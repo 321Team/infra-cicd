@@ -2,6 +2,8 @@
 
 대상: `cicd-runner01 / 10.250.10.20 / server01_cicd-runner`. 선택값: infra-cicd 저장소 전용·중앙 실행·Podman rootless. 서버에서 실행하는 절차이며 저장소 등록만으로 설치 완료를 뜻하지 않는다.
 
+2026-09-09 후속 증적: 공식 Runner 2.337.0 패키지 검사·버전 실행·GitHub 연결 및 서비스 설치 로그를 수신했다. 최종 서비스 상태는 failed/203이며, 동일 PID의 SELinux AVC에서 서비스 진입점 runsvc.sh의 실행 거부가 확인됐다. 현재 서버의 다음 작업은 [단일 파일 SELinux 라벨 복구·재검증](runner-selinux-recovery.md)이다. 아래 신규 설치 절차를 반복하지 않는다. 복구·Online·첫 Job은 아직 미검증이다.
+
 ## 1. 키트 검사와 압축 해제
 
 ZIP과 sidecar를 로그인 계정 홈에 놓고 실행한다.
@@ -47,7 +49,7 @@ ZIP과 sidecar를 로그인 계정 홈에 놓고 실행한다.
 
 [infra-cicd 설정](https://github.com/321Team/infra-cicd/settings/actions/runners/new)의 **Settings → Actions → Runners → New self-hosted runner → Linux / x64**에서 실제 패키지 버전과 SHA-256을 받는다. 등록 URL은 `https://github.com/321Team/infra-cicd`다.
 
-`/home/server01_cicd-runner/actions-runner`가 이미 존재하면 덮어쓰지 말고 기존 설치인지 확인한다. 이번 수집은 두 후보 경로 미발견이었으므로 신규 설치를 기본으로 한다.
+`/home/server01_cicd-runner/actions-runner`가 이미 존재하면 기존 설치인지 확인한다. 최초 병행 수집에서는 두 후보 경로를 찾지 못했지만 이후 설치가 진행됐다. 다음 mkdir 블록은 신규 서버에만 적용한다.
 
 ```bash
 (
