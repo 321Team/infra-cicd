@@ -6,7 +6,7 @@ P1-CICD-01 GitHub Actions·Self-hosted Runner 기반 CI/CD 구축 및 검증 저
 
 Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, 테스트·보안 검사·인증 실패 시 잘못된 이미지의 배포를 차단한다.
 
-- 담당: **이권욱(Lead)** / **이하영(Support·독립 기술 리뷰)**
+- 담당: **이권욱(Lead)** / **이하영(Support·독립 기술 리뷰)** — [역할 결정 기록](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/decisions/p1-cicd-01-roles.md)
 - 티켓: **P1-CICD-01 — In Progress**
 - Runtime / Delivery Gate: **NOT_VERIFIED**
 - 이 초기 구성에는 문서·기록 양식만 포함한다. 실행 Workflow와 Runner 설치·배포 스크립트는 선행조건 확인 후 별도 PR로 구현한다.
@@ -33,7 +33,7 @@ Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, �
 | ServiceAccount | ci-cd/cicd-runner-sa |
 | 배포 방식 | 승인된 기존 Deployment의 이미지 Digest 갱신; 최초 리소스 생성은 P1-APP/P1-SEC 인계 |
 
-이 저장소가 생겼다는 사실로 Runner 등록이나 Delivery Pipeline이 동작하는 것은 아니다. 업무 애플리케이션 Source·Dockerfile·테스트는 각 앱 저장소에 둔다. 앱 저장소와 승인 Source를 확인한 뒤, 앱 측 호출 Workflow와 이 저장소의 재사용 Workflow 또는 승인 Commit 입력 방식의 연결을 구현한다. 재사용 Workflow를 채택하면 전체 Commit SHA로 참조하고 호출 저장소의 접근·Runner 사용 범위를 확인한다. [GitHub 재사용 Workflow](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
+이 저장소가 생겼다는 사실로 Runner 등록이나 Delivery Pipeline이 동작하는 것은 아니다. 업무 애플리케이션 Source·Dockerfile·테스트는 각 앱 저장소에 둔다. [이미 채택한 구현값](https://github.com/321Team/infra-cicd/blob/790105e390c529ee2fd50b23e709efe160a059c6/config/p1-cicd-01.json)에 따라 초기 구성은 `321Team/infra-cicd` 전용 Runner와 이 저장소에서 실행하는 중앙 수동 Workflow다. 승인된 main Workflow 및 앱 Source SHA를 사용하며, 다른 비공개 앱 저장소의 읽기 권한은 별도 인계한다. Ansible 관련 CI 추적을 이유로 `infra-ansible`에 Runner 접근 권한을 추가하지 않는다.
 
 ## 다른 저장소와의 관계
 
@@ -67,4 +67,8 @@ TLS는 CI/CD 선행조건으로 관리한다. 이미 채택한 역할에 따라 
 
 ## 근거
 
-[검토 기준 베이스라인 v3.1.17](https://github.com/321Team/fds-project-baseline/blob/2d93395a0e19ea67e5be199d7183a7edbaa6cf4c/baseline/FDS_Project_Implementation_Baseline_v3.1.17.md), P1-CICD-01 Kickoff User Story v1.0 및 본 대화의 역할 확정 지시를 반영했다. 이후 정본 변경은 영향 검토 후 동기화하며, 다른 티켓의 완료 상태를 임의 갱신하지 않는다.
+- [검토 기준 베이스라인 v3.1.17](https://github.com/321Team/fds-project-baseline/blob/2d93395a0e19ea67e5be199d7183a7edbaa6cf4c/baseline/FDS_Project_Implementation_Baseline_v3.1.17.md)
+- [P1-CICD-01 Kickoff User Story v1.0](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/references/P1-CICD-01_Notion_UserStory_v1.0.md) — 배포 당시 원문. [출처·SHA-256·현재 문서와의 관계](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/references/README.md)
+- [P1-CICD-01 역할 결정 기록](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/decisions/p1-cicd-01-roles.md) — 기존 역할과 채택 구현의 출처 및 책임 경계
+
+착수 원문의 일정·상태를 현재 Runtime 완료 판정으로 사용하지 않는다. 이후 정본 변경은 영향 검토 후 동기화하며, 다른 티켓의 완료 상태를 임의 갱신하지 않는다.

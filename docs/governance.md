@@ -2,6 +2,8 @@
 
 ## 역할
 
+아래 담당과 CA/Harbor 역할의 출처·책임 경계는 [P1-CICD-01 역할 결정 기록](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/decisions/p1-cicd-01-roles.md)에 연결한다. 이 기록은 기존 채택사항을 문서화한 것이며 새 권한 부여나 PR 승인 기록이 아니다.
+
 | 구분 | 담당 |
 |---|---|
 | P1-CICD-01 Lead, Runner·Pipeline 구현 및 최종 판정 | 이권욱 |
@@ -22,6 +24,12 @@ GitHub Free 조직의 Private 저장소에서는 브랜치 보호와 CODEOWNERS�
 
 ## 자격증명과 증적
 
-`.gitignore`는 보조 수단이며 강제 추가 또는 이미 추적된 자료까지 보호하지 않는다. Push 전에 전체 변경 내용을 확인한다. Token·개인키·원본 Secret 및 kubeconfig를 커밋하거나 PR에 붙이지 않는다. CA Trust 증적에는 공개 인증서 지문과 검증 결과만 기록한다.
+`.gitignore`에는 `*.pem`을 포함한다. `.pem`은 공개 CSR·인증서에도 쓰이므로 이 규칙은 저장소에 실수로 추가하는 것을 줄이는 조치이며, 승인된 공개 CSR·인증서의 발급·전달 절차를 금지하지 않는다. 현재 저장소에는 공개 지문·검증 결과·인계 참조를 기록하고 실물 인증서·CSR은 기존 인계 절차로 다룬다.
+
+`.gitignore`는 보조 수단이며 강제 추가 또는 이미 추적된 자료까지 보호하지 않는다. Push 전에 전체 변경 내용을 확인한다. [Git 공식 문서](https://git-scm.com/docs/gitignore) Token·개인키·원본 Secret 및 kubeconfig를 커밋하거나 PR에 붙이지 않는다. CA Trust 증적에는 공개 인증서 지문과 검증 결과만 기록한다.
 
 배포 자격증명은 P1-SEC의 승인 발급·주입·만료·회수 방식으로 처리한다. CA 개인키를 Runner나 Actions Secrets에 배포하지 않는다. 증적은 비밀값을 제거한 후 fds-project-evidence의 수신 Commit·경로·SHA-256으로 연결한다.
+
+## 줄바꿈
+
+`.gitattributes`에서 `*.sh`, `*.yml`, `*.yaml`에 `text eol=lf`를 지정한다. 셸 스크립트와 Workflow YAML의 Git 정규화·체크아웃 줄바꿈을 LF로 유지하며, 기존 파일 전체를 일괄 재정규화하지 않는다. [Git 공식 문서](https://git-scm.com/docs/gitattributes)
