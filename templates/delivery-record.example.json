@@ -1,0 +1,25 @@
+{
+  "template_only": true,
+  "ticket": "P1-CICD-01",
+  "source_repository": null,
+  "source_commit": null,
+  "workflow_repository": "321Team/infra-cicd",
+  "workflow_commit": null,
+  "run_id": null,
+  "run_attempt": null,
+  "approved_by": null,
+  "approval_reference": null,
+  "images": [
+    {"deployment": "transaction-api", "previous_digest": null, "approved_digest": null},
+    {"deployment": "fds-engine", "previous_digest": null, "approved_digest": null}
+  ],
+  "test_result": "NOT_VERIFIED",
+  "scan_result": "NOT_VERIFIED",
+  "deploy_result": "NOT_VERIFIED",
+  "health_e2e_result": "NOT_VERIFIED",
+  "rollback_result": "NOT_TESTED",
+  "evidence_repository_commit": null,
+  "evidence_path": null,
+  "evidence_sha256": null,
+  "delivery_gate": "NOT_VERIFIED"
+}

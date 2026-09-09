@@ -1,0 +1,4 @@
+# Preserve LF for shell scripts and workflow YAML across platforms.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
