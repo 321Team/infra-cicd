@@ -2,7 +2,7 @@
 
 대상: `cicd-runner01 / 10.250.10.20 / server01_cicd-runner`. 선택값: infra-cicd 저장소 전용·중앙 실행·Podman rootless. 서버에서 실행하는 절차이며 저장소 등록만으로 설치 완료를 뜻하지 않는다.
 
-2026-09-09 후속 증적: 공식 Runner 2.337.0 패키지 검사·버전 실행·GitHub 연결 및 서비스 설치 로그를 수신했다. 최종 서비스 상태는 failed/203이며, 동일 PID의 SELinux AVC에서 서비스 진입점 runsvc.sh의 실행 거부가 확인됐다. 현재 서버의 다음 작업은 [단일 파일 SELinux 라벨 복구·재검증](runner-selinux-recovery.md)이다. 아래 신규 설치 절차를 반복하지 않는다. 복구·Online·첫 Job은 아직 미검증이다.
+2026-09-09 17:48:25 KST 후속 증적: Runner 2.337.0의 서비스가 SELinux Enforcing 상태에서 active/running으로 복구됐고 GitHub 연결·Listening for Jobs가 관측됐다. [복구 증적 검토](runner-selinux-recovery.md)의 외부·내부 체크섬 검증은 PASS다. 현재 서버의 다음 작업은 4절의 첫 Job 검증이다. 아래 신규 설치·등록 및 복구 명령은 현재 정상 Runner에서 반복하지 않는다. GitHub 화면의 현재 상태, 첫 Job·재부팅 후 복구·종합 Delivery gate는 아직 미검증이다.
 
 ## 1. 키트 검사와 압축 해제
 
@@ -117,11 +117,20 @@ ZIP과 sidecar를 로그인 계정 홈에 놓고 실행한다.
 
 재실행 시 GitHub 저장소의 Settings → Actions → Runners → New self-hosted runner 화면에서 유효한 등록 토큰을 받아 config.sh의 토큰 프롬프트에만 입력한다. 명령행·대화·첨부에는 토큰을 넣지 않는다. 공식 등록 토큰은 1시간 후 만료한다. [GitHub 등록 문서](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)
 
-수정한 Bash 블록은 bash -n 구문 검사를 통과했다. 대상 VM에서의 등록·서비스 성공 여부는 아직 미검증이다. 동일 키트 압축 해제나 패키지 재설치는 필수 복구 단계가 아니며, 위 패키지 확인이 실패한 경우에만 실제 누락 상태에 맞춰 보완한다.
+등록 명령 수정 시 Bash 블록은 bash -n 구문 검사를 통과했다. 이후 서비스 복구 증적은 문서 상단과 연결된 검토 문서에 반영했다. 위 패키지 확인이 실패한 경우에만 실제 누락 상태에 맞춰 보완한다.
 
 ## 4. 첫 Job과 이후 도구
 
-`templates/runner-smoke.yml`을 기술 검토 후 `.github/workflows/runner-smoke.yml`로 반영·병합하고 main에서 수동 실행한다. 현재 키트는 템플릿만 제공하므로 자동 실행되지 않는다. 첫 Job은 비밀값 없이 host/account·도구·rootless를 확인한다. 재시작 뒤 Online과 Job 수신도 확인한다. rootless `podman info` 성공은 이미지 빌드·Push 성공과 별개다.
+`.github/workflows/runner-smoke.yml`을 PR에 실행용 소스로 준비했다. 현재 main에는 Workflow가 없으며 PR은 미병합이다. GitHub Actions의 수동 실행은 Workflow가 기본 브랜치에 있어야 하므로 다음 순서로 진행한다. [GitHub 수동 Workflow 실행](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+
+1. PR #1·#2의 이하영(hayeounglee) 독립 기술 리뷰와 이권욱 최종 승인·main 병합을 완료한다. 현재 리뷰 요청 상태만으로 승인 완료를 판정하지 않는다.
+2. 저장소 Settings → Actions → Runners에서 cicd-runner01의 현재 Online/Idle 상태와 지정 라벨을 확인한다.
+3. Actions → **P1 Runner smoke** → Run workflow → **main**을 선택해 한 번 수동 실행한다.
+4. 성공한 Run URL·Commit·Attempt 및 Job 로그를 제출한다. Job이 대기하면 Runner 상태/라벨을 확인하고, 실패하면 해당 단계 오류를 검토한다.
+
+Workflow는 수동 workflow_dispatch만 사용하고 infra-cicd/main에서만 Job을 실행한다. 권한은 빈 설정이며 checkout·외부 Action·Secret·Harbor·Kubernetes 작업은 없다. 호스트·전체 사용자명·숫자 UID를 확인하고 Git·Podman 버전 및 rootless podman info를 검사한다. 마지막 검사가 통과해야 JOB_RECEPTION=VERIFIED와 BUILDER_ROOTLESS=VERIFIED를 출력한다. 기존 배포용 templates/runner-smoke.yml은 실행용 파일과 동일하게 유지한다.
+
+첫 Job은 Runner 작업 수신과 해당 도구의 기본 실행을 검증한다. 이미지 빌드·스캔·Push/Pull·배포, 외부 Action 다운로드, Artifact 업로드까지 검증한 결과는 아니다. Job 종료 후 별도 계획한 재부팅 시점에 Online 복귀와 추가 smoke Job 성공을 확인한다. 이 문서 갱신 자체로 재부팅이나 Workflow 실행을 수행하지 않는다.
 
 GitHub 통신은 기존 두 TLS 검사 외에 실제 등록·Job·Action 다운로드·로그/Artifact·업데이트 도메인을 기능별로 확인한다. 필요한 outbound 경로는 [공식 요구사항](https://docs.github.com/en/actions/reference/runners/self-hosted-runners#communication)을 따르며 임의 inbound 규칙이나 DNS/SNAT 변경을 추가하지 않는다.
 

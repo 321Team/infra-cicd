@@ -1,4 +1,36 @@
-# P1-CICD-01 Runner SELinux 실행 차단 검토·복구 v1.0
+# P1-CICD-01 Runner SELinux 실행 차단 검토·복구 v1.1
+
+## 최신 판정 — 복구 결과 수신
+
+**2026-09-09 17:48:25 KST 제출 증적 기준, 서비스 복구와 GitHub 연결·Job 대기 상태는 PASS다.** 아래 v1.0 적용 명령은 이번 장애의 이력·동일 조건 재발 대응용이며 정상 동작 중인 현재 Runner에서 반복 실행하지 않는다.
+
+`P1-CICD-01_Runner_SELinux_Result.tar.gz`의 외부 sidecar와 내부 SHA256SUMS에 기재된 일반 파일 4개를 검증했다. 압축파일에는 그 4개와 SHA256SUMS, 총 5개의 일반 파일만 있다.
+
+| 검증 대상 | SHA-256 |
+|---|---|
+| 결과 archive | 8af569a10468ad0681634e0c0ff4e7076ded63ac0efc93953244665cce700f1a |
+| result.txt | 9b7f6262d720f2813b874393d47b6d03df9954a924b1192336e7fa4abaf53f54 |
+| before.txt | 2c3a65fb55db18558287a277061f5672f7081913a96f0645e6aff4bee0da924f |
+| fcontext-before.txt | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 |
+| added-rule.txt | 63ffa281ad56144f65ae2b5e918124264c76238b0995408c6d8fa1575bd7b0b8 |
+
+| 항목 | 복구 후 관측 | 판정 범위 |
+|---|---|---|
+| SELinux | Enforcing | 시스템 설정 유지 |
+| 서비스 진입점 | system_u:object_r:bin_t:s0, 0755, 기존 사용자 소유 | 해당 파일 라벨 변경 확인 |
+| 서비스 | active/running, Result=success, enabled, NRestarts=0, MainPID=12907 | 약 10초 관측. 재부팅·장시간 지속성은 미검증 |
+| 실행 사용자 설정 | User=server01_cicd-runner | systemd 설정 확인. ps 사용자 열은 server0+로 잘려 숫자 UID까지 독립 확인한 것은 아님 |
+| 실행 도메인 | system_u:system_r:unconfined_service_t:s0 | 예상한 일반 서비스 도메인 관측. Runner 전용 격리 정책 적용 판정은 아님 |
+| GitHub 연결 | 17:48:17 KST Connected to GitHub | 제출된 서비스 로그 기준 |
+| Runner 대기 | 17:48:18 KST, version 2.337.0, Listening for Jobs | Job 대기 상태 도달. 실제 Job 수신·성공은 미검증 |
+
+fcontext-before.txt는 빈 파일이며 그 빈 바이트의 해시가 일치한다. added-rule.txt는 이 Runbook의 단일 파일 선택자와 일치한다. 규칙 추가와 matchpathcon 검증 성공은 제출 실행 로그에 기록됐으나, 변경 후 전체 규칙 목록이나 재부팅 후 재적용 증적은 아직 없다. 체크섬은 제출 바이트의 무결성을 검증하며 원격 실행 전체를 독립 증명하지 않는다.
+
+콘솔 앞부분의 명령 텍스트는 일부 섞여 보이지만 결과 archive가 정상 검증되므로 이 표시만으로 Python 또는 전체 복구 실행 실패를 판정하지 않는다. 결과 파일에 남은 17:29:47의 203/EXEC는 PID 12646의 과거 실패이며, 17:48:15에 시작된 새 PID 12907의 복구 결과와 구분한다.
+
+현재 상태: `RUNNER_SERVICE_RECOVERY=PASS_FROM_SUBMITTED_EVIDENCE`, `RUNNER_JOB_WAIT=OBSERVED`, `RUNNER_JOB_EXECUTION=NOT_VERIFIED`, `REBOOT_RECOVERY=NOT_VERIFIED`, `DELIVERY_GATE=NOT_VERIFIED`.
+
+다음 단계는 [Runner Runbook의 첫 Job 절차](runner-bootstrap.md#4-첫-job과-이후-도구)다. 복구 문서를 포함한 PR과 수동 smoke Workflow를 검토·승인·main 병합한 뒤 첫 Job을 실행하고 Run URL, Commit, Attempt, 실제 사용자·UID, rootless 검사 결과를 제출한다.
 
 ## 확인 결과
 
@@ -142,4 +174,4 @@ PY
 
 Runner 자동 업데이트·svc.sh 재설치가 진입점을 재생성하면 영구 규칙이 있어도 새 파일의 라벨이 자동 적용된다고 보장할 수 없다. 해당 작업 후 `matchpathcon -V`와 서비스 상태를 확인하고, 필요 시 위에서 정한 **동일 파일**에 `restorecon -Fv`를 적용한다. 승인된 배포 소스와 실행 파일의 일치도 다시 확인한다.
 
-이 문서의 Bash 블록은 `bash -n`, 내장 Python은 구문 검사를 수행했다. 원격 SELinux 정책 변경·서비스 복구·Job 수신 시험은 이 작업 환경에서 실행하지 않았다. 이번 상태는 `ROOT_CAUSE=SELINUX_EXEC_DENIAL_CONFIRMED_FROM_EVIDENCE`, `RECOVERY=PREPARED_NOT_EXECUTED`, `DELIVERY_GATE=NOT_VERIFIED`다.
+v1.0 배포 시 이 문서의 Bash 블록은 `bash -n`, 내장 Python은 구문 검사를 수행했다. 이 작업 환경에서 원격 정책 변경·서비스 복구를 실행한 것은 아니며, 이후 사용자가 실행한 복구 결과를 v1.1 상단에 검증·기록했다. v1.1은 판정 문구 갱신으로 적용·원복 코드 블록은 v1.0과 동일하다. 첫 Job·재부팅 후 복구·종합 Delivery gate는 계속 미검증이다.
