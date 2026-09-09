@@ -1,6 +1,8 @@
 # P1-CICD-01 TLS·Runner 병행 준비 v1.0
 
-작성일: 2026-09-09. 상태: 준비 도구 구현 / 서버 실행 결과 수신 전. DELIVERY_GATE: NOT_VERIFIED.
+작성일: 2026-09-09. 상태: 준비 증적 수신·검토 완료 / 구현 선택 채택. DELIVERY_GATE: NOT_VERIFIED.
+
+현재 채택한 등록 범위·빌더·CA 프로파일·Harbor 보존 초기화 방식은 [베이스라인 구현안](baseline-implementation.md)을 따른다. 아래 수집 명령은 기존 도구 사용 기록이며 동일 결과를 다시 수집할 필요가 없다.
 
 ## 이번 작업과 완료 범위
 
@@ -69,7 +71,7 @@ Runner 경로가 기본 후보인 계정 홈의 `actions-runner` 또는 `/opt/ac
 1. **정식 CA 존재 여부:** 승인된 CA 자산 기록과 공개 인증서 SHA-256 지문, 기존 Consumer 범위. 파일 미발견이나 과거 임시 인증서 이력만으로 CA가 없다고 결론내리지 않는다.
 2. **CA 운영 환경:** 이권욱이 관리할 보호 환경과 백업·갱신 절차. CA 개인키를 Runner나 Actions Secrets로 옮기지 않는다.
 3. **Harbor 설치 정본:** 서로 다른 Compose 경로 라벨이 관측된 이력이 있으므로 이하영이 실제 관리할 설정 파일·적용 경로를 확정한다. 라벨만으로 정본을 선택하거나 `docker compose up/down`을 실행하지 않는다.
-4. **발급 프로파일·적용:** IP SAN 10.1.93.54, CA:FALSE, 서버 인증 목적을 유지한다. DNS SAN·유효기간·변경 시점·이전 인증서 복구 방법을 정한다.
+4. **발급 프로파일·적용:** IP SAN 10.1.93.54, CA:FALSE, 서버 인증 목적을 유지한다. DNS SAN은 harbor.fds.internal/harbor01, IP SAN은 10.1.93.54, Leaf 365일/30일 전 갱신을 채택했다. 전환·복구는 [정식화 Runbook](harbor-formalization.md)을 따른다.
 
 기존 CA를 재사용하거나, 정식 CA가 없음을 확인한 뒤 보호 환경에서 최초 생성한다. Harbor에서 개인키와 CSR을 만들고 CSR만 이권욱에게 전달한다. 이권욱은 서명한 Leaf·CA 공개 인증서·지문·발급 기록을 전달하고, 이하영은 적용·복구를 확인한다. 그 다음 Runner·Worker Trust와 엄격한 TLS, 인증 Push/Pull을 시험한다. 기존 Root 교체는 영향받는 Consumer의 전환·복구 계획을 먼저 확인한다.
 
@@ -77,7 +79,7 @@ Runner 경로가 기본 후보인 계정 홈의 `actions-runner` 또는 `/opt/ac
 
 앱 저장소가 `infra-cicd`의 재사용 Workflow를 호출하면 Runner 접근은 **호출한 앱 저장소의 문맥**을 따른다. `infra-cicd`에만 등록된 저장소 전용 Runner가 앱 저장소 호출에도 자동 사용되는 것은 아니다. 호출 저장소와 조직 설정의 실제 허용 범위를 확인한 뒤 등록한다. [GitHub 재사용 구성 규칙](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations)
 
-권장 준비 방향은 앱 저장소 목록을 먼저 확정하고, 조직 Runner를 쓸 경우 실제 설정에서 승인한 저장소만 접근하도록 구성 가능한지 확인하는 것이다. 이 단계에서는 조직 전체 접근이나 임의 저장소명을 승인 상태로 만들지 않는다. 조직 Runner를 사용할 수 없으면 호출 저장소 전용 Runner 또는 중앙 실행 방식을 비교해 기록한다.
+2026-09-09 사용자 지시에 따라 `infra-cicd` 저장소 전용 Runner와 중앙 실행 방식을 채택했다. Workflow는 infra-cicd에서 실행하며 승인 앱 저장소의 SHA를 읽기 전용 권한으로 가져온다. 조직 전체 접근을 부여하지 않는다. 신규 설치 경로·Podman rootless·수동 최초 실행은 [Runner Runbook](runner-bootstrap.md)에 고정했다.
 
 등록 전 입력: 앱 저장소·승인 Commit·Dockerfile·Unit/Contract Test 명령, 두 Deployment·컨테이너명, 빌더 선택, Trivy 기존 Critical 차단 기준·DB 공급, Robot Push/Pull 권한, SA/RBAC·단기 Token 주입 방식. 현재 설치된 Podman 존재만으로 Docker 컨테이너 Action/서비스 컨테이너가 실행 가능하다고 판정하지 않는다. 이런 Job은 Docker 요구가 있으므로 실제 Workflow 형태와 함께 선택한다. [Runner 요구사항](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 

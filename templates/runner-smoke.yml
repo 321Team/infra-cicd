@@ -1,0 +1,24 @@
+name: P1 Runner smoke
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: p1-runner-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    if: github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, p1-cicd, onprem, podman]
+    timeout-minutes: 5
+    steps:
+      - name: Verify runner identity and rootless builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(hostname -s)" = cicd-runner01
+          test "$(id -un)" = server01_cicd-runner
+          test "$(id -u)" -ne 0
+          git --version
+          podman --version
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          printf 'JOB_RECEPTION=VERIFIED\nBUILDER_ROOTLESS=VERIFIED\nDELIVERY_GATE=NOT_VERIFIED\n'

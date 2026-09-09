@@ -1,0 +1,12 @@
+[ harbor_leaf ]
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+subjectAltName = @sans
+
+[ sans ]
+DNS.1 = harbor.fds.internal
+DNS.2 = harbor01
+IP.1 = 10.1.93.54
