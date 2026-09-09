@@ -1,0 +1,49 @@
+{
+  "schema": "P1-CICD-01-parallel-handoff-1.0",
+  "template_only": true,
+  "repository": "321Team/infra-cicd",
+  "delivery_gate": "NOT_VERIFIED",
+  "tls": {
+    "ca_owner": "이권욱",
+    "harbor_key_csr_apply_owner": "이하영",
+    "approved_project_ca_exists": null,
+    "ca_asset_record_reference": null,
+    "approved_ca_certificate_sha256_fingerprint": null,
+    "existing_ca_consumer_scope": [],
+    "protected_ca_environment_reference": null,
+    "ca_backup_and_renewal_procedure_reference": null,
+    "canonical_harbor_installation_directory": null,
+    "canonical_compose_files": [],
+    "harbor_leaf_ip_sans": ["10.1.93.54"],
+    "harbor_leaf_dns_sans": [],
+    "harbor_leaf_validity_days": null,
+    "certificate_apply_path": null,
+    "private_key_local_path_reference_only": null,
+    "change_window": null,
+    "rollback_procedure_reference": null,
+    "worker_trust_test_owner": null,
+    "owner_confirmed_at": null
+  },
+  "runner": {
+    "host": "cicd-runner01",
+    "ip": "10.250.10.20",
+    "account": "server01_cicd-runner",
+    "existing_installation_directory": null,
+    "existing_github_registration_url": null,
+    "workflow_caller_repositories": [],
+    "registration_scope": null,
+    "allowed_repositories": [],
+    "github_registration_status": "NOT_VERIFIED",
+    "github_actions_job_reception": "NOT_VERIFIED",
+    "builder_choice": null,
+    "app_source_commit_and_test_contract_reference": null,
+    "credential_injection_policy_reference": null,
+    "owner_confirmed_at": null
+  },
+  "evidence": {
+    "runner_archive_sha256": null,
+    "harbor_archive_sha256": null,
+    "reviewed_commit": null
+  },
+  "instructions": "비밀값을 입력하지 않는다. null과 빈 배열은 미확인이다. 확인자가 근거와 함께 작성한 뒤 template_only를 false로 바꾼다. CA 존재 여부는 로컬 파일 미발견으로 false 처리하지 않는다."
+}
