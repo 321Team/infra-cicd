@@ -45,7 +45,9 @@ ZIP과 sidecar를 `server08`의 홈에 복사한 뒤 실행한다.
 
 CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 초기화하지 않는다. 대장에 이미 발급이 기록되었는지 확인하고 동일 요청을 중복 발급하지 않는다. §5.1 실패로 남은 release 디렉터리도 출력 경로 하나만 확인하며 원래 요청 키를 유지한다.
 
-## 2. CA 보관 환경
+## 2. CA 보관 환경 — server01 / ca01 배치 확정
+
+2026-09-10 사용자 “server01배치안으로” 지시를 반영한다. server01은 물리 Windows/VMware 호스트이며 서명은 별도 ca01 VM에서 수행한다. 2 vCPU·RAM 4GB·OS 20GB·CA 데이터 2GB, LUKS2 데이터 암호화, 초기 준비 후 NIC 제거·별도 암호화 백업을 구축값으로 정했다. 실제 VM·장치·백업 준비 완료는 미검증이다.
 
 구현값: 이권욱이 관리하는 관리자 단말/전용 오프라인 환경의 **암호화 볼륨 `/mnt/fds-ca`**, 자산 디렉터리 `/mnt/fds-ca/fds-project-root-ca-2026-replacement`. 루트 키는 암호화하고 별도 암호화 백업 매체 1개를 분리 보관한다. 서명 중에만 볼륨을 열고 끝나면 분리한다. 개인키·암호를 Runner, Harbor, Git, Actions Secrets, 대화 또는 증적 Archive에 넣지 않는다.
 
@@ -59,7 +61,7 @@ CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 
 (
   set -euo pipefail
   umask 077
-  case "$(hostname -s)" in cicd-runner01|harbor01|edge01) exit 3 ;; esac
+  test "$(hostname -s)" = ca01
   mountpoint -q /mnt/fds-ca
   test ! -e /mnt/fds-ca/fds-project-root-ca-2026-replacement
   test ! -L /mnt/fds-ca/fds-project-root-ca-2026-replacement
@@ -73,6 +75,7 @@ CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 
 (
   set -euo pipefail
   umask 077
+  test "$(hostname -s)" = ca01
   cd /mnt/fds-ca/fds-project-root-ca-2026-replacement
   test -f root-ca.cnf
   test -f harbor-leaf.ext
@@ -102,6 +105,7 @@ CSR Archive의 외부 해시를 확인한 후 새 디렉터리에 압축을 풀�
 (
   set -euo pipefail
   umask 077
+  test "$(hostname -s)" = ca01
   cd /mnt/fds-ca/fds-project-root-ca-2026-replacement
   openssl req -in requests/harbor01.csr.pem -verify -noout
   openssl req -in requests/harbor01.csr.pem -noout -subject -text

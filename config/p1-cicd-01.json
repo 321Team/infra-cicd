@@ -86,7 +86,23 @@
     "legacy_ca_status": "RETIREMENT_REQUIRED",
     "legacy_ca_fingerprint_sha256": null,
     "legacy_ca_retirement_status": "NOT_VERIFIED",
-    "new_ca_asset_directory": "/mnt/fds-ca/fds-project-root-ca-2026-replacement"
+    "new_ca_asset_directory": "/mnt/fds-ca/fds-project-root-ca-2026-replacement",
+    "ca_deployment_plan": {
+      "decision_date": "2026-09-10",
+      "instruction": "server01배치안으로",
+      "status": "ADOPTED_BY_USER",
+      "physical_host": "server01",
+      "vm_hostname": "ca01",
+      "os": "CentOS Stream 10 Minimal",
+      "vcpu": 2,
+      "memory_gb": 4,
+      "os_disk_gb": 20,
+      "ca_data_disk_gb": 2,
+      "ca_data_encryption": "LUKS2",
+      "network_after_preparation": "VIRTUAL_NIC_REMOVED",
+      "separate_encrypted_backup_required": true,
+      "provisioning_status": "NOT_VERIFIED"
+    }
   },
   "delivery": {
     "namespace": "fds-app",
