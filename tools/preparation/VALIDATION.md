@@ -1,12 +1,12 @@
-# CA 준비·배포 조건 검사 검증 v1.0
+# CA 준비·배포 조건 검사 검증 v1.1
 
-2026-09-10 로컬 검증. 대상: 이번 후속 브랜치의 신규 `tools/preparation` 코드. 기존 PR #2 수집기·CSR 도구와 분리했다.
+2026-09-10 신규 CA 결정 반영 후 로컬 검증. 이전 v1.0의 30건 시험 이력은 이전 Commit에 보존하며 재사용 방침을 현재 기준으로 인용하지 않는다. 대상: 이번 후속 브랜치의 신규 `tools/preparation` 코드. 기존 PR #2 수집기·CSR 도구와 분리했다.
 
-`python3 -m unittest discover -s tools/preparation -p 'test_*.py' -v`: **30건 PASS**.
+`python3 -m unittest discover -s tools/preparation -p 'test_*.py' -v`: **32건 PASS**.
 
 | 분류 | 시험 |
 |---|---|
-| CA 입력 8건 | 기재 완료가 발급 성공이 아님, UNKNOWN 차단, 기존 CA 재생성 선택 차단, 부재 기록 모순 차단, 암호화/백업/접근/오프라인 필수값, 서비스 호스트 거부, 기존 CSR 교체 차단, 미작성/오류 입력 |
+| CA 입력 10건 | 기재 완료가 발급·폐기 성공이 아님, 구 스키마/혼합 필드 거부, 재사용·부재 선택 거부, 신규 결정·폐기 계획 필수, 구 지문 미확인 후속 기록, 잘못된 지문·폐기 완료 주장 거부, 암호화/백업/접근/오프라인 필수값, 서비스 호스트 거부, 기존 CSR 교체 차단, 미작성 입력 |
 | 배포 조건 19건 | 유효 모의 입력, 앱별 Test 실패, Critical 검출, HIGH 기준 유지, 스캐너 오류/불명확 건수, 보고서/DB 누락, Digest 불일치/Tag 거부, Run/Attempt/Workflow 승인 불일치, Source/저장소/브랜치/대상 범위, API/Token/TLS/RBAC/잠금 미확인, 단계 구분, callback 실패 전파, 미작성 입력 |
 | JSON 입력 3건 | 중복 키·비유한 숫자, symlink/FIFO, 1MiB 초과 파일 거부 |
 

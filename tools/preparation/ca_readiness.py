@@ -24,15 +24,24 @@ def evaluate(record):
             reasons.append(code)
     if not isinstance(record, dict):
         record = {}
-    need(record.get('schema') == 'P1-CICD-01-ca-preparation-1.0', 'SCHEMA')
+    need(record.get('schema') == 'P1-CICD-01-ca-preparation-1.1', 'SCHEMA')
     need(record.get('template_only') is False, 'TEMPLATE_OR_UNCONFIRMED_INPUT')
     need(record.get('owner') == '이권욱', 'CA_OWNER')
     need(record.get('csr_sha256') == CSR_SHA256, 'EXISTING_CSR_REFERENCE')
     need(record.get('csr_spki_sha256') == SPKI_SHA256, 'EXISTING_KEY_REFERENCE')
     need(reference(record.get('inventory_record_reference')), 'CA_INVENTORY_RECORD')
     need(reference(record.get('checked_at')), 'INVENTORY_CHECK_TIME')
-    status = record.get('approved_ca_status')
-    need(status in ('PRESENT', 'ABSENT_CONFIRMED'), 'CA_EXISTENCE_UNKNOWN')
+    need(record.get('selection') == 'REPLACE_WITH_NEW_ROOT', 'NEW_ROOT_REQUIRED')
+    need(reference(record.get('replacement_decision_reference')), 'REPLACEMENT_DECISION')
+    need(reference(record.get('retirement_plan_reference')), 'RETIREMENT_PLAN')
+    need(record.get('legacy_ca_status') == 'RETIREMENT_REQUIRED', 'LEGACY_RETIREMENT_INTENT')
+    need(not any(field in record for field in ('approved_ca_status',
+             'approved_ca_fingerprint_sha256', 'approved_ca_record_reference',
+             'ca_validity_review_reference')), 'LEGACY_SCHEMA_FIELDS')
+    legacy_fingerprint = record.get('legacy_ca_fingerprint_sha256')
+    need(legacy_fingerprint is None or
+         (isinstance(legacy_fingerprint, str) and re.fullmatch(r'[0-9a-f]{64}', legacy_fingerprint)),
+         'LEGACY_CA_FINGERPRINT_FORMAT')
     env = record.get('custody')
     env = env if isinstance(env, dict) else {}
     host = env.get('host')
@@ -45,21 +54,12 @@ def evaluate(record):
     for field in ('encrypted_storage_confirmed', 'separate_encrypted_backup_confirmed',
                   'administrator_access_confirmed', 'offline_signing_confirmed'):
         need(env.get(field) is True, 'CUSTODY_' + field.upper())
-    if status == 'PRESENT':
-        need(isinstance(record.get('approved_ca_fingerprint_sha256'), str)
-             and re.fullmatch(r'[0-9a-f]{64}', record['approved_ca_fingerprint_sha256']),
-             'APPROVED_CA_FINGERPRINT')
-        need(reference(record.get('approved_ca_record_reference')), 'APPROVED_CA_RECORD')
-        need(reference(record.get('ca_validity_review_reference')), 'CA_VALIDITY_REVIEW')
-        need(record.get('selection') == 'REUSE_APPROVED_CA', 'REUSE_EXISTING_CA_REQUIRED')
-    elif status == 'ABSENT_CONFIRMED':
-        need(record.get('approved_ca_fingerprint_sha256') is None, 'ABSENCE_FINGERPRINT_CONFLICT')
-        need(record.get('approved_ca_record_reference') is None, 'ABSENCE_ASSET_CONFLICT')
-        need(record.get('selection') == 'INITIALIZE_AFTER_CUSTODY_REVIEW', 'NEW_CA_REVIEW_REQUIRED')
     return {'preparation_inputs': 'COMPLETE_FOR_REVIEW' if not reasons else 'INCOMPLETE',
             'reasons': reasons, 'basis': 'DECLARED_INPUTS_ONLY',
+            'follow_up': ['LEGACY_CA_IDENTIFICATION_PENDING'] if legacy_fingerprint is None else [],
             'ca_asset_independently_verified': False, 'key_accessed': False,
             'ca_initialized': False, 'certificate_issued': False,
+            'legacy_ca_retirement': 'NOT_VERIFIED',
             'delivery_gate': 'NOT_VERIFIED'}
 
 

@@ -1,6 +1,6 @@
-# P1-CICD-01 CA 준비·배포 차단 로직 병행 작업 v1.0
+# P1-CICD-01 CA 준비·배포 차단 로직 병행 작업 v1.1
 
-착수일: 2026-09-10. 이권욱 담당의 CA 준비와 CI/CD 차단 로직을 먼저 구현했다. 소스 기준은 main `be92fd00b269ff7d7abc124bb17f6d3e4c007851`, 베이스라인 v3.1.17 Commit `2d93395a0e19ea67e5be199d7183a7edbaa6cf4c`다. 착수 시 조회한 정본 main도 같은 Commit이었다. PR #2의 `baeda8850cf10b916ab2fe0b64ae45864d75e8c2`는 수정하지 않는다.
+착수일: 2026-09-10. 이권욱 담당의 CA 준비와 CI/CD 차단 로직을 먼저 구현했다. 소스 기준은 main `be92fd00b269ff7d7abc124bb17f6d3e4c007851`, 베이스라인 v3.1.17 Commit `2d93395a0e19ea67e5be199d7183a7edbaa6cf4c`다. 착수 시 조회한 정본 main도 같은 Commit이었다. 2026-09-10 사용자 지시 “기존 승인 CA는 폐기 신규 발급 필요”에 따라 재사용 선택을 철회하고 새 키·Root 발급으로 변경했다. [결정·전환·폐기 기록](decisions/ca-replacement-20260910.md)을 따르며 PR #2의 발급 절차·설정도 동기화한다.
 
 이번 산출물은 입력 점검과 모의 시험이 가능한 준비 코드다. 실제 CA 자산·인증서 발급·Trivy 스캔·Push·Kubernetes 배포를 수행하지 않았다. **DELIVERY_GATE=NOT_VERIFIED**를 유지한다.
 
@@ -8,8 +8,8 @@
 
 | 작업 | 이권욱 | 다른 담당·선행 입력 |
 |---|---|---|
-| CA 준비 | 기존 승인 CA 확인, 보호 환경·백업·접근통제 기록, 발급 준비 | 실제 보호 환경·기존 CA 유무 아직 미확인 |
-| CA 서명 | 준비 확인 후 기존 CSR에 서명, 발급 기록·공개 인증서 전달 | 이하영: 기존 Harbor 개인키·CSR 유지, 인증서 설치·서비스 전환·복구 |
+| CA 준비 | 신규 Root 보호 환경·백업·접근통제 기록, 구 CA 전환·폐기 준비 | 실제 보호 환경·구 CA 지문과 배포 대상 미확인 |
+| CA 서명 | 준비 확인 후 새 Root로 기존 CSR에 서명, 발급 기록·공개 인증서 전달 | 이하영: 기존 Harbor 개인키·CSR 유지, 인증서 설치·서비스 전환·복구 |
 | CI/CD 차단 | Test·Scan·Digest·승인·대상 조건 검사와 음성시험 | 실행 어댑터·실제 Job 연동은 후속 단계 |
 | 앱·도구 인계 | 실제 Source/Test·Trivy·K8s 입력 취합 및 검증 | 앱 저장소·승인 SHA·Dockerfile·테스트 명령·컨테이너명·Token 정책 필요 |
 
@@ -21,11 +21,11 @@ CA를 준비할 곳은 이권욱 관리의 별도 오프라인 관리자 환경�
 
 | 현장 확인 | 입력·근거 |
 |---|---|
-| 기존 승인 CA | PRESENT / ABSENT_CONFIRMED / UNKNOWN. 자산·발급 대장 확인 기록과 확인 시각 |
+| CA 선택 | REPLACE_WITH_NEW_ROOT 확정. 기존 CA 사용 종료·신규 발급 결정 참조 |
 | 작업 환경 | 실제 호스트·보관 자산 참조, 관리자 접근통제와 오프라인 서명 절차 |
 | 암호화·백업 | 실제 암호화 확인 근거, 별도 암호화 백업 매체·복구 절차 참조 |
-| 기존 CA가 있을 때 | 승인 공개 지문·승인 자산 기록·잔여 유효기간 검토, REUSE_APPROVED_CA |
-| 없음을 확인했을 때 | 확인된 부재 근거, INITIALIZE_AFTER_CUSTODY_REVIEW. UNKNOWN을 부재로 바꾸어 해석하지 않음 |
+| 구 CA 식별·폐기 | 지문·발급 대장·소비자·키 복제본/백업 조사. RETIREMENT_REQUIRED는 실행 완료가 아님 |
+| 신규 자산 | 별도 신규 디렉터리·새 개인키·새 Root. 기존 키·발급 대장 재사용 금지 |
 
 Linux CA 후보 환경에서는 다음 조회로 마운트·장치·호스트 정보를 확인할 수 있다. 디렉터리를 만들거나 볼륨을 포맷하는 명령이 아니다. `findmnt`가 실패하면 마운트가 확인되지 않은 상태로 기록한다. `mountpoint`나 `findmnt` 성공만으로 암호화·오프라인 상태를 입증하지 못한다. 실제 암호화 방식·잠금/해제·백업 확인은 관리자 기록과 대조한다.
 
@@ -40,14 +40,14 @@ Linux CA 후보 환경에서는 다음 조회로 마운트·장치·호스트 �
 )
 ```
 
-[CA 입력 양식](../templates/ca-preparation.example.json)에 실제 확인값과 기록 참조를 채운다. 개인키·암호·인증 Token은 입력하지 않는다. 확인하지 못한 값은 null/UNKNOWN 그대로 둔다. 실제 확인 후에만 `template_only`를 false로 변경한다. 검사기는 명시한 JSON 하나만 읽고, 자산이나 개인키를 탐색하지 않는다. `COMPLETE_FOR_REVIEW`는 기재된 조건의 충족 여부이며 독립 자산 확인·승인·발급 완료가 아니다. CA 후보 이름이 알려진 서비스 호스트와 다른 것만으로 오프라인 전용 환경이 입증되지는 않는다.
+[CA 입력 양식](../templates/ca-preparation.example.json)에 실제 확인값과 기록 참조를 채운다. 개인키·암호·인증 Token은 입력하지 않는다. 현장 확인하지 못한 값은 null로 둔다. 신규 발급 선택은 확정값으로 유지한다. v1.0의 재사용/부재 조건은 거부하며 v1.1 양식으로 옮겨 실제 근거를 입력한다. 실제 확인 후에만 `template_only`를 false로 변경한다. 검사기는 명시한 JSON 하나만 읽고, 자산이나 개인키를 탐색하지 않는다. `COMPLETE_FOR_REVIEW`는 기재된 조건의 충족 여부이며 독립 자산 확인·승인·발급 완료가 아니다. 구 지문이 null이면 LEGACY_CA_IDENTIFICATION_PENDING을 남기지만, 구 CA 부재나 폐기 완료를 신규 준비의 선행조건으로 요구하지 않는다. 기존 CA 지문·배포 현황 확인은 실제 신뢰 제거·폐기 인수 전까지 완료해야 한다. CA 후보 이름이 알려진 서비스 호스트와 다른 것만으로 오프라인 전용 환경이 입증되지는 않는다.
 
 이미 검토한 요청을 계속 사용한다.
 
 - 요청: `harbor01-sn0wepv7`, 개인키는 Harbor 보호 영역에 보존.
 - CSR SHA-256: `97473d44f37140dfe04c83a29f6fec17560bb6f7b29a543fd1fa06cce91ca890`.
 - SPKI SHA-256: `636f85ce3ae0d5e3ea49e50fca2b8ec1e5c132f990d7867e2ad59d0a2e333638`.
-- 실제 CA가 확인되면 [PR #2의 CA 발급 절차](https://github.com/321Team/infra-cicd/blob/baeda8850cf10b916ab2fe0b64ae45864d75e8c2/docs/harbor-formalization.md)에 연결한다. 새 Root RSA4096/1825일, Harbor Leaf RSA3072/365일·30일 전 갱신·CA:FALSE/serverAuth·기존 SAN을 유지한다. 본 브랜치는 새로운 인증서 프로파일을 발행하지 않는다.
+- 보호 환경이 준비되면 [PR #2의 갱신된 CA 발급 절차](https://github.com/321Team/infra-cicd/blob/3a1a9a8d774eca2917ea62bbe184fea0e11724b2/docs/harbor-formalization.md)에 따라 새 Root로 서명한다. 새 Root RSA4096/1825일, Harbor Leaf RSA3072/365일·30일 전 갱신·CA:FALSE/serverAuth·기존 SAN을 유지한다. 본 브랜치는 새로운 인증서 프로파일을 발행하지 않는다.
 
 ## 3. 배포 차단 로직
 
@@ -113,7 +113,7 @@ GitHub에서 이 후속 PR의 **검토할 전체 Commit 화면**을 열고 해�
 )
 ```
 
-내부 PREPARATION_SHA256SUMS는 내려받은 소스 파일 간 무결성 확인이며 다운로드 출처의 독립 인증은 아니다. GitHub의 고정 Commit과 파일 목록을 함께 확인한다. 기존 v1.0 키트들을 다시 설치하거나 기존 Runner 등록을 반복할 필요는 없다.
+내부 PREPARATION_SHA256SUMS는 내려받은 소스 파일 간 무결성 확인이며 다운로드 출처의 독립 인증은 아니다. GitHub의 고정 Commit과 파일 목록을 함께 확인한다. 기존 v1.0 키트는 소급 변경하지 않았다. 그 안의 CA 재사용·부재 조건은 이번 결정으로 대체되므로 신규 발급에는 갱신된 Runbook을 사용한다. 기존 Runner 등록은 반복하지 않는다.
 
 두 양식의 초기 결과는 `INCOMPLETE` 또는 `BLOCK`, 종료코드 2가 정상이다. 실제 준비 정보를 입력하려면 위 출력의 WORK_DIR로 이동한 뒤 아래 명령으로 **새 파일**을 만들고 편집한다. 기존 파일이 있으면 이 명령은 실패하므로 다른 이름을 사용한다.
 
@@ -136,7 +136,7 @@ PY
 
 ## 6. 다음 인계
 
-1. 이권욱: 실제 승인 CA 유무·보호 환경·암호화/백업 상태를 확인해 CA 입력 기록을 완성한다. 기존 CA가 있으면 재사용하고 없음을 확인한 경우에만 보호 환경 검토 후 초기 생성한다.
+1. 이권욱: 실제 보호 환경·암호화/백업을 확인하고 신규 Root 준비 기록을 완성한다. 기존 CA 재사용 선택은 종료했다. 새 CA 발급과 함께 구 CA 식별·실제 Consumer 전환·신뢰 제거·키 폐기를 추적한다.
 2. 앱 담당 입력: 두 앱의 실제 Source·승인 SHA·Dockerfile·Unit/Contract 명령·호환성 및 컨테이너명.
 3. CI 어댑터 입력: Trivy 버전/배포물·DB 공급/갱신, 승인된 Harbor repository/Robot, K8s 버전·TokenRequest·실제 RBAC/잠금/Health 경로.
 4. 독립 리뷰 후 별도 승인된 변경으로 실제 어댑터와 Workflow를 연결한다. 기존 PR #2의 첫 smoke 결과 및 Harbor TLS 인수와 결합한다.

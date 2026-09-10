@@ -1,4 +1,3 @@
-import copy
 import unittest
 
 import ca_readiness as ca
@@ -6,12 +5,13 @@ import ca_readiness as ca
 
 def complete_record():
     # Synthetic declarations only; this is not a real CA asset record.
-    return {'schema': 'P1-CICD-01-ca-preparation-1.0', 'template_only': False, 'owner': '이권욱',
+    return {'schema': 'P1-CICD-01-ca-preparation-1.1', 'template_only': False, 'owner': '이권욱',
             'csr_sha256': ca.CSR_SHA256, 'csr_spki_sha256': ca.SPKI_SHA256,
-            'approved_ca_status': 'PRESENT', 'inventory_record_reference': 'fixture:inventory',
-            'checked_at': '2026-09-10T00:00:00Z', 'approved_ca_fingerprint_sha256': 'a' * 64,
-            'approved_ca_record_reference': 'fixture:ca', 'ca_validity_review_reference': 'fixture:validity',
-            'selection': 'REUSE_APPROVED_CA', 'custody': {
+            'legacy_ca_status': 'RETIREMENT_REQUIRED', 'inventory_record_reference': 'fixture:inventory',
+            'checked_at': '2026-09-10T00:00:00Z', 'legacy_ca_fingerprint_sha256': 'a' * 64,
+            'replacement_decision_reference': 'fixture:replacement-decision',
+            'retirement_plan_reference': 'fixture:retirement-plan',
+            'selection': 'REPLACE_WITH_NEW_ROOT', 'custody': {
                 'host': 'fixture-offline-admin', 'role': 'OFFLINE_ADMIN_ENVIRONMENT',
                 'asset_reference': 'fixture:asset', 'encryption_reference': 'fixture:encryption',
                 'backup_reference': 'fixture:backup', 'access_control_reference': 'fixture:access',
@@ -27,23 +27,39 @@ class CAReadinessTests(unittest.TestCase):
         for key in ('ca_asset_independently_verified', 'key_accessed', 'ca_initialized', 'certificate_issued'):
             self.assertIs(result[key], False)
         self.assertEqual(result['delivery_gate'], 'NOT_VERIFIED')
+        self.assertEqual(result['legacy_ca_retirement'], 'NOT_VERIFIED')
 
-    def test_unknown_inventory_cannot_select_new_ca(self):
+    def test_old_schema_and_mixed_old_fields_are_rejected(self):
         record = complete_record()
-        record.update(approved_ca_status='UNKNOWN', selection='INITIALIZE_AFTER_CUSTODY_REVIEW')
-        self.assertEqual(ca.evaluate(record)['preparation_inputs'], 'INCOMPLETE')
+        record['schema'] = 'P1-CICD-01-ca-preparation-1.0'
+        self.assertIn('SCHEMA', ca.evaluate(record)['reasons'])
+        record = complete_record(); record['approved_ca_status'] = 'PRESENT'
+        self.assertIn('LEGACY_SCHEMA_FIELDS', ca.evaluate(record)['reasons'])
 
-    def test_existing_ca_cannot_be_replaced_by_initialization(self):
-        record = complete_record()
-        record['selection'] = 'INITIALIZE_AFTER_CUSTODY_REVIEW'
-        self.assertIn('REUSE_EXISTING_CA_REQUIRED', ca.evaluate(record)['reasons'])
+    def test_reuse_or_absence_rule_cannot_override_replacement(self):
+        for selection in ('REUSE_APPROVED_CA', 'INITIALIZE_AFTER_CUSTODY_REVIEW', None):
+            with self.subTest(selection=selection):
+                record = complete_record(); record['selection'] = selection
+                self.assertIn('NEW_ROOT_REQUIRED', ca.evaluate(record)['reasons'])
 
-    def test_confirmed_absence_requires_consistent_asset_fields(self):
-        record = complete_record()
-        record.update(approved_ca_status='ABSENT_CONFIRMED', selection='INITIALIZE_AFTER_CUSTODY_REVIEW')
-        self.assertEqual(ca.evaluate(record)['preparation_inputs'], 'INCOMPLETE')
-        record.update(approved_ca_fingerprint_sha256=None, approved_ca_record_reference=None)
-        self.assertEqual(ca.evaluate(record)['preparation_inputs'], 'COMPLETE_FOR_REVIEW')
+    def test_replacement_and_retirement_records_required(self):
+        for field in ('replacement_decision_reference', 'retirement_plan_reference', 'legacy_ca_status'):
+            record = complete_record(); record[field] = None
+            self.assertEqual(ca.evaluate(record)['preparation_inputs'], 'INCOMPLETE')
+
+    def test_unknown_old_fingerprint_does_not_require_false_absence_or_completed_retirement(self):
+        record = complete_record(); record['legacy_ca_fingerprint_sha256'] = None
+        result = ca.evaluate(record)
+        self.assertEqual(result['preparation_inputs'], 'COMPLETE_FOR_REVIEW')
+        self.assertEqual(result['follow_up'], ['LEGACY_CA_IDENTIFICATION_PENDING'])
+        self.assertEqual(result['legacy_ca_retirement'], 'NOT_VERIFIED')
+
+    def test_bad_old_fingerprint_and_claimed_retirement_are_not_accepted(self):
+        for fingerprint in (True, 'unknown', 'z' * 64):
+            record = complete_record(); record['legacy_ca_fingerprint_sha256'] = fingerprint
+            self.assertIn('LEGACY_CA_FINGERPRINT_FORMAT', ca.evaluate(record)['reasons'])
+        record = complete_record(); record['legacy_ca_status'] = 'RETIRED'
+        self.assertIn('LEGACY_RETIREMENT_INTENT', ca.evaluate(record)['reasons'])
 
     def test_encryption_backup_and_offline_each_required(self):
         for field in ('encrypted_storage_confirmed', 'separate_encrypted_backup_confirmed',
