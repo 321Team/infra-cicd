@@ -18,10 +18,27 @@ PRIVATE_BASE = Path("/etc/harbor/pki/requests")
 ARCHIVE = "P1-CICD-01_Harbor_CSR_Result.tar.gz"
 
 
+def stderr_summary(stderr):
+    """Return fixed diagnostic labels, never arbitrary command output."""
+    value = stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else (stderr or "")
+    lowered = value.lower()
+    for phrase, label in (("permission denied", "PERMISSION_DENIED"),
+                          ("no such file or directory", "PATH_NOT_FOUND"),
+                          ("error loading", "CONFIG_OR_EXTENSION_LOAD_FAILED"),
+                          ("verify failure", "VERIFICATION_FAILED")):
+        if phrase in lowered:
+            return label
+    return "DETAIL_WITHHELD" if value else "EMPTY"
+
+
 def command(args):
-    result = subprocess.run(args, env=ENV, capture_output=True, timeout=120)
+    try:
+        result = subprocess.run(args, env=ENV, capture_output=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("command failed: " + args[0] + " reason=TIMEOUT") from None
     if result.returncode:
-        raise RuntimeError("command failed: " + args[0])
+        raise RuntimeError("command failed: " + args[0] + " rc=" + str(result.returncode)
+                           + " stderr_summary=" + stderr_summary(result.stderr))
     return result.stdout
 
 
@@ -94,6 +111,8 @@ def main(argv=None):
         return 0
     if args.output_dir is None:
         parser.error("--apply requires --output-dir")
+    private = None
+    phase = "preconditions"
     try:
         account = identity()
         public_parent(args.output_dir, account)
@@ -105,9 +124,12 @@ def main(argv=None):
         private = Path(tempfile.mkdtemp(prefix="harbor01-", dir=PRIVATE_BASE))
         key = private / "harbor01.key"
         csr_path = private / "harbor01.csr.pem"
+        phase = "key_generation"
         command(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:3072", "-out", str(key)])
         key.chmod(0o600)
+        phase = "csr_generation"
         command(["openssl", "req", "-new", "-sha256", "-key", str(key), "-config", str(config), "-out", str(csr_path)])
+        phase = "csr_verification"
         command(["openssl", "req", "-in", str(csr_path), "-verify", "-noout"])
         csr_bytes = csr_path.read_bytes()
         receipt = {
@@ -124,6 +146,7 @@ def main(argv=None):
         }
         # Finish privileged work before writing anything into the user's home.
         # Only the public CSR bytes are retained; the private key is never read.
+        phase = "public_export"
         os.setgroups([])
         os.setgid(account.pw_gid)
         os.setuid(account.pw_uid)
@@ -137,6 +160,10 @@ def main(argv=None):
         return 0
     except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError, KeyError) as exc:
         print("ERROR=" + str(exc))
+        print("FAILED_PHASE=" + phase)
+        if private is not None:
+            print("PRIVATE_REQUEST_DIR=" + str(private))
+            print("PRIVATE_REQUEST_PRESERVED=true")
         print("DELIVERY_GATE=NOT_VERIFIED")
         return 3
 

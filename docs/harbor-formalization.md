@@ -1,6 +1,8 @@
-# Harbor 초기화·정식 발급 Runbook v1.0
+# Harbor 초기화·정식 발급 Runbook v1.1
 
 채택 방식: **임시 환경은 보존·격리하고 새 데이터·키·자격증명으로 정식 구성한다.** 초기화 요청을 이 방식으로 구현한다. 서비스 전환은 이하영, CA 운영·서명과 Runner Trust는 이권욱이 맡는다.
+
+2026-09-10 리뷰 반영: §5.1에 실제 설치 명령을 추가했다. 현재 유효한 CSR은 `harbor01-sn0wepv7` 요청이며 다시 생성하지 않는다. **Leaf 발급 결과와 승인 CA 지문은 아직 미수신이므로 지금 §5.1을 실행할 단계는 아니다.** 아래 §1은 최초 생성·별도 신규 요청 절차로 보존한다.
 
 ## 1. Harbor에서 바로 실행할 작업: 새 키·CSR
 
@@ -27,6 +29,19 @@ ZIP과 sidecar를 `server08`의 홈에 복사한 뒤 실행한다.
 ```
 
 성공 시 `CSR=CREATED`, `PRIVATE_KEY_EXPORTED=false`, `HARBOR_SERVICE_CHANGED=false` 및 `ARCHIVE`·`SIDECAR`가 출력된다. 종료 0은 CSR 생성 성공, 3은 오류이며 Delivery 성공이 아니다. `--apply` 없이 실행하면 계획만 출력한다. 출력 Archive와 sidecar만 공유한다. Archive 구성은 `harbor01.csr.pem`, `receipt.json`, `SHA256SUMS`다. 영수증의 개인키 경로는 서버 내 위치 참조이며 키 내용은 없다.
+
+### 실패·재시도와 요청 디렉터리 정리
+
+개인키 생성 이후 실패했다고 같은 `--apply`를 즉시 반복하지 않는다. 새 소스는 실패 단계와 `PRIVATE_REQUEST_DIR`를 출력하고 기존 파일을 보존한다. 이미 전달한 v1.0 ZIP은 변경하지 않았다. 해당 ZIP 실행에는 새 진단 필드가 없을 수 있다.
+
+- **CSR 생성·자체 서명 검증 성공, 공개 결과 내보내기만 실패:** 기존 요청을 보존하고 같은 CSR을 다시 전달한다. 키를 다시 만들거나 요청 디렉터리를 통째로 압축하지 않는다.
+- **생성 도중 실패:** 이하영이 root 보호 영역에서 파일 메타데이터와 CSR 유무·자체 서명을 확인한다. CA 요청/발급 대장, `current` 대상 및 서비스가 참조하는 키와 대조하여 활성·발급 대기 요청을 먼저 제외한다.
+- **폐기 확정된 미발급 요청:** 요청 ID·실패 단계·폐기 이유를 기록한 뒤 해당 디렉터리 하나만 정리한다. 시간 기준 자동 삭제, 와일드카드/재귀 일괄 삭제를 하지 않는다. 발급된 요청은 갱신/폐기·백업 보존 정책과 함께 처리한다.
+- **현재 `harbor01-sn0wepv7`:** 제출 CSR 검토가 PASS이며 CA 서명 대기다. 개인키·CSR 모두 보존 대상이다.
+
+소유자가 정확한 폐기 대상임을 확인한 뒤 사용할 명령은 `sudo rm -- /etc/harbor/pki/requests/<폐기확정-ID>/harbor01.key /etc/harbor/pki/requests/<폐기확정-ID>/harbor01.csr.pem`, 이어 `sudo rmdir -- /etc/harbor/pki/requests/<폐기확정-ID>`다. 실제 존재하는 파일만 지정하며, 추가 파일이 있으면 `rmdir` 실패를 조사한다. 파일 삭제가 저장매체의 보안 소거를 보장하지는 않는다. 이 명령의 자리표시자는 현재 요청 ID로 바꾸어 실행하라는 뜻이 아니다.
+
+CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 초기화하지 않는다. 대장에 이미 발급이 기록되었는지 확인하고 동일 요청을 중복 발급하지 않는다. §5.1 실패로 남은 release 디렉터리도 출력 경로 하나만 확인하며 원래 요청 키를 유지한다.
 
 ## 2. CA 보관 환경
 
@@ -120,7 +135,136 @@ CSR Archive의 외부 해시를 확인한 후 새 디렉터리에 압축을 풀�
 | 기존 DB·Redis·Registry·Secret | `/data`의 기존 개별 경로에 보존, 신규 구성으로 import하지 않음 |
 | 자격증명 | 신규 관리자/내부 비밀값/CI Push+Pull Robot/Worker Pull Robot 분리 발급 |
 
-`current`는 검증된 새 키·Leaf 쌍의 버전 디렉터리를 가리키게 전환한다. CSR 영수증의 기존 개인키를 서버 안에서 사용하고 새 키를 다시 만들지 않는다. CA/Leaf 검증과 공개키 일치, root 소유·최소권한을 확인한다. 생성된 Compose/NGINX의 실제 파일·마운트도 확인한다. Harbor의 `prepare`는 입력을 실제 서비스 설정으로 전개하므로 원본 경로만 바꾸고 서비스 반영을 완료했다고 하지 않는다. [Harbor HTTPS](https://goharbor.io/docs/2.13.0/install-config/configure-https/)
+### 5.1. 발급물 검증·서버 내 설치 — 최초 `current` 생성
+
+CA는 **Leaf·Root 공개 인증서**를 반환한다. `.key`를 CA에서 받아오는 절차는 없다. 이하영이 Harbor에 이미 생성한 `/etc/harbor/pki/requests/harbor01-sn0wepv7/harbor01.key`를 서버 안에서 복사해 사용한다. 원래 요청 키는 이동·삭제하지 않는다.
+
+이권욱이 서명 결과를 검토하여 CA 지문, Leaf의 SHA-256·serial·유효기간 및 CA:FALSE·digitalSignature/keyEncipherment·serverAuth·정확한 SAN을 발급 기록에 확정한다. Root 지문은 **받은 파일에서 계산한 값을 그대로 승인값으로 삼지 않고** 승인 CA 자산 기록과 대조한다. 아래는 채택한 Root→Harbor Leaf 직접 서명 구조다. 다른 체인 구조면 chain 파일·검증 절차를 먼저 맞춘다.
+
+공개 반환물을 `server08` 홈의 `P1_CICD_Harbor_Issued`에 다음 이름으로 둔다. `SHA256SUMS`는 발급 담당이 공개 파일 2개의 해시를 기록한 목록이다. 설치 스크립트는 Root의 승인 지문, Leaf의 체인·IP/두 DNS 이름, 알려진 CSR 해시, CSR/Leaf/개인키 공개키 일치와 잔여 30일을 다시 검사한다. 체크섬만으로 CA 신뢰를 결정하지 않는다.
+
+| 입력/결과 | 경로·권한 |
+|---|---|
+| 받은 공개 파일 | `~/P1_CICD_Harbor_Issued/harbor01.crt`, `fds-root-ca.crt`, `SHA256SUMS` |
+| 원본 개인키 | `/etc/harbor/pki/requests/harbor01-sn0wepv7/harbor01.key`, root:root 0600 유지 |
+| 새 설치 디렉터리 | `/etc/harbor/pki/releases/harbor01-<임의값>`, root:root 0700 |
+| 설치 파일 | Leaf/Root 0644, 개인키 0600, 모두 root:root |
+| Harbor 입력 링크 | `/etc/harbor/pki/current` → 검증 완료한 release 디렉터리 |
+
+`current`가 이미 있으면 자동 교체하지 않고 중단한다. 최초 구성 준비를 위한 명령이며 서비스 중지·`prepare`·기동은 수행하지 않는다. 실패한 release는 root 0700에 남겨 조사하고 원본 요청을 보존한다.
+
+```bash
+(
+  set -euo pipefail
+  umask 077
+  test "$(hostname -s)" = harbor01
+  test "$(id -un)" = server08
+  issued_dir="$HOME/P1_CICD_Harbor_Issued"
+  cd "$issued_dir"
+  sha256sum --check SHA256SUMS
+  read -r -p '승인 CA SHA-256 지문(64자리, 콜론 허용): ' approved_ca_sha
+  approved_ca_sha="${approved_ca_sha//:/}"
+  approved_ca_sha="${approved_ca_sha,,}"
+  [[ "$approved_ca_sha" =~ ^[0-9a-f]{64}$ ]]
+  sudo bash -s -- "$issued_dir" "$approved_ca_sha" <<'HARBOR_TLS_INSTALL'
+set -Eeuo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C
+tls_phase=preconditions
+tls_release=''
+trap 'tls_rc=$?; printf "FAILED_PHASE=%s RC=%s RELEASE_PRESERVED=%s\n" "$tls_phase" "$tls_rc" "$tls_release" >&2; exit "$tls_rc"' ERR
+test "$(hostname -s)" = harbor01
+test "$(id -u)" = 0
+test "${SUDO_USER:-}" = server08
+tls_in="$1"
+tls_ca_sha="$2"
+[[ "$tls_ca_sha" =~ ^[0-9a-f]{64}$ ]]
+tls_base=/etc/harbor/pki
+tls_request="$tls_base/requests/harbor01-sn0wepv7"
+test ! -e "$tls_base/current"
+test ! -L "$tls_base/current"
+
+# Validate every existing protected path without following symbolic links.
+python3 - "$tls_request" "$tls_base/releases" <<'PY'
+import os, pathlib, stat, sys
+request, releases = map(pathlib.Path, sys.argv[1:])
+for path in [*reversed(request.parents), request]:
+    s = path.lstat()
+    if not stat.S_ISDIR(s.st_mode) or s.st_uid != 0 or s.st_mode & 0o022:
+        raise SystemExit('UNSAFE_PROTECTED_PATH')
+for path in (request / 'harbor01.key', request / 'harbor01.csr.pem'):
+    s = path.lstat()
+    if (not stat.S_ISREG(s.st_mode) or s.st_uid != 0 or s.st_gid != 0
+            or s.st_nlink != 1 or stat.S_IMODE(s.st_mode) != 0o600):
+        raise SystemExit('UNSAFE_REQUEST_FILE')
+if os.path.lexists(releases):
+    s = releases.lstat()
+    if (not stat.S_ISDIR(s.st_mode) or s.st_uid != 0 or s.st_gid != 0
+            or stat.S_IMODE(s.st_mode) != 0o700):
+        raise SystemExit('UNSAFE_RELEASE_DIRECTORY')
+else:
+    releases.mkdir(mode=0o700)
+PY
+tls_phase=stage_public_files
+for tls_file in harbor01.crt fds-root-ca.crt; do
+  test -f "$tls_in/$tls_file"
+  test ! -L "$tls_in/$tls_file"
+  test "$(stat -c %s "$tls_in/$tls_file")" -le 65536
+done
+tls_release="$(mktemp -d "$tls_base/releases/harbor01-XXXXXXXX")"
+printf 'TLS_RELEASE_DIR=%s\n' "$tls_release"
+install -o root -g root -m 0644 -- "$tls_in/harbor01.crt" "$tls_release/harbor01.crt"
+install -o root -g root -m 0644 -- "$tls_in/fds-root-ca.crt" "$tls_release/fds-root-ca.crt"
+cd "$tls_release"
+test "$(grep -c '^-----BEGIN CERTIFICATE-----$' harbor01.crt)" = 1
+test "$(grep -c '^-----BEGIN CERTIFICATE-----$' fds-root-ca.crt)" = 1
+if grep -q 'PRIVATE KEY' harbor01.crt fds-root-ca.crt; then
+  printf 'UNEXPECTED_PRIVATE_MATERIAL\n' >&2
+  exit 3
+fi
+
+tls_phase=verify_ca_and_leaf
+tls_actual_ca="$(openssl x509 -in fds-root-ca.crt -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr 'A-F' 'a-f')"
+test "$tls_actual_ca" = "$tls_ca_sha"
+openssl verify -CAfile fds-root-ca.crt -check_ss_sig fds-root-ca.crt
+openssl verify -CAfile fds-root-ca.crt -purpose sslserver -verify_ip 10.1.93.54 harbor01.crt
+for tls_name in harbor.fds.internal harbor01; do
+  openssl verify -CAfile fds-root-ca.crt -purpose sslserver -verify_hostname "$tls_name" harbor01.crt
+done
+openssl x509 -in harbor01.crt -checkend 2592000 -noout
+openssl x509 -in harbor01.crt -noout -ext basicConstraints | grep -Fq 'CA:FALSE'
+
+tls_phase=verify_existing_key_and_csr
+test "$(sha256sum "$tls_request/harbor01.csr.pem" | cut -d' ' -f1)" = 97473d44f37140dfe04c83a29f6fec17560bb6f7b29a543fd1fa06cce91ca890
+openssl req -in "$tls_request/harbor01.csr.pem" -verify -noout
+install -o root -g root -m 0600 -- "$tls_request/harbor01.key" harbor01.key
+openssl pkey -in harbor01.key -passin file:/dev/null -check -noout
+openssl x509 -in harbor01.crt -pubkey -noout | openssl pkey -pubin -outform DER > leaf-public.der
+openssl req -in "$tls_request/harbor01.csr.pem" -pubkey -noout | openssl pkey -pubin -outform DER > csr-public.der
+openssl pkey -in harbor01.key -passin file:/dev/null -pubout -outform DER > key-public.der
+cmp -- leaf-public.der csr-public.der
+cmp -- leaf-public.der key-public.der
+test "$(sha256sum leaf-public.der | cut -d' ' -f1)" = 636f85ce3ae0d5e3ea49e50fca2b8ec1e5c132f990d7867e2ad59d0a2e333638
+rm -- leaf-public.der csr-public.der key-public.der
+openssl x509 -in harbor01.crt -noout -serial -dates -fingerprint -sha256
+openssl x509 -in harbor01.crt -noout -ext basicConstraints,keyUsage,extendedKeyUsage,subjectAltName
+
+tls_phase=create_current_link
+ln -s -- "$tls_release" "$tls_base/current"
+test "$(readlink -f "$tls_base/current")" = "$tls_release"
+stat -c '%U:%G %a %n' "$tls_release" harbor01.crt harbor01.key fds-root-ca.crt
+printf 'TLS_FILES_INSTALLED=true\nHARBOR_SERVICE_CHANGED=false\nDELIVERY_GATE=NOT_VERIFIED\n'
+HARBOR_TLS_INSTALL
+)
+```
+
+`current` 생성 직후 취소하고 아직 어떤 서비스도 참조하지 않았다면, 출력한 release 경로와 `readlink` 결과가 일치하는지 확인하고 `sudo unlink -- /etc/harbor/pki/current`로 링크만 제거한다. release와 원본 키는 보존한다. 서비스 반영 후에는 아래 전체 구성·데이터 복구 절차를 따른다. 갱신 시에는 기존 `current`의 대상·사용 중인 Leaf를 기록한 별도 교체 작업이 필요하며 위 최초 설치 블록을 반복하지 않는다.
+
+### 5.2. Harbor 설정에 반영하고 검증
+
+§5.1 설치 성공 후 `/opt/harbor/harbor.yml`의 `https.certificate`와 `https.private_key`를 위 표의 `current` 경로로 지정한다. 생성된 Compose/NGINX의 실제 파일·마운트도 확인한다. Harbor의 `prepare`는 입력을 실제 서비스 설정으로 전개하므로 원본 경로만 바꾸고 서비스 반영을 완료했다고 하지 않는다. [Harbor HTTPS](https://goharbor.io/docs/2.13.0/install-config/configure-https/)
+
+선정 설치판·실제 bind mount·중지 시점·일관된 백업이 확인된 후에만 새 `/opt/harbor` 설치판의 `prepare`와 기동 절차를 수행한다. 설치판이 아직 확정되지 않았으므로 현재 시점에 서비스 전환 완료 또는 자동 전환 가능으로 기록하지 않는다. `prepare` 후 전개된 인증서 공개 지문과 입력 Leaf 지문을 대조하고, 개인키가 복사되는 실제 호스트 경로의 소유권·권한 및 SELinux 거부 유무를 확인한다. 전체 경로 `chmod 777`이나 SELinux 비활성화로 해결하지 않는다.
 
 전환 순서:
 

@@ -1,4 +1,6 @@
 import importlib.util
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -15,6 +17,40 @@ spec.loader.exec_module(csr)
 
 
 class Safety(unittest.TestCase):
+    def test_command_failure_reports_rc_and_safe_stderr_only(self):
+        result = types.SimpleNamespace(returncode=7, stdout=b"SENTINEL_STDOUT",
+                                       stderr=b"Permission denied: password=SENTINEL_SECRET")
+        with patch.object(csr.subprocess, "run", return_value=result):
+            with self.assertRaises(RuntimeError) as error:
+                csr.command(["openssl", "req"])
+        self.assertIn("rc=7", str(error.exception))
+        self.assertIn("PERMISSION_DENIED", str(error.exception))
+        self.assertNotIn("SENTINEL", str(error.exception))
+
+    def test_timeout_does_not_disclose_partial_output(self):
+        error = csr.subprocess.TimeoutExpired(["openssl"], 120, stderr=b"SENTINEL_PRIVATE")
+        with patch.object(csr.subprocess, "run", side_effect=error):
+            with self.assertRaises(RuntimeError) as caught:
+                csr.command(["openssl"])
+        self.assertIn("TIMEOUT", str(caught.exception))
+        self.assertNotIn("SENTINEL", str(caught.exception))
+
+    def test_failed_generation_preserves_request_and_reports_location(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            output = io.StringIO()
+            def fail_after_write(args):
+                Path(args[-1]).write_text("SENTINEL_INCOMPLETE_KEY")
+                raise RuntimeError("simulated failure")
+            with patch.object(csr, "identity", return_value=object()), patch.object(csr, "public_parent"), patch.object(csr, "root_directory"), patch.object(csr, "PRIVATE_BASE", base), patch.object(csr, "command", side_effect=fail_after_write), patch.object(csr, "export_public") as export, contextlib.redirect_stdout(output):
+                self.assertEqual(csr.main(["--apply", "--output-dir", str(base)]), 3)
+            keys = list(base.glob("harbor01-*/harbor01.key"))
+            self.assertEqual(len(keys), 1)
+            self.assertIn("PRIVATE_REQUEST_DIR=" + str(keys[0].parent), output.getvalue())
+            self.assertIn("FAILED_PHASE=key_generation", output.getvalue())
+            self.assertNotIn("SENTINEL", output.getvalue())
+            export.assert_not_called()
+
     def test_plan_does_not_read_identity_or_write(self):
         with patch.object(csr, "identity", side_effect=AssertionError), patch.object(csr, "root_directory", side_effect=AssertionError):
             self.assertEqual(csr.main([]), 0)

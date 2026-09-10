@@ -18,7 +18,7 @@ import subprocess
 import tarfile
 import tempfile
 
-VERSION = '1.0'
+VERSION = '1.1'
 HOSTS = {'runner': ('cicd-runner01', '10.250.10.20'), 'harbor': ('harbor01', '10.1.93.54')}
 RUNNER_USER = 'server01_cicd-runner'
 SAFE_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
@@ -49,6 +49,19 @@ def scrub(value):
     return re.sub(r'(?i)(\b(?:password|passwd|token|secret|api[_-]?key)\b[\s:=]+)(?:"[^"\n]*"|\x27[^\x27\n]*\x27|[^\s,;]+)', r'\1[REDACTED]', value)
 
 
+def stderr_summary(value):
+    # Fixed labels only: redaction regexes cannot safely sanitize every secret.
+    lowered = (value or '').lower()
+    for phrase, label in (('permission denied', 'PERMISSION_DENIED'),
+                          ('no such file or directory', 'PATH_NOT_FOUND'),
+                          ('connection refused', 'CONNECTION_REFUSED'),
+                          ('cannot connect to the docker daemon', 'DOCKER_DAEMON_UNAVAILABLE'),
+                          ('failed to connect to bus', 'SYSTEMD_BUS_UNAVAILABLE')):
+        if phrase in lowered:
+            return label
+    return 'DETAIL_WITHHELD' if value else 'EMPTY'
+
+
 def run(argv):
     env = {'PATH': SAFE_PATH, 'LC_ALL': 'C', 'HOME': pwd.getpwuid(os.geteuid()).pw_dir}
     try:
@@ -56,8 +69,9 @@ def run(argv):
                                 text=True, timeout=12, check=False, env=env)
         if len(result.stdout) > 131072:
             return {'rc': result.returncode, 'error': 'OUTPUT_TOO_LARGE'}
-        # stderr is deliberately not included in evidence.
-        return {'rc': result.returncode, 'text': result.stdout}
+        # Raw stderr remains excluded; only a fixed diagnostic label is returned.
+        return {'rc': result.returncode, 'text': result.stdout,
+                'stderr_summary': stderr_summary(result.stderr) if result.returncode else None}
     except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
         return {'rc': None, 'error': type(exc).__name__}
 
@@ -69,14 +83,15 @@ def query(argv):
             return {'status': 'COLLECTED', 'data': json.loads(result['text'])}
         except (ValueError, TypeError):
             pass
-    return {'status': 'UNAVAILABLE', 'rc': result.get('rc'), 'error': result.get('error', 'QUERY_OR_PARSE_FAILED')}
+    return {'status': 'UNAVAILABLE', 'rc': result.get('rc'), 'error': result.get('error', 'QUERY_OR_PARSE_FAILED'),
+            'stderr_summary': result.get('stderr_summary')}
 
 
 def text_query(argv):
     result = run(argv)
     return {'status': 'COLLECTED' if result.get('rc') == 0 and 'text' in result else 'UNAVAILABLE',
             'rc': result.get('rc'), 'value': scrub(result.get('text', '').strip()),
-            'error': result.get('error')}
+            'error': result.get('error'), 'stderr_summary': result.get('stderr_summary')}
 
 
 def identity(role):
@@ -229,7 +244,7 @@ def github_probe(host):
         address = next(ip for ip in candidates if ipaddress.ip_address(ip).is_global)
         context = ssl.create_default_context()
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        with socket.create_connection((address, 443), timeout=5, source_address=('10.250.10.20', 0)) as connection:
+        with socket.create_connection((address, 443), timeout=5, source_address=(HOSTS['runner'][1], 0)) as connection:
             with context.wrap_socket(connection, server_hostname=host) as secure:
                 return {'host': host, 'status': 'TLS_VERIFIED', 'resolved_ip': address,
                         'local_source': secure.getsockname()[0], 'tls_version': secure.version()}

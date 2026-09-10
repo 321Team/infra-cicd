@@ -15,6 +15,19 @@ spec.loader.exec_module(p)
 
 
 class PreparationSafetyTests(unittest.TestCase):
+    def test_stderr_summary_reports_known_failure_without_arbitrary_text(self):
+        for stderr, expected in [('Permission denied: token=SENTINEL', 'PERMISSION_DENIED'),
+                                 ('SENTINEL_PRIVATE_UNKNOWN', 'DETAIL_WITHHELD')]:
+            with self.subTest(stderr=stderr), patch.object(p.subprocess, 'run', return_value=Mock(returncode=1, stdout='', stderr=stderr)):
+                result = p.query(['docker', 'version'])
+            self.assertEqual(result['stderr_summary'], expected)
+            self.assertNotIn('SENTINEL', json.dumps(result))
+
+    def test_github_probe_uses_declared_runner_source(self):
+        with patch.dict(p.HOSTS, {'runner': ('fixture-runner', '192.0.2.20')}), patch.object(p, 'run', return_value={'rc': 0, 'text': '140.82.114.4 STREAM github.com\n'}), patch.object(p.socket, 'create_connection', side_effect=OSError) as connect:
+            self.assertEqual(p.github_probe('github.com')['status'], 'FAILED')
+            self.assertEqual(connect.call_args.kwargs['source_address'], ('192.0.2.20', 0))
+
     def test_wrong_identity_stops_before_collection_and_writes(self):
         with patch.object(p, 'identity', return_value={'status': 'MISMATCH'}), patch.object(p, 'runner_inventory') as inventory, patch.object(p, 'save_report') as save:
             self.assertEqual(p.main(['--role', 'runner', '--output-dir', '/unused']), 3)
