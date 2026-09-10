@@ -17,7 +17,7 @@
 
 ## 2. CA에서 먼저 확인할 실제 정보
 
-CA를 준비할 곳은 이권욱 관리의 별도 오프라인 관리자 환경이다. 서명 환경으로 서비스 VM을 재사용하지 않는다. 채택 목표는 암호화 볼륨 `/mnt/fds-ca`이며 장치·호스트·암호화 방식의 실제 값은 아직 없다. 실제 준비 상태를 확인하기 전에 일반 디렉터리에서 Root를 만들지 않는다.
+사용자 “server01배치안으로” 지시에 따라 **server01 물리 호스트의 별도 ca01 VM**을 발급 환경으로 확정했다. [VM 준비 안내](ca01-vm-preparation.md)의 2 vCPU·RAM 4GB·OS 20GB·CA 데이터 2GB, LUKS2 `/mnt/fds-ca`, 준비 후 NIC 제거·별도 암호화 백업을 적용한다. 실제 VM 생성·장치·암호화·백업 완료는 미검증이며 서비스 VM을 서명 환경으로 재사용하지 않는다. 보호 환경 준비 전 일반 디렉터리에서 Root를 만들지 않는다.
 
 | 현장 확인 | 입력·근거 |
 |---|---|
@@ -27,7 +27,7 @@ CA를 준비할 곳은 이권욱 관리의 별도 오프라인 관리자 환경�
 | 구 CA 식별·폐기 | 지문·발급 대장·소비자·키 복제본/백업 조사. RETIREMENT_REQUIRED는 실행 완료가 아님 |
 | 신규 자산 | 별도 신규 디렉터리·새 개인키·새 Root. 기존 키·발급 대장 재사용 금지 |
 
-Linux CA 후보 환경에서는 다음 조회로 마운트·장치·호스트 정보를 확인할 수 있다. 디렉터리를 만들거나 볼륨을 포맷하는 명령이 아니다. `findmnt`가 실패하면 마운트가 확인되지 않은 상태로 기록한다. `mountpoint`나 `findmnt` 성공만으로 암호화·오프라인 상태를 입증하지 못한다. 실제 암호화 방식·잠금/해제·백업 확인은 관리자 기록과 대조한다.
+ca01 환경에서는 다음 조회로 마운트·장치·호스트 정보를 확인할 수 있다. 디렉터리를 만들거나 볼륨을 포맷하는 명령이 아니다. `findmnt`가 실패하면 마운트가 확인되지 않은 상태로 기록한다. `mountpoint`나 `findmnt` 성공만으로 암호화·오프라인 상태를 입증하지 못한다. 실제 암호화 방식·잠금/해제·백업 확인은 관리자 기록과 대조한다.
 
 ```bash
 (
@@ -47,7 +47,7 @@ Linux CA 후보 환경에서는 다음 조회로 마운트·장치·호스트 �
 - 요청: `harbor01-sn0wepv7`, 개인키는 Harbor 보호 영역에 보존.
 - CSR SHA-256: `97473d44f37140dfe04c83a29f6fec17560bb6f7b29a543fd1fa06cce91ca890`.
 - SPKI SHA-256: `636f85ce3ae0d5e3ea49e50fca2b8ec1e5c132f990d7867e2ad59d0a2e333638`.
-- 보호 환경이 준비되면 [PR #2의 갱신된 CA 발급 절차](https://github.com/321Team/infra-cicd/blob/3a1a9a8d774eca2917ea62bbe184fea0e11724b2/docs/harbor-formalization.md)에 따라 새 Root로 서명한다. 새 Root RSA4096/1825일, Harbor Leaf RSA3072/365일·30일 전 갱신·CA:FALSE/serverAuth·기존 SAN을 유지한다. 본 브랜치는 새로운 인증서 프로파일을 발행하지 않는다.
+- 보호 환경이 준비되면 [PR #2의 갱신된 CA 발급 절차](https://github.com/321Team/infra-cicd/blob/5f575fc8bfbd68d29fc3995fe68bceb87f1b194b/docs/harbor-formalization.md)에 따라 새 Root로 서명한다. 새 Root RSA4096/1825일, Harbor Leaf RSA3072/365일·30일 전 갱신·CA:FALSE/serverAuth·기존 SAN을 유지한다. 본 브랜치는 새로운 인증서 프로파일을 발행하지 않는다.
 
 ## 3. 배포 차단 로직
 

@@ -23,5 +23,11 @@
   "legacy_ca_status": "RETIREMENT_REQUIRED",
   "legacy_ca_fingerprint_sha256": null,
   "replacement_decision_reference": "docs/decisions/ca-replacement-20260910.md",
-  "retirement_plan_reference": "docs/decisions/ca-replacement-20260910.md"
+  "retirement_plan_reference": "docs/decisions/ca-replacement-20260910.md",
+  "planned_custody": {
+    "decision_status": "ADOPTED_BY_USER",
+    "physical_host": "server01",
+    "vm_hostname": "ca01",
+    "provisioning_status": "NOT_VERIFIED"
+  }
 }

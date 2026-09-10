@@ -11,8 +11,8 @@
 | 신규 Root | 새 RSA4096 개인키, 1825일, CA:TRUE/pathlen:0, keyCertSign/cRLSign. 아직 생성·발급 미수행 |
 | Harbor Leaf | 기존 RSA3072 CSR에 신규 Root로 서명, 365일·만료 30일 전 갱신. CA:FALSE/serverAuth·기존 SAN 유지 |
 | 기존 Harbor 요청 | harbor01-sn0wepv7 유지. CA 교체만으로 서버 개인키·CSR을 다시 만들지 않음 |
-| 보관 환경 | 이권욱 관리 오프라인 암호화 환경과 별도 암호화 백업. 실제 호스트·볼륨·매체 미확인 |
-| ca01 제안 | server01의 전용 VM 제안은 자원·호스트 접근통제 확인 전이며 설치 완료·배치 확정으로 기록하지 않음 |
+| 보관 환경 | server01 물리 호스트의 ca01 VM, 이권욱 관리 오프라인 암호화 환경과 별도 암호화 백업. 실제 구축·볼륨·매체 미확인 |
+| ca01 배치 | 사용자 “server01배치안으로” 지시로 확정. 2 vCPU·RAM 4GB·OS 20GB·CA 데이터 2GB. 설치·암호화 완료는 아님 |
 
 ## 실행 순서와 인수
 
@@ -36,4 +36,4 @@ CA 준비 양식 v1.1은 신규 Root 선택과 전환 계획 참조를 요구하
 
 [v3.1.17 본문 §3.7 D19](https://github.com/321Team/fds-project-baseline/blob/2d93395a0e19ea67e5be199d7183a7edbaa6cf4c/baseline/FDS_Project_Implementation_Baseline_v3.1.17.md)은 프로젝트 Private Root, 서비스별 Leaf, Consumer 공개 CA Trust, TLS 1.2 이상과 검증 우회 금지를 규정한다. 해당 본문에 CA 전용 물리 서버·ca01의 CPU/RAM을 필수로 고정한 문구는 없다. 별도 오프라인 암호화 보관과 서비스 VM 내 CA 키 금지는 이후 infra-cicd에서 채택한 구현 통제이며 두 근거를 구분한다.
 
-Harbor와 **동일 VM**에서 Root 개인키를 보관·서명하는 안은 현재 구현 통제와 충돌한다. **동일 물리 VMware 호스트의 별도 CA VM**은 자원·호스트 관리자·VM 파일 접근통제 확인을 전제로 검토할 수 있다. server01 배치 제안이 물리 호스트 강제 규칙은 아니다. NIC 제거는 VM 네트워크 분리이며 물리 호스트 관리자까지 격리하는 것은 아니다. 이번 질문을 Harbor VM에 CA를 통합하라는 변경 지시로 해석하지 않는다.
+Harbor와 **동일 VM**에서 Root 개인키를 보관·서명하는 안은 현재 구현 통제와 충돌한다. **동일 물리 VMware 호스트의 별도 CA VM**은 자원·호스트 관리자·VM 파일 접근통제 확인을 전제로 검토할 수 있다. server01 배치는 이후 사용자 선택으로 이번 구축 대상으로 확정됐다. D19 자체의 물리 호스트 강제 규칙과 구분한다. NIC 제거는 VM 네트워크 분리이며 물리 호스트 관리자까지 격리하는 것은 아니다. Harbor VM에 CA를 통합하지 않으며 [ca01 준비 안내](../ca01-vm-preparation.md)를 따른다.
