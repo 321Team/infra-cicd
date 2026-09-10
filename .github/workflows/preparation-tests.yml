@@ -1,0 +1,32 @@
+name: P1 CA and gate unit tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1-ca-gate-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.repository == '321Team/infra-cicd'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # official v6 commit
+        with:
+          persist-credentials: false
+      - name: Verify preparation sources and run unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum --check PREPARATION_SHA256SUMS
+          python3 -m unittest discover -s tools/preparation -p 'test_*.py' -v
+          printf 'LOCAL_LOGIC_TESTS=PASS\nDELIVERY_GATE=NOT_VERIFIED\n'

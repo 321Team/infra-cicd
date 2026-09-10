@@ -1,0 +1,112 @@
+{
+  "schema": "P1-CICD-01-gate-input-1.0",
+  "template_only": true,
+  "workflow": {
+    "repository": "321Team/infra-cicd",
+    "ref": "refs/heads/main",
+    "commit": null,
+    "approved_commit": null,
+    "approval_reference": null,
+    "run_id": null,
+    "run_attempt": null
+  },
+  "runtime": {
+    "runner_job": "NOT_VERIFIED",
+    "builder_rootless": "NOT_VERIFIED",
+    "harbor_tls": "NOT_VERIFIED",
+    "kubernetes_access": "NOT_VERIFIED",
+    "token_valid": "NOT_VERIFIED",
+    "rbac_scope": "NOT_VERIFIED",
+    "worker_trust": "NOT_VERIFIED",
+    "deployment_lock": "NOT_VERIFIED"
+  },
+  "deployment_approval": {
+    "approved_by": null,
+    "reference": null,
+    "run_id": null,
+    "run_attempt": null,
+    "workflow_commit": null
+  },
+  "images": [
+    {
+      "deployment": "transaction-api",
+      "source": {
+        "repository": null,
+        "approved_repository": null,
+        "commit": null,
+        "approved_commit": null,
+        "approval_reference": null
+      },
+      "tests": {
+        "unit": "NOT_VERIFIED",
+        "contract": "NOT_VERIFIED"
+      },
+      "build": {
+        "result": "NOT_VERIFIED",
+        "manifest_digest": null
+      },
+      "scan": {
+        "result": "NOT_VERIFIED",
+        "exit_code": null,
+        "critical_count": null,
+        "manifest_digest": null,
+        "report_sha256": null,
+        "tool_version": null,
+        "db_reference": null
+      },
+      "registry_repository": null,
+      "approved_registry_repository": null,
+      "push": {
+        "result": "NOT_VERIFIED",
+        "manifest_digest": null
+      },
+      "approved_manifest_digest": null,
+      "target": {
+        "namespace": "fds-app",
+        "service_account": "ci-cd/cicd-runner-sa",
+        "container": null,
+        "previous_manifest_digest": null
+      }
+    },
+    {
+      "deployment": "fds-engine",
+      "source": {
+        "repository": null,
+        "approved_repository": null,
+        "commit": null,
+        "approved_commit": null,
+        "approval_reference": null
+      },
+      "tests": {
+        "unit": "NOT_VERIFIED",
+        "contract": "NOT_VERIFIED"
+      },
+      "build": {
+        "result": "NOT_VERIFIED",
+        "manifest_digest": null
+      },
+      "scan": {
+        "result": "NOT_VERIFIED",
+        "exit_code": null,
+        "critical_count": null,
+        "manifest_digest": null,
+        "report_sha256": null,
+        "tool_version": null,
+        "db_reference": null
+      },
+      "registry_repository": null,
+      "approved_registry_repository": null,
+      "push": {
+        "result": "NOT_VERIFIED",
+        "manifest_digest": null
+      },
+      "approved_manifest_digest": null,
+      "target": {
+        "namespace": "fds-app",
+        "service_account": "ci-cd/cicd-runner-sa",
+        "container": null,
+        "previous_manifest_digest": null
+      }
+    }
+  ]
+}

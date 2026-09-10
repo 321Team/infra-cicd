@@ -1,0 +1,27 @@
+{
+  "schema": "P1-CICD-01-ca-preparation-1.0",
+  "template_only": true,
+  "owner": "이권욱",
+  "csr_sha256": "97473d44f37140dfe04c83a29f6fec17560bb6f7b29a543fd1fa06cce91ca890",
+  "csr_spki_sha256": "636f85ce3ae0d5e3ea49e50fca2b8ec1e5c132f990d7867e2ad59d0a2e333638",
+  "approved_ca_status": "UNKNOWN",
+  "inventory_record_reference": null,
+  "checked_at": null,
+  "approved_ca_fingerprint_sha256": null,
+  "approved_ca_record_reference": null,
+  "ca_validity_review_reference": null,
+  "selection": null,
+  "custody": {
+    "host": null,
+    "role": "OFFLINE_ADMIN_ENVIRONMENT",
+    "asset_reference": null,
+    "encryption_reference": null,
+    "backup_reference": null,
+    "access_control_reference": null,
+    "offline_procedure_reference": null,
+    "encrypted_storage_confirmed": null,
+    "separate_encrypted_backup_confirmed": null,
+    "administrator_access_confirmed": null,
+    "offline_signing_confirmed": null
+  }
+}
