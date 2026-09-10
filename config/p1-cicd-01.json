@@ -14,10 +14,19 @@
     "account": "server01_cicd-runner",
     "scope": "repository",
     "registration_url": "https://github.com/321Team/infra-cicd",
-    "allowed_workflow_repositories": ["321Team/infra-cicd"],
+    "allowed_workflow_repositories": [
+      "321Team/infra-cicd"
+    ],
     "execution_model": "central_orchestration",
     "name": "cicd-runner01",
-    "labels": ["self-hosted", "Linux", "X64", "p1-cicd", "onprem", "podman"],
+    "labels": [
+      "self-hosted",
+      "Linux",
+      "X64",
+      "p1-cicd",
+      "onprem",
+      "podman"
+    ],
     "install_directory": "/home/server01_cicd-runner/actions-runner",
     "service_account": "server01_cicd-runner",
     "builder": "podman-rootless",
@@ -48,37 +57,67 @@
     "harbor_key_csr_apply_owner": "이하영",
     "ca_custody_target": "GU_CONTROLLED_OFFLINE_ADMIN_ENVIRONMENT_ENCRYPTED_VOLUME",
     "ca_custody_actual_asset_reference": null,
-    "approved_ca_asset_status": "UNKNOWN",
-    "ca_selection_rule": "REUSE_APPROVED_CA_IF_PRESENT_ELSE_INITIALIZE_ON_CONFIRMED_ABSENCE",
+    "approved_ca_asset_status": "NEW_ROOT_REQUIRED_NOT_GENERATED",
+    "ca_selection_rule": "REPLACE_LEGACY_CA_WITH_NEW_KEY_AND_ROOT",
     "new_root_rsa_bits": 4096,
     "new_root_validity_days": 1825,
     "harbor_leaf_rsa_bits": 3072,
     "harbor_leaf_validity_days": 365,
     "harbor_leaf_renew_before_days": 30,
-    "harbor_leaf_dns_sans": ["harbor.fds.internal", "harbor01"],
-    "harbor_leaf_ip_sans": ["10.1.93.54"],
+    "harbor_leaf_dns_sans": [
+      "harbor.fds.internal",
+      "harbor01"
+    ],
+    "harbor_leaf_ip_sans": [
+      "10.1.93.54"
+    ],
     "harbor_leaf_ca": false,
-    "harbor_leaf_eku": ["serverAuth"],
+    "harbor_leaf_eku": [
+      "serverAuth"
+    ],
     "minimum_tls": "1.2",
     "consumer_material": "APPROVED_CA_PUBLIC_CERTIFICATE_ONLY",
-    "issuance_status": "NOT_EXECUTED"
+    "issuance_status": "NOT_EXECUTED",
+    "ca_replacement_decision": {
+      "date": "2026-09-10",
+      "by": "이권욱",
+      "instruction": "기존 승인 CA는 폐기 신규 발급 필요"
+    },
+    "legacy_ca_status": "RETIREMENT_REQUIRED",
+    "legacy_ca_fingerprint_sha256": null,
+    "legacy_ca_retirement_status": "NOT_VERIFIED",
+    "new_ca_asset_directory": "/mnt/fds-ca/fds-project-root-ca-2026-replacement"
   },
   "delivery": {
     "namespace": "fds-app",
     "service_account": "ci-cd/cicd-runner-sa",
-    "deployments": ["transaction-api", "fds-engine"],
-    "verbs": ["get", "update", "patch"],
+    "deployments": [
+      "transaction-api",
+      "fds-engine"
+    ],
+    "verbs": [
+      "get",
+      "update",
+      "patch"
+    ],
     "image_reference": "sha256_digest",
-    "scan_block_severity": ["CRITICAL"],
+    "scan_block_severity": [
+      "CRITICAL"
+    ],
     "scan_error_blocks_deploy": true,
-    "ci_robot_permissions": ["push", "pull"],
-    "worker_robot_permissions": ["pull"],
+    "ci_robot_permissions": [
+      "push",
+      "pull"
+    ],
+    "worker_robot_permissions": [
+      "pull"
+    ],
     "credential_separation": true,
     "token_policy_owner": "P1-SEC-01",
     "gate": "NOT_VERIFIED"
   },
   "remaining_runtime_inputs": [
-    "Actual protected CA asset reference and approved CA inventory",
+    "Protected new CA environment and backup; legacy CA fingerprint, consumers and disposal evidence",
     "App source repositories, approved SHAs, Dockerfiles and Unit/Contract test commands",
     "Actual Kubernetes version, container names and TokenRequest policy",
     "Harbor stop window, consistent protected backup and selected installer digest"

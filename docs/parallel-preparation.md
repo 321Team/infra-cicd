@@ -68,12 +68,12 @@ Runner 경로가 기본 후보인 계정 홈의 `actions-runner` 또는 `/opt/ac
 
 [인계 양식](../templates/parallel-preparation-handoff.json)을 사용한다. 계정 암호·Token·개인키 내용은 입력하지 않는다.
 
-1. **정식 CA 존재 여부:** 승인된 CA 자산 기록과 공개 인증서 SHA-256 지문, 기존 Consumer 범위. 파일 미발견이나 과거 임시 인증서 이력만으로 CA가 없다고 결론내리지 않는다.
+1. **신규 CA 전환·기존 CA 폐기:** 2026-09-10 사용자 결정에 따라 재사용하지 않는다. 기존 공개 지문·자산·백업·실제 Consumer를 식별하고 새 CA 전환 및 폐기 이력에 연결한다. 구 자산 미발견을 폐기 완료로 간주하지 않는다.
 2. **CA 운영 환경:** 이권욱이 관리할 보호 환경과 백업·갱신 절차. CA 개인키를 Runner나 Actions Secrets로 옮기지 않는다.
 3. **Harbor 설치 정본:** 서로 다른 Compose 경로 라벨이 관측된 이력이 있으므로 이하영이 실제 관리할 설정 파일·적용 경로를 확정한다. 라벨만으로 정본을 선택하거나 `docker compose up/down`을 실행하지 않는다.
 4. **발급 프로파일·적용:** IP SAN 10.1.93.54, CA:FALSE, 서버 인증 목적을 유지한다. DNS SAN은 harbor.fds.internal/harbor01, IP SAN은 10.1.93.54, Leaf 365일/30일 전 갱신을 채택했다. 전환·복구는 [정식화 Runbook](harbor-formalization.md)을 따른다.
 
-기존 CA를 재사용하거나, 정식 CA가 없음을 확인한 뒤 보호 환경에서 최초 생성한다. Harbor에서 개인키와 CSR을 만들고 CSR만 이권욱에게 전달한다. 이권욱은 서명한 Leaf·CA 공개 인증서·지문·발급 기록을 전달하고, 이하영은 적용·복구를 확인한다. 그 다음 Runner·Worker Trust와 엄격한 TLS, 인증 Push/Pull을 시험한다. 기존 Root 교체는 영향받는 Consumer의 전환·복구 계획을 먼저 확인한다.
+새 키로 신규 Root를 보호 환경에서 발급한다. Harbor는 이미 검토된 `harbor01-sn0wepv7`의 서버 키·CSR을 유지하고 CSR만 이권욱에게 전달한다. 이권욱은 서명한 Leaf·CA 공개 인증서·지문·발급 기록을 전달하고, 이하영은 적용·복구를 확인한다. 그 다음 Runner·Worker Trust와 엄격한 TLS, 인증 Push/Pull을 시험한다. 영향받는 Consumer의 전환·복구와 구 신뢰 제거를 확인하고, 구 CA 개인키·복제본·백업의 폐기 결과를 기록한다. 자세한 순서는 [발급 Runbook](harbor-formalization.md)을 따른다.
 
 ## Runner 등록 범위와 구현 준비
 
@@ -90,7 +90,7 @@ Runner 경로가 기본 후보인 계정 홈의 `actions-runner` 또는 `/opt/ac
 ## 증적 수신 후 처리
 
 - Runner 결과: 기존 설치·등록 여부와 부족 도구를 판정하고, 호환 버전·빌더·등록 범위에 맞는 설치 절차를 만든다.
-- Harbor 결과와 인계: CA 재사용/최초 생성, CSR·서명·적용·복구 명령을 확정한다. TLS 설정 변경 전 동일 인증서 수집을 반복하지 않는다.
+- Harbor 결과와 인계: 신규 Root 발급과 기존 CSR 서명·적용·신뢰 전환·구 CA 폐기를 기록한다. TLS 설정 변경 전 동일 인증서 수집을 반복하지 않는다.
 - 두 흐름이 합쳐지는 시점: 엄격한 TLS 성공 → Runner Push/Worker Pull → 승인 Digest 배포·Health/E2E → 실패 차단·복구 시험.
 - 초기 구성 PR #1은 별도 기술 검토 후 이권욱이 병합 판단한다. 이 준비 도구의 실행이 병합 또는 배포 승인을 대신하지 않는다.
 

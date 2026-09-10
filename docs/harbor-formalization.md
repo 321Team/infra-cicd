@@ -1,10 +1,12 @@
-# Harbor 초기화·정식 발급 Runbook v1.1
+# Harbor 초기화·정식 발급 Runbook v1.2
 
 채택 방식: **임시 환경은 보존·격리하고 새 데이터·키·자격증명으로 정식 구성한다.** 초기화 요청을 이 방식으로 구현한다. 서비스 전환은 이하영, CA 운영·서명과 Runner Trust는 이권욱이 맡는다.
 
 2026-09-10 리뷰 반영: §5.1에 실제 설치 명령을 추가했다. 현재 유효한 CSR은 `harbor01-sn0wepv7` 요청이며 다시 생성하지 않는다. **Leaf 발급 결과와 승인 CA 지문은 아직 미수신이므로 지금 §5.1을 실행할 단계는 아니다.** 아래 §1은 최초 생성·별도 신규 요청 절차로 보존한다.
 
-## 1. Harbor에서 바로 실행할 작업: 새 키·CSR
+2026-09-10 CA 결정 변경: **기존 승인 CA는 폐기하고 새 개인키로 신규 Root를 발급한다.** 재사용·부재 확인 조건을 대체한다. 실제 CA 폐기·발급은 미수행이며 §2–4와 마지막 전환 절차를 따른다.
+
+## 1. Harbor 키·CSR 최초 생성 절차 — 현재 요청은 재실행하지 않음
 
 개인키는 `/etc/harbor/pki/requests/harbor01-<임의값>/harbor01.key`에 root 전용으로 생성한다. 기존 키·인증서·서비스·데이터를 변경하지 않는다. 재실행하면 새로운 요청이 생기므로 성공한 요청의 키·CSR 쌍을 계속 사용한다.
 
@@ -45,11 +47,11 @@ CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 
 
 ## 2. CA 보관 환경
 
-구현값: 이권욱이 관리하는 관리자 단말/전용 오프라인 환경의 **암호화 볼륨 `/mnt/fds-ca`**, 자산 디렉터리 `/mnt/fds-ca/fds-project-root-ca-2026`. 루트 키는 암호화하고 별도 암호화 백업 매체 1개를 분리 보관한다. 서명 중에만 볼륨을 열고 끝나면 분리한다. 개인키·암호를 Runner, Harbor, Git, Actions Secrets, 대화 또는 증적 Archive에 넣지 않는다.
+구현값: 이권욱이 관리하는 관리자 단말/전용 오프라인 환경의 **암호화 볼륨 `/mnt/fds-ca`**, 자산 디렉터리 `/mnt/fds-ca/fds-project-root-ca-2026-replacement`. 루트 키는 암호화하고 별도 암호화 백업 매체 1개를 분리 보관한다. 서명 중에만 볼륨을 열고 끝나면 분리한다. 개인키·암호를 Runner, Harbor, Git, Actions Secrets, 대화 또는 증적 Archive에 넣지 않는다.
 
-이 경로는 새로 채택한 구축 위치다. 실제 장치 ID·암호화 방식·관리자 계정과 백업 매체는 현장에서 자산 기록에 연결한다. 암호화 볼륨이 준비되기 전에는 일반 디렉터리에 키를 생성하지 않는다. 승인 프로젝트 CA가 있으면 그 관리 체계와 지문을 재사용하고, 아래 최초 생성 절차는 실행하지 않는다. Harbor 임시 인증서는 승인 CA로 인정하지 않는다. CA 자산의 미확인 상태는 `config/p1-cicd-01.json`에 그대로 남겼다.
+이 경로는 새로 채택한 구축 위치다. 실제 장치 ID·암호화 방식·관리자 계정과 백업 매체는 현장에서 자산 기록에 연결한다. 암호화 볼륨이 준비되기 전에는 일반 디렉터리에 키를 생성하지 않는다. 사용자 결정에 따라 구 CA는 재사용하지 않으며 구 키·발급 대장·자산 경로는 신규 디렉터리에 복사하거나 덮어쓰지 않는다. 새 Root는 새 개인키로 만든다. 구 CA 지문·배포 대상·백업은 전환·폐기 이력으로 식별한다. 실제 자산 확인 및 발급·폐기 상태는 `config/p1-cicd-01.json`에 미검증으로 남겼다.
 
-## 3. 승인 CA가 없음을 확인한 경우에만 최초 생성
+## 3. 보호 환경에서 신규 Root 최초 생성
 
 다음 명령은 **위 오프라인 CA 환경 전용**이다. 이 대화 환경이나 Runner·Harbor에서 실행하는 명령이 아니다. 암호화 볼륨 장치와 백업을 현장에서 확인하고, 키트의 `pki/root-ca.cnf`를 복사한다. 암호는 OpenSSL의 보호된 대화형 프롬프트로 입력한다. 이 단계에서 만든 CA 공개 지문을 자산 기록에 확정한다.
 
@@ -59,9 +61,9 @@ CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 
   umask 077
   case "$(hostname -s)" in cicd-runner01|harbor01|edge01) exit 3 ;; esac
   mountpoint -q /mnt/fds-ca
-  test ! -e /mnt/fds-ca/fds-project-root-ca-2026
-  test ! -L /mnt/fds-ca/fds-project-root-ca-2026
-  mkdir -m 700 /mnt/fds-ca/fds-project-root-ca-2026
+  test ! -e /mnt/fds-ca/fds-project-root-ca-2026-replacement
+  test ! -L /mnt/fds-ca/fds-project-root-ca-2026-replacement
+  mkdir -m 700 /mnt/fds-ca/fds-project-root-ca-2026-replacement
 )
 ```
 
@@ -71,7 +73,7 @@ CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 
 (
   set -euo pipefail
   umask 077
-  cd /mnt/fds-ca/fds-project-root-ca-2026
+  cd /mnt/fds-ca/fds-project-root-ca-2026-replacement
   test -f root-ca.cnf
   test -f harbor-leaf.ext
   test ! -e private
@@ -90,7 +92,7 @@ CA 서명 도중 실패한 경우에도 CA `index.txt`·`serial`·`newcerts`를 
 )
 ```
 
-Root의 1825일과 Leaf의 365일은 이번 운영값이다. 기존 CA가 있다면 기존 유효기간을 임의로 늘리지 않는다. 새 Root는 RSA4096, CA:TRUE/pathlen:0, keyCertSign/cRLSign이다. 서명 DB·serial·인증서·암호화 키를 함께 보호 백업한다. 이 단순 오프라인 CA 절차는 전체 PKI 자동화 시스템을 구현했다는 의미가 아니다. [OpenSSL CA 운영](https://docs.openssl.org/3.5/man1/openssl-ca/)
+Root의 1825일과 Leaf의 365일은 이번 운영값이다. 새 키·인증서 지문·SPKI·serial과 발급 대장을 신규 자산 ID에 연결한다. 구 CA 개인키나 serial 대장을 새 CA에 재사용하지 않는다. 명령이 일부 진행된 뒤 실패하면 남은 파일·대장을 먼저 확인하며 디렉터리 초기화나 무조건 재생성을 하지 않는다. 새 Root는 RSA4096, CA:TRUE/pathlen:0, keyCertSign/cRLSign이다. 서명 DB·serial·인증서·암호화 키를 함께 보호 백업한다. 이 단순 오프라인 CA 절차는 전체 PKI 자동화 시스템을 구현했다는 의미가 아니다. [OpenSSL CA 운영](https://docs.openssl.org/3.5/man1/openssl-ca/)
 
 ## 4. CSR 검토·Leaf 서명
 
@@ -100,7 +102,7 @@ CSR Archive의 외부 해시를 확인한 후 새 디렉터리에 압축을 풀�
 (
   set -euo pipefail
   umask 077
-  cd /mnt/fds-ca/fds-project-root-ca-2026
+  cd /mnt/fds-ca/fds-project-root-ca-2026-replacement
   openssl req -in requests/harbor01.csr.pem -verify -noout
   openssl req -in requests/harbor01.csr.pem -noout -subject -text
   openssl x509 -in certs/fds-root-ca.crt -checkend 31622400 -noout
@@ -116,7 +118,7 @@ CSR Archive의 외부 해시를 확인한 후 새 디렉터리에 압축을 풀�
 )
 ```
 
-서명 프롬프트에서 요청 주체·RSA3072·정해진 SAN을 검토한다. CA는 요청의 임의 확장을 복사하지 않고 `harbor-leaf.ext`로 CA:FALSE와 serverAuth 및 SAN을 강제한다. 승인된 CA가 기존에 있으면 해당 CA의 서명 도구·대장을 사용하여 같은 Leaf 프로파일로 발급한다. CA 잔여 유효기간이 충분하지 않으면 먼저 갱신/Consumer 전환 계획을 세운다. [OpenSSL CSR](https://docs.openssl.org/3.5/man1/openssl-req/)
+서명 프롬프트에서 요청 주체·RSA3072·정해진 SAN을 검토한다. CA는 요청의 임의 확장을 복사하지 않고 `harbor-leaf.ext`로 CA:FALSE와 serverAuth 및 SAN을 강제한다. 이 단계에서는 새로 생성한 Root의 승인 지문·보관 위치·신규 발급 대장을 확인하고 그 CA로 서명한다. 구 CA를 서명자로 선택하지 않는다. CA 잔여 유효기간이 충분하지 않으면 발급을 중단하고 원인을 확인한다. [OpenSSL CSR](https://docs.openssl.org/3.5/man1/openssl-req/)
 
 반환물: Leaf 공개 인증서, CA 공개 인증서, 두 인증서의 SHA-256 지문, CSR SHA-256, serial·유효기간·발급자·요청 ID. 실제 CA 키와 암호는 반환하지 않는다. 만료 30일 전 Leaf 갱신을 시작하고 같은 검증·교체·복구 절차를 반복한다.
 
@@ -276,10 +278,21 @@ HARBOR_TLS_INSTALL
 
 `data_volume`은 Harbor의 영속 데이터 위치이며 컨테이너 재생성만으로 초기화되지 않는다. [Harbor 설정](https://goharbor.io/docs/2.13.0/install-config/configure-yml-file/)
 
-복구는 신규 구성을 정지하고 보존한 이전 구성·데이터·키 쌍으로 되돌리는 순서다. 신규 환경에서 쓰기가 시작된 후에는 구 환경 복귀가 신규 데이터를 잃게 할 수 있으므로 전환 이후 데이터 처리와 함께 판단한다. 임시 인증서로 돌아가면 이전 TLS 미검증 상태도 되돌아온다. 기존/신규 데이터 간 부분 복사는 복구 수단으로 사용하지 않는다.
+복구는 신규 구성을 정지하고 보존한 이전 구성·데이터를 확인하는 순서다. 신규 환경에서 쓰기가 시작된 후에는 구 환경 복귀가 신규 데이터를 잃게 할 수 있으므로 전환 이후 데이터 처리와 함께 판단한다. CA 폐기 결정에 따라 구 Root 신뢰를 다시 추가하는 방식으로 복구하지 않는다. 이전 서비스 구성을 복원할 때도 새 Root가 서명한 유효 Leaf와 일치하는 서버 키를 적용할 수 있는지 사전에 검증하며, 불가능하면 서비스를 중지 상태로 두고 원인을 해결한다. 기존/신규 데이터 간 부분 복사는 복구 수단으로 사용하지 않는다.
 
 ## 6. Trust와 최종 인수
 
 Runner·Worker에 승인 지문과 일치하는 CA 공개 인증서만 설치한다. Runner의 OS trust와 실제 Podman trust, Worker의 실제 containerd trust가 적용됐는지 각각 확인한다. 이전 임시 cert의 blanket trust나 `-k`·`--tls-verify=false`는 사용하지 않는다. 승인 CA로 strict TLS를 통과한 뒤 CI Push+Pull 및 Worker Pull/Pod Start·Push DENY를 시험한다. CA 키를 Consumer에 복사하지 않는다.
 
 IP endpoint를 유지하므로 DNS 미구현이 초기 발급을 막지 않는다. SAN에 이름을 넣는 것은 DNS 레코드/방화벽 적용 완료를 뜻하지 않는다. IF-09/10/11, 내부 source 보존과 API 인증·최소권한은 별도 증적으로 확인한다. **현재 DELIVERY_GATE=NOT_VERIFIED**이며 이 키트만으로 초기화·정식 발급·배포 완료를 선언하지 않는다.
+
+
+## 기존 CA 전환·폐기 인수 — 2026-09-10
+
+- **담당:** 이권욱은 구 CA 신규 서명 중지·자산 식별·신규 Root 발급·Runner Trust와 최종 폐기 기록, 이하영은 Harbor Leaf 적용·복구·Worker Trust를 담당한다.
+- **전환:** 기존 CA 공개 지문과 실제 소비자를 식별하고 신규 Root 공개 인증서 및 새 Leaf로 전환한다. Harbor·Runner·Worker 외 edge01·monitor01·클러스터 Prometheus·관리자 도구는 실제 구 CA 사용 여부에 따라 포함한다. D33의 monitor01 Leaf 및 Prometheus Trust도 조사한다. 사용 중인 대상이 없으면 근거를 기록하고 전환 시험을 N/A로 처리한다.
+- **검증:** 새 Root 단독 신뢰로 strict TLS·필요한 Push/Pull을 확인한 뒤 실제 OS·Podman·런타임·앱 신뢰 저장소에서 구 Root를 제거한다. 다른 구 신뢰 경로도 확인하고 구 체인이 더는 신뢰되지 않는지 검사한다. Root 키 삭제나 CRL 생성만으로 기존 Consumer의 Root 신뢰가 자동 제거되지는 않는다. [OpenSSL Trust Anchors](https://docs.openssl.org/3.5/man1/openssl-verification-options/#trust-anchors)
+- **폐기:** 전환·필요한 취소 기록 완료 후 구 CA 개인키·복제본·백업을 실제 매체에 맞게 폐기하고 처리자·시각·방법·대상·검증 근거를 남긴다. 공개 인증서·지문·발급 대장·폐기 기록은 보존한다. 구 키가 이미 폐기됐다면 완료 증적과 남은 Trust 제거를 확인한다. 폐기된 CA로의 복구는 사용하지 않는다.
+- **현재 미확인:** 구 CA 지문·장치·복제본·배포 현황, 새 CA 호스트·암호화 볼륨·백업. 대상 경로를 모르는 상태에서 일괄 삭제·포맷하지 않는다. 파일 삭제만으로 SSD·가상 디스크의 보안 소거를 입증하지 않는다.
+
+`NEW_CA_ISSUANCE=NOT_EXECUTED`, `LEGACY_CA_RETIREMENT=NOT_VERIFIED`, `DELIVERY_GATE=NOT_VERIFIED`.
