@@ -1,0 +1,141 @@
+{
+  "schema": "P1-CICD-01-implementation-1.0",
+  "decision_status": "ADOPTED_BY_USER",
+  "authorization": "우리가 설계한 베이스라인 기준으로 권장안 적용",
+  "baseline": {
+    "version": "3.1.17",
+    "commit": "2d93395a0e19ea67e5be199d7183a7edbaa6cf4c",
+    "blob": "9090e23e62f9e59f74f1ce174d404fa6ead4db91",
+    "path": "baseline/FDS_Project_Implementation_Baseline_v3.1.17.md"
+  },
+  "runner": {
+    "host": "cicd-runner01",
+    "ip": "10.250.10.20",
+    "account": "server01_cicd-runner",
+    "scope": "repository",
+    "registration_url": "https://github.com/321Team/infra-cicd",
+    "allowed_workflow_repositories": [
+      "321Team/infra-cicd"
+    ],
+    "execution_model": "central_orchestration",
+    "name": "cicd-runner01",
+    "labels": [
+      "self-hosted",
+      "Linux",
+      "X64",
+      "p1-cicd",
+      "onprem",
+      "podman"
+    ],
+    "install_directory": "/home/server01_cicd-runner/actions-runner",
+    "service_account": "server01_cicd-runner",
+    "builder": "podman-rootless",
+    "builder_observed_version": "6.1.0",
+    "docker_container_actions": false,
+    "github_service_containers": false,
+    "initial_trigger": "workflow_dispatch",
+    "untrusted_pr_execution": false,
+    "runtime_status": "NOT_VERIFIED"
+  },
+  "harbor": {
+    "formal_setup": "NOT_STARTED_USER_CONFIRMED",
+    "host": "harbor01",
+    "endpoint": "https://10.1.93.54",
+    "target_install_directory": "/opt/harbor",
+    "target_data_volume": "/data/harbor-formal",
+    "legacy_data_policy": "PRESERVE_ISOLATED_NO_IMPORT_NO_DELETE",
+    "legacy_data_root": "/data",
+    "legacy_install_directory": "/home/server08/harbor",
+    "new_credentials_required": true,
+    "https_certificate": "/etc/harbor/pki/current/harbor01.crt",
+    "https_private_key": "/etc/harbor/pki/current/harbor01.key",
+    "runtime_status": "NOT_APPLIED"
+  },
+  "tls": {
+    "trust_model": "D19_PROJECT_PRIVATE_ROOT_CA_SEPARATE_SERVER_LEAVES",
+    "ca_owner": "이권욱",
+    "harbor_key_csr_apply_owner": "이하영",
+    "ca_custody_target": "GU_CONTROLLED_OFFLINE_ADMIN_ENVIRONMENT_ENCRYPTED_VOLUME",
+    "ca_custody_actual_asset_reference": null,
+    "approved_ca_asset_status": "NEW_ROOT_REQUIRED_NOT_GENERATED",
+    "ca_selection_rule": "REPLACE_LEGACY_CA_WITH_NEW_KEY_AND_ROOT",
+    "new_root_rsa_bits": 4096,
+    "new_root_validity_days": 1825,
+    "harbor_leaf_rsa_bits": 3072,
+    "harbor_leaf_validity_days": 365,
+    "harbor_leaf_renew_before_days": 30,
+    "harbor_leaf_dns_sans": [
+      "harbor.fds.internal",
+      "harbor01"
+    ],
+    "harbor_leaf_ip_sans": [
+      "10.1.93.54"
+    ],
+    "harbor_leaf_ca": false,
+    "harbor_leaf_eku": [
+      "serverAuth"
+    ],
+    "minimum_tls": "1.2",
+    "consumer_material": "APPROVED_CA_PUBLIC_CERTIFICATE_ONLY",
+    "issuance_status": "NOT_EXECUTED",
+    "ca_replacement_decision": {
+      "date": "2026-09-10",
+      "by": "이권욱",
+      "instruction": "기존 승인 CA는 폐기 신규 발급 필요"
+    },
+    "legacy_ca_status": "RETIREMENT_REQUIRED",
+    "legacy_ca_fingerprint_sha256": null,
+    "legacy_ca_retirement_status": "NOT_VERIFIED",
+    "new_ca_asset_directory": "/mnt/fds-ca/fds-project-root-ca-2026-replacement",
+    "ca_deployment_plan": {
+      "decision_date": "2026-09-10",
+      "instruction": "server01배치안으로",
+      "status": "ADOPTED_BY_USER",
+      "physical_host": "server01",
+      "vm_hostname": "ca01",
+      "os": "CentOS Stream 10 Minimal",
+      "vcpu": 2,
+      "memory_gb": 4,
+      "os_disk_gb": 20,
+      "ca_data_disk_gb": 2,
+      "ca_data_encryption": "LUKS2",
+      "network_after_preparation": "VIRTUAL_NIC_REMOVED",
+      "separate_encrypted_backup_required": true,
+      "provisioning_status": "NOT_VERIFIED"
+    }
+  },
+  "delivery": {
+    "namespace": "fds-app",
+    "service_account": "ci-cd/cicd-runner-sa",
+    "deployments": [
+      "transaction-api",
+      "fds-engine"
+    ],
+    "verbs": [
+      "get",
+      "update",
+      "patch"
+    ],
+    "image_reference": "sha256_digest",
+    "scan_block_severity": [
+      "CRITICAL"
+    ],
+    "scan_error_blocks_deploy": true,
+    "ci_robot_permissions": [
+      "push",
+      "pull"
+    ],
+    "worker_robot_permissions": [
+      "pull"
+    ],
+    "credential_separation": true,
+    "token_policy_owner": "P1-SEC-01",
+    "gate": "NOT_VERIFIED"
+  },
+  "remaining_runtime_inputs": [
+    "Protected new CA environment and backup; legacy CA fingerprint, consumers and disposal evidence",
+    "App source repositories, approved SHAs, Dockerfiles and Unit/Contract test commands",
+    "Actual Kubernetes version, container names and TokenRequest policy",
+    "Harbor stop window, consistent protected backup and selected installer digest"
+  ]
+}

@@ -1,0 +1,19 @@
+[ req ]
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = request_extensions
+
+[ dn ]
+C = KR
+O = FDS
+OU = Harbor
+CN = harbor.fds.internal
+
+[ request_extensions ]
+subjectAltName = @sans
+
+[ sans ]
+DNS.1 = harbor.fds.internal
+DNS.2 = harbor01
+IP.1 = 10.1.93.54
