@@ -1,5 +1,7 @@
 # 현재 관측 결과와 선행조건
 
+**2026-09-15 최신 관측은 [실제 구성·후속 실행 기록](implementation-state-20260915.md)을 기준으로 읽는다.** 신규 Root/Leaf 발급·백업/파일 복구·공개 인계와 Runner 로컬/Idle는 확인했다. PR #2는 승인 후 병합됐고 첫 실제 Job·Harbor 서비스 전환·Delivery는 미검증이다. 아래 표는 09-09 수신 결과로 보존하며 현재 상태로 해석하지 않는다.
+
 이 문서는 제출 증적의 시점별 결과다. 실시간 모니터링 결과가 아니다.
 
 | 항목 | 확인 범위 / 남은 작업 |
@@ -13,7 +15,7 @@
 | 앱 Source·Token·Robot·Trivy 세부 기준 | 관련 담당 인계 및 실제 실행 조건 확인 필요. |
 | Delivery Gate | NOT_VERIFIED |
 
-우선 정식 CA 현황과 Harbor 적용 경로를 확인하고 TLS 신뢰를 정리한다. Runner 등록 준비와 앱 Source·테스트 계약 확인은 병행할 수 있다. 실제 인증 Push/Pull과 배포는 각 선행조건 충족 후 수행한다.
+현재는 첫 Runner smoke와 앱 Source·테스트 계약 인계를 진행한다. Harbor 적용·신뢰 배포는 이하영 주관 HBR 작업과 연계한다. 실제 인증 Push/Pull과 배포는 각 선행조건 충족 후 수행한다.
 
 근거 증적 Archive SHA-256:
 

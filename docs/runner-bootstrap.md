@@ -134,6 +134,6 @@ Workflow는 수동 workflow_dispatch만 사용하고 infra-cicd/main에서만 Jo
 
 GitHub 통신은 기존 두 TLS 검사 외에 실제 등록·Job·Action 다운로드·로그/Artifact·업데이트 도메인을 기능별로 확인한다. 필요한 outbound 경로는 [공식 요구사항](https://docs.github.com/en/actions/reference/runners/self-hosted-runners#communication)을 따르며 임의 inbound 규칙이나 DNS/SNAT 변경을 추가하지 않는다.
 
-Trivy는 공식 배포물의 고정 버전·체크섬으로 설치하고 DB 공급·갱신 기록을 남긴다. Podman 이미지의 로컬 archive를 스캔하는 흐름을 사용하며 CRITICAL 또는 검사 오류면 Push/Deploy를 중단한다. kubectl은 실제 API 서버 버전을 인계받아 호환 버전을 고정한다. 두 항목은 Runner 등록의 선행 필수값이 아니므로 준비를 병행한다. 토큰·Robot 인증정보는 Job별 임시 파일/표준입력으로 주입하고 작업 종료 시 정리한다.
+Trivy는 공식 배포물의 고정 버전·체크섬으로 설치하고 DB 공급·갱신 기록을 남긴다. Podman 이미지의 로컬 archive를 스캔하는 흐름을 사용하며 09-14 #13/#16 사용자 결정에 따라 미해결 CRITICAL/HIGH 또는 검사·DB 오류면 Push/Deploy를 중단한다. 예외는 CVE·Digest·사유·만료·승인자를 기록하며 실제 집행은 후속 Pipeline 검증 대상이다. kubectl은 실제 API 서버 버전을 인계받아 호환 버전을 고정한다. 두 항목은 Runner 등록의 선행 필수값이 아니므로 준비를 병행한다. 토큰·Robot 인증정보는 Job별 임시 파일/표준입력으로 주입하고 작업 종료 시 정리한다.
 
 공유할 결과: Runner 버전, Online 상태, 서비스의 실행 사용자, smoke Run URL/Commit/Attempt/결과, rootless 결과. 등록 토큰·`.credentials*`·전체 환경변수·개인키는 공유하지 않는다. DELIVERY_GATE는 종합 인수 전까지 NOT_VERIFIED다.

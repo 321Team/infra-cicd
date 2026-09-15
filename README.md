@@ -1,5 +1,7 @@
 # infra-cicd
 
+**2026-09-15 후속:** [실제 구성·증거 범위와 첫 Job 안내](docs/implementation-state-20260915.md). PR #2 승인·병합, CA 발급/백업·공개 인계, Runner 로컬/Idle 결과와 남은 Runtime 검증을 구분한다.
+
 P1-CICD-01 GitHub Actions·Self-hosted Runner 기반 CI/CD 구축 및 검증 저장소. Test·Build·Trivy·Harbor Push·Kubernetes 배포와 롤백, 승인 Digest 및 실행 증적을 관리합니다.
 
 ## 목적과 상태
