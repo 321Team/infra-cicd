@@ -12,17 +12,97 @@
       "context": "transaction-api",
       "dockerfile": "transaction-api/Dockerfile",
       "base_image": null,
-      "setup": [],
+      "setup": [
+        {
+          "cwd": "transaction-api",
+          "argv": [
+            "/usr/bin/python3",
+            "-m",
+            "venv",
+            ".venv"
+          ],
+          "timeout_seconds": 120
+        },
+        {
+          "cwd": "transaction-api",
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "pip",
+            "--disable-pip-version-check",
+            "install",
+            "--no-cache-dir",
+            "-r",
+            "requirements-test.txt"
+          ],
+          "timeout_seconds": 600
+        }
+      ],
       "unit": null,
-      "contract": null
+      "contract": {
+        "cwd": "transaction-api",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_health.py"
+        ],
+        "timeout_seconds": 300
+      }
     },
     "fds-engine": {
       "context": "fds-engine",
       "dockerfile": "fds-engine/Dockerfile",
       "base_image": null,
-      "setup": [],
-      "unit": null,
-      "contract": null
+      "setup": [
+        {
+          "cwd": "fds-engine",
+          "argv": [
+            "/usr/bin/python3",
+            "-m",
+            "venv",
+            ".venv"
+          ],
+          "timeout_seconds": 120
+        },
+        {
+          "cwd": "fds-engine",
+          "argv": [
+            ".venv/bin/python",
+            "-m",
+            "pip",
+            "--disable-pip-version-check",
+            "install",
+            "--no-cache-dir",
+            "-r",
+            "requirements-test.txt"
+          ],
+          "timeout_seconds": 600
+        }
+      ],
+      "unit": {
+        "cwd": "fds-engine",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_rules.py"
+        ],
+        "timeout_seconds": 300
+      },
+      "contract": {
+        "cwd": "fds-engine",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_health.py"
+        ],
+        "timeout_seconds": 300
+      }
     }
   }
 }

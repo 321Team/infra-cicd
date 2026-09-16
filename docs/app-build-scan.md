@@ -4,11 +4,15 @@
 
 ## 기본 상태와 승인 경계
 
-`config/app-build-scan.json`은 **PENDING_APP_HANDOFF** 상태다. 관측된 앱 main SHA를 승인값으로 복사하지 않았다. 승인 Commit·승인자·근거·base image digest·Unit/Contract 명령은 null이며 그대로 실행하면 `APP_HANDOFF_PENDING`, exit 1로 중단한다. 이 경우 Git 명령·앱 코드·Podman·DB/Scan을 호출하지 않는다.
+`config/app-build-scan.json`은 **PENDING_APP_HANDOFF** 상태다. 관측된 앱 main SHA를 승인값으로 복사하지 않았다. 승인 Commit·승인자·근거·base image digest와 transaction-api Unit은 null이다. 서비스별 setup/Contract 및 fds-engine Unit은 앱 파일에 맞춘 검토 후보를 입력했다. 그대로 실행하면 `APP_HANDOFF_PENDING`, exit 1로 중단한다. 이 경우 Git 명령·앱 코드·Podman·DB/Scan을 호출하지 않는다.
 
 입력 채택은 기존 [운영 기준](governance.md)에 따른다. 앱 담당이 Source/Test 계약을 인계하고 CICD PR에서 그 근거·전체 설정과 실행 변경을 독립 검토한 후 이권욱이 최종 판단한다. 입력의 `APPROVED_FOR_TEST_BUILD_SCAN` 문자열이나 승인 링크 형식은 사람의 승인 진위를 자동 검증하는 장치가 아니다. CLI는 실제 실행에서 설정 바이트가 `GITHUB_SHA`의 Git 객체와 같은지 검사하며, 설정 변경 후 예전 코드 리뷰를 그대로 적용하지 않는다.
 
 이번 변경에는 운영 Workflow를 추가하지 않는다. 기존 Source validation에 신규 Mock/로컬 시험 경로만 추가하므로 PR 생성/갱신과 main push는 GitHub-hosted 소스 CI를 실행한다. 내부 Runner의 Build/Scan Job이 자동으로 시작되지는 않는다.
+
+## 최신 앱 시험 매핑 준비
+
+[앱 시험 매핑과 공급 경로 인계 후보](app-handoff-mapping.md)에 2026-09-16 관측 Source의 중복 없는 16+5+5 함수 배정, API Unit 공백, service별 venv, 공급 경로 후보·현장 수집 절차를 정리했다. 이는 실제 실행 승인이나 시험 PASS가 아니다. config는 PENDING_APP_HANDOFF를 유지한다.
 
 ## 앱 담당에게 필요한 구체 입력
 
