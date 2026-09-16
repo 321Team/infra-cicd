@@ -25,4 +25,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/trivy/verify_runner.py
+          export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+          printf 'TOOLCHECK_PATH=%s\n' "$PATH"
+          /usr/bin/python3 tools/trivy/verify_runner.py
