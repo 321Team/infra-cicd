@@ -35,7 +35,7 @@ sudo 불필요. 잘못된 대상이면 수집 및 증적 생성 전에 종료한
 |---|---|
 | Identity | 호스트·계정·UID·IPv4. 실제 외부 NAT Source는 별도 확인 |
 | 경로 | IPv4 route 전 테이블과 policy rule. 외부 destination 조회·접속 없음 |
-| DNS | `/etc/resolv.conf`의 nameserver 주소만. 실제 질의·변경 없음 |
+| DNS | `/etc/resolv.conf`의 nameserver 주소만. 읽기에 성공한 빈 목록도 수집 완료이며, 읽기 실패(`null`)는 PARTIAL. 실제 질의·변경 없음 |
 | Runner 서비스 | 고정 service의 LoadState/ActiveState/SubState/User/MainPID만 |
 | 도구 | Python/Podman/Skopeo 버전 또는 UNAVAILABLE. 미설치 도구를 자동 설치하지 않음 |
 | 공급 설정 | 정해진 pip/registry 파일·디렉터리의 존재·권한 메타데이터만 |
@@ -65,7 +65,10 @@ Runner process environ, service Environment/ExecStart, pip config 내용, regist
 | 1 | Python 3.11 미만, 수집 또는 저장 오류. 고정 오류 코드 확인 |
 
 모든 경우 `NETWORK_SUPPLY`·실제 registry/PyPI 연결과 `DELIVERY_GATE`를 PASS로 올리지 않는다.
-현장 수집 자체도 아직 실행하지 않았다. 새 수집기의 로컬 시험은 Mock/임시 파일 기반이다.
+현장 로컬 수집은 2026-09-16 21:44:56 KST에 실행됐고 제출 자료의 무결성·Source 일치를
+[#11](https://github.com/321Team/infra-cicd/issues/11)에서 검증했다. 수집 Source는 `ab10e159`이며
+nameserver `8.8.8.8`이 있어 빈 목록 판정 수정의 영향을 받지 않는다. 이 수정만을 위한 재수집은
+요구하지 않는다. 코드 회귀 시험은 Mock/임시 파일 기반이며 실제 공급 연결은 아직 미검증이다.
 
 ## 2. 현장 자료 후 판단할 OID-03 공급 후보
 

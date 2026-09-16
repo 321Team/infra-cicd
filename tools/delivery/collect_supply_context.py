@@ -56,7 +56,7 @@ def collect(home, env):
     tools = {name: prep.text_query([name, '--version'])
              for name in ('python3', 'podman', 'skopeo')}
     complete = (all(r.get('status') == 'COLLECTED' for r in (routes, rules, service))
-                and bool(servers))
+                and servers is not None)
     return {
         'local_collection': 'COMPLETE' if complete else 'PARTIAL',
         'ipv4_routes': routes, 'ipv4_rules': rules, 'resolver_nameservers': servers,

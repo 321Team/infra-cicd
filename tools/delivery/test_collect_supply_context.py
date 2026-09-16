@@ -97,6 +97,29 @@ class SupplyContextTests(unittest.TestCase):
                 self.assertIn('LOCAL_COLLECTION=PARTIAL', out)
                 self.assertIn('ARCHIVE=', out)
 
+    def test_empty_resolver_list_is_collected_without_supply_pass(self):
+        with patch.object(supply.prep, 'resolver_servers', return_value=[]):
+            rc, out = self.invoke()
+        self.assertEqual(rc, 0)
+        self.assertIn('LOCAL_COLLECTION=COMPLETE', out)
+        report = json.loads(next(self.home.glob('P1_CICD_Parallel_*/preparation.json')).read_text())
+        self.assertEqual(report['inventory']['resolver_nameservers'], [])
+        self.assertEqual(report['inventory']['local_collection'], 'COMPLETE')
+        self.assertEqual(report['network_probes'], 'NOT_EXECUTED')
+        self.assertEqual(report['supply_approval'], 'NOT_VERIFIED')
+        self.assertEqual(report['delivery_gate'], 'NOT_VERIFIED')
+        self.network.assert_not_called()
+
+    def test_unreadable_resolver_is_partial_and_still_saved(self):
+        with patch.object(supply.prep, 'resolver_servers', return_value=None):
+            rc, out = self.invoke()
+        self.assertEqual(rc, 2)
+        self.assertIn('LOCAL_COLLECTION=PARTIAL', out)
+        self.assertIn('ARCHIVE=', out)
+        report = json.loads(next(self.home.glob('P1_CICD_Parallel_*/preparation.json')).read_text())
+        self.assertIsNone(report['inventory']['resolver_nameservers'])
+        self.assertEqual(report['inventory']['local_collection'], 'PARTIAL')
+
     def test_systemd_unexpected_or_duplicate_fields_are_not_exported(self):
         for raw in ('Environment=SENTINEL\n', 'LoadState=loaded\nLoadState=loaded\n', 'LoadState=loaded\n'):
             self.run.return_value = {'rc': 0, 'text': raw}
