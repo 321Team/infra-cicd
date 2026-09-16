@@ -1,4 +1,69 @@
-# Base image metadata — one approved collection window
+# Base image metadata — approved collection and config completion
+
+## Current action: complete one missing config
+
+The first collection at 2026-09-17 05:39:10–05:39:13 KST obtained the index and
+linux/amd64 manifest, then stopped on the registry's HTTP 307 config response.
+Its archive SHA-256 is
+`902b84c21a77b8a2970d6fcabfd6886f20dd1d1312e1caf589477153e9f3bebf`.
+The archive and all internal checksums were verified; `COLLECTION=FAIL` remains
+the correct result for that incomplete run. The redirect hostname was
+`production.cloudfront.docker.com`; the signed path/query was not retained.
+
+User 이권욱 then explicitly adopted the concrete completion recommendation with
+`권장안으로 채택 후 수행`. Local scope label `P1-CICD-OID03-20260917-02`
+records that adoption (not a new canonical Decision ID):
+
+| Item | Adopted value |
+| --- | --- |
+| Runner / owner | `10.250.10.20` / 이권욱 |
+| Destinations | `auth.docker.io:443`, `registry-1.docker.io:443`, `production.cloudfront.docker.com:443` |
+| Resource | One config blob, exactly 5,664 bytes |
+| Config digest | `sha256:ec7d6c95cd3692a2e2d228a8b1ca74e4025b54121fcc4c5da6f09cfa473315ad` |
+| Window | At most 900 seconds from first actual completion invocation; no automatic renewal |
+| Redirect | One HTTP 307 from that registry blob to the exact HTTPS CDN authority; no second redirect |
+
+The completion mode requests an anonymous repository pull token and that fixed
+blob only. It accepts a direct 200 or the single approved 307. A separate HTTPS
+request to the CDN has no registry Authorization header. HTTPS verification,
+exact host/default or explicit 443, no userinfo/fragment, and bounded ASCII URL
+validation apply. The signed URL is held in memory only; evidence stores a
+redacted path. HTTP redirects, alternate ports/hosts, further redirects and
+responses larger than 5,664 bytes fail closed. Exact bytes, digest and platform
+are checked before saving `config.json`.
+
+The original index `sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea`
+and manifest `sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79`
+will be reused from the submitted archive during offline verification. This
+mode does not read/recollect a tag, index, manifest or layer. It records those
+prior digest values as linkage, not as a new validation of locally present files.
+
+Transfer the updated published script to the account home, verify the SHA-256
+published with that exact commit, then run as `server01_cicd-runner`:
+
+```bash
+/usr/bin/python3 -I -B /home/server01_cicd-runner/collect_base_metadata.py --complete-config
+```
+
+This creates the separate owner-only `FDS_CICD_OID03_20260917_02.json` scope record;
+the original 60-minute record is untouched. Retries share the new record's fixed
+start/expiry. Do not edit/delete either record to extend a window. No policy,
+DNS, NAT, CA, service or home-permission changes are made. The script ends its
+own requests; it does not create or prove an expiring firewall rule. A network
+deny remains a stop, not permission to alter policy.
+
+Return `base-config.tar.gz` and `base-config.tar.gz.sha256` from the printed
+`FDS_CICD_Base_Config.<UTC>.<random>` directory, including failure evidence.
+On success the archive contains `config.json`, `result.json`, `SHA256SUMS`;
+on failure it contains only the latter two. The previous archive need not be
+resubmitted. The subsequent offline PR #16 verification combines its index and
+manifest with the new config and checks the complete profile. Until then,
+`BASE_MANIFEST_CHECK=NOT_EXECUTED`, `IMAGE_SCAN=NOT_EXECUTED` and
+`DELIVERY_GATE=NOT_VERIFIED` remain. App Source approval and independent review
+are separate; this adoption does not merge code or publish v19.
+
+The following sections document the original two-host collection mode. Its
+redirect prohibition and 60-minute scope remain unchanged for `--collect`.
 
 ## Authority and scope
 
@@ -116,4 +181,5 @@ All HTTP responses in these tests are synthetic; no registry is queried.
 
 - [Docker Registry token authentication](https://docs.docker.com/reference/api/registry/auth/)
 - [Docker Hub-supported Registry API](https://docs.docker.com/reference/api/registry/latest/)
+- [Docker documented pull/push destinations](https://docs.docker.com/desktop/setup/allow-list/)
 - [OCI image index v1.1.0](https://github.com/opencontainers/image-spec/blob/v1.1.0/image-index.md)

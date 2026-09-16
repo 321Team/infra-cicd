@@ -186,6 +186,187 @@ class CollectionTests(unittest.TestCase):
                 c.window(self.fd, now)
         self.assertEqual((self.home / c.LEASE).read_bytes(), raw)
 
+    def completion_fixture(self, redirect=True, platform='amd64'):
+        raw = c.encode({'os': 'linux', 'architecture': platform,
+                        'config': {'Env': ['MOCK_PRIVATE_VALUE=private']}})
+        raw += b' ' * (c.CONFIG_BLOB_BYTES - len(raw))
+        pin = patch.object(c, 'CONFIG_BLOB_DIGEST', c.digest(raw))
+        pin.start()
+        self.addCleanup(pin.stop)
+        Connection.responses = [Response(c.encode({'token': 'SECRET_BEARER'}))]
+        if redirect:
+            Connection.responses.append(Response(status=307, headers={
+                'Location': 'https://' + c.CDN + '/PRIVATE_PATH?Signature=PRIVATE_QUERY'}))
+        Connection.responses.append(Response(raw))
+        return c.Client({'started_epoch': self.now - 1, 'expires_epoch': self.now + 899}, True)
+
+    def test_completion_retrieves_only_pinned_config_and_strips_token(self):
+        for redirect in (True, False):
+            with self.subTest(redirect=redirect):
+                Connection.calls = []
+                client, files = self.completion_fixture(redirect), {}
+                result = c.complete_config(client, files)
+                self.assertEqual(set(files), {'config.json'})
+                self.assertEqual(result['config_digest'], c.CONFIG_BLOB_DIGEST)
+                self.assertEqual(result['config_bytes'], 5664)
+                self.assertEqual([call[0] for call in Connection.calls],
+                                 [c.AUTH, c.REGISTRY] + ([c.CDN] if redirect else []))
+                self.assertEqual(Connection.calls[1][2], c.config_path())
+                self.assertEqual(Connection.calls[1][3]['Authorization'], 'Bearer SECRET_BEARER')
+                if redirect:
+                    self.assertNotIn('Authorization', Connection.calls[2][3])
+                    with self.assertRaises(c.Stop):
+                        client.get(c.CDN, Connection.calls[2][2])
+                receipts = json.dumps(client.receipts)
+                for secret in ('SECRET_BEARER', 'PRIVATE_PATH', 'PRIVATE_QUERY', 'MOCK_PRIVATE_VALUE'):
+                    self.assertNotIn(secret, receipts)
+
+    def test_completion_rejects_unapproved_redirect_authorities_and_url_forms(self):
+        locations = [None, '', 'http://' + c.CDN + '/blob',
+                     'https://' + c.CDN + '.evil.example/blob',
+                     'https://user@' + c.CDN + '/blob',
+                     'https://' + c.CDN + ':444/blob',
+                     'https://' + c.CDN + './blob',
+                     'https://' + c.CDN + '/blob#secret',
+                     'https://' + c.CDN + '/blob\r\nX: secret',
+                     'https://' + c.CDN + '/blob with space',
+                     'https://' + c.CDN + '//other/blob',
+                     'https://' + c.CDN + '/blob\\suffix',
+                     'https://' + c.CDN, '//'+c.CDN+'/blob',
+                     'https://[invalid/blob', 'https://' + c.CDN + '/' + 'x' * 16384]
+        for location in locations:
+            with self.subTest(location=location):
+                Connection.calls = []
+                client = self.completion_fixture()
+                Connection.responses[1].headers['Location'] = location
+                files = {}
+                with self.assertRaisesRegex(c.Stop, 'CDN_LOCATION_INVALID'):
+                    c.complete_config(client, files)
+                self.assertEqual(len(Connection.calls), 2)
+                self.assertEqual(files, {})
+
+    def test_completion_accepts_only_https_default_or_explicit_443(self):
+        for authority in (c.CDN, c.CDN + ':443', c.CDN.upper()):
+            client = self.completion_fixture()
+            Connection.responses[1].headers['Location'] = 'https://' + authority + '/blob?q=private'
+            self.assertEqual(c.complete_config(client, {})['config_bytes'], 5664)
+
+    def test_completion_blocks_second_redirect_and_other_redirect_statuses(self):
+        for status in (301, 302, 303, 308):
+            Connection.calls = []
+            client = self.completion_fixture()
+            Connection.responses[1].status = status
+            with self.assertRaisesRegex(c.Stop, 'REDIRECT_STOPPED'):
+                c.complete_config(client, {})
+            self.assertEqual(len(Connection.calls), 2)
+        Connection.calls = []
+        client = self.completion_fixture()
+        Connection.responses[-1] = Response(status=307, headers={
+            'Location': 'https://' + c.CDN + '/another?SECRET_QUERY'})
+        with self.assertRaisesRegex(c.Stop, 'REDIRECT_STOPPED'):
+            c.complete_config(client, {})
+        self.assertEqual(len(Connection.calls), 3)
+        self.assertNotIn('SECRET_QUERY', json.dumps(client.receipts))
+
+    def test_completion_has_no_tag_manifest_layer_or_arbitrary_cdn_permission(self):
+        client = self.completion_fixture()
+        for host, path, token in [(c.REGISTRY, c.ROOT_PATH, None),
+                                  (c.REGISTRY, c.PREFIX + 'blobs/sha256:' + 'a' * 64, None),
+                                  (c.CDN, '/arbitrary', None),
+                                  (c.AUTH, c.TOKEN_PATH, 'secret')]:
+            with self.assertRaises(c.Stop):
+                client.get(host, path, token)
+        for kind, value in [('manifests', c.REUSED_MANIFEST_DIGEST), ('blobs', 'sha256:' + 'a' * 64)]:
+            with self.assertRaisesRegex(c.Stop, 'COMPLETION_SCOPE_VIOLATION'):
+                client.allow_blob(kind, value)
+        self.assertEqual(Connection.calls, [])
+
+    def test_completion_rejects_wrong_hash_size_platform_and_oversized_response(self):
+        for bad in (b'{}', b'x' * 5664, b'x' * 5665):
+            client = self.completion_fixture()
+            Connection.responses[-1] = Response(bad)
+            files = {}
+            with self.assertRaises(c.Stop):
+                c.complete_config(client, files)
+            self.assertEqual(files, {})
+        client = self.completion_fixture(platform='arm64')
+        with self.assertRaisesRegex(c.Stop, 'CONFIG_PLATFORM'):
+            c.complete_config(client, {})
+
+    def test_completion_expiry_before_cdn_stops_without_third_connection(self):
+        client = self.completion_fixture()
+        original = client.config_redirect
+
+        def expire(location):
+            target = original(location)
+            client.deadline = time.monotonic() - 1
+            return target
+
+        with patch.object(client, 'config_redirect', side_effect=expire):
+            with self.assertRaisesRegex(c.Stop, 'WINDOW_EXPIRED_OR_CLOCK_REVERSED'):
+                c.complete_config(client, {})
+        self.assertEqual(len(Connection.calls), 2)
+
+    def test_completion_lease_is_separate_fifteen_minutes_and_cannot_renew(self):
+        c.window(self.fd, self.now - 7200)
+        old = (self.home / c.LEASE).read_bytes()
+        current = c.window(self.fd, self.now, completion=True)
+        raw = (self.home / c.CONFIG_LEASE).read_bytes()
+        self.assertEqual(current['expires_epoch'] - current['started_epoch'], 900)
+        self.assertEqual(current['config_digest'], c.CONFIG_BLOB_DIGEST)
+        self.assertEqual(c.window(self.fd, self.now + 899, True), current)
+        for moment in (self.now - 1, self.now + 900):
+            with self.assertRaises(c.Stop):
+                c.window(self.fd, moment, True)
+        self.assertEqual((self.home / c.LEASE).read_bytes(), old)
+        self.assertEqual((self.home / c.CONFIG_LEASE).read_bytes(), raw)
+
+    def test_completion_changed_scope_or_symlink_stops(self):
+        lease = c.window(self.fd, self.now, True)
+        path = self.home / c.CONFIG_LEASE
+        lease['config_digest'] = 'sha256:' + '0' * 64
+        path.write_bytes(c.encode(lease))
+        with self.assertRaisesRegex(c.Stop, 'WINDOW_SCOPE_MISMATCH'):
+            c.window(self.fd, self.now, True)
+        path.unlink()
+        target = self.home / 'unchanged'
+        target.write_text('KEEP')
+        path.symlink_to(target)
+        with self.assertRaises(OSError):
+            c.window(self.fd, self.now, True)
+        self.assertEqual(target.read_text(), 'KEEP')
+
+    def test_completion_main_outputs_bound_archive_without_promoting_delivery(self):
+        self.completion_fixture()
+        with patch.object(c, 'open_home', return_value=os.dup(self.fd)), \
+                patch('sys.stdout', new_callable=io.StringIO) as output:
+            self.assertEqual(c.main(['--complete-config']), 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['COLLECTION'], 'PASS')
+        self.assertEqual(report['BASE_MANIFEST_CHECK'], 'NOT_EXECUTED')
+        self.assertEqual(report['DELIVERY_GATE'], 'NOT_VERIFIED')
+        self.assertEqual(report['parent_archive_sha256'], c.PARENT_ARCHIVE_SHA256)
+        self.assertNotIn('PRIVATE_QUERY', output.getvalue())
+        self.assertFalse((self.home / c.LEASE).exists())
+        folder = next(self.home.glob('FDS_CICD_Base_Config.*'))
+        with tarfile.open(folder / 'base-config.tar.gz') as archive:
+            self.assertEqual(set(archive.getnames()), {'config.json', 'result.json', 'SHA256SUMS'})
+        self.assertTrue((folder / 'base-config.tar.gz.sha256').is_file())
+
+    def test_completion_failure_retains_only_sanitized_receipts(self):
+        self.completion_fixture()
+        Connection.responses[-1] = Response(status=403)
+        with patch.object(c, 'open_home', return_value=os.dup(self.fd)), \
+                patch('sys.stdout', new_callable=io.StringIO) as output:
+            self.assertEqual(c.main(['--complete-config']), 1)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['error_code'], 'HTTP_STATUS_403')
+        folder = next(self.home.glob('FDS_CICD_Base_Config.*'))
+        with tarfile.open(folder / 'base-config.tar.gz') as archive:
+            self.assertEqual(set(archive.getnames()), {'result.json', 'SHA256SUMS'})
+        for secret in ('SECRET_BEARER', 'PRIVATE_PATH', 'PRIVATE_QUERY'):
+            self.assertNotIn(secret, (folder / 'result.json').read_text())
+
     def test_symlink_window_and_existing_output_preserved(self):
         target = self.home / 'important.txt'
         target.write_text('KEEP')
