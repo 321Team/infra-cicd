@@ -47,7 +47,7 @@ class FlowTests(unittest.TestCase):
         self.image_id = flow.inspect_archive(self.fixture)['config_digest']
         self.context = {'workflow_sha': 'b' * 40, 'run_id': '123', 'attempt': 1}
         self.events, self.envs = [], []
-        self.fail, self.scan_rc = None, 0
+        self.fault, self.scan_rc = None, 0
         self.blocked_service = 'transaction-api'
         self.receipt_mutator, self.mutated_archive = None, None
         self.evidence = self.root / 'evidence'
@@ -70,19 +70,19 @@ class FlowTests(unittest.TestCase):
         label = output.stem
         self.events.append(label)
         self.envs.append(env.copy())
-        if self.fail == label:
+        if self.fault == label:
             output.write_text('fixture failure')
             return 42
-        if self.fail == 'timeout' and label.endswith('-unit-0'):
+        if self.fault == 'timeout' and label.endswith('-unit-0'):
             raise subprocess.TimeoutExpired(argv, timeout)
-        if self.fail == 'signal' and label.endswith('-unit-0'):
+        if self.fault == 'signal' and label.endswith('-unit-0'):
             flow.interrupted(15, None)
         if argv[0] == '/usr/bin/git':
             return self.original_command(argv, cwd, env, output, timeout)
         if label == 'podman-version':
             output.write_text('podman version 6.1.0\n')
         elif label == 'podman-rootless':
-            output.write_text('false\n' if self.fail == 'rootful' else 'true\n')
+            output.write_text('false\n' if self.fault == 'rootful' else 'true\n')
         else:
             output.write_text('fixture success\n')
         if label.endswith('-build'):
@@ -91,7 +91,7 @@ class FlowTests(unittest.TestCase):
             self.assertFalse((source / 'untracked.txt').exists())
             self.assertFalse((source / 'generated.txt').exists())
             iid = Path(argv[argv.index('--iidfile') + 1])
-            iid.write_text(('sha256:' + '0' * 64 if self.fail == 'iid' else self.image_id) + '\n')
+            iid.write_text(('sha256:' + '0' * 64 if self.fault == 'iid' else self.image_id) + '\n')
         if label.endswith('-save'):
             Path(argv[argv.index('--output') + 1]).write_bytes(self.fixture.read_bytes())
         if label.endswith('-unit-0'):
@@ -123,6 +123,101 @@ class FlowTests(unittest.TestCase):
         return flow.execute(self.config, self.repo, self.evidence, self.context,
                             {'GITHUB_TOKEN': 'fixture-secret', 'KUBECONFIG': '/fixture/admin',
                              'TRIVY_SEVERITY': 'LOW', 'HTTP_PROXY': 'http://proxy.invalid'})
+
+    def unit_scope_fixture(self):
+        # Synthetic approval metadata; never a real app handoff approval.
+        return {'status': 'NOT_APPLICABLE', 'reason': 'Fixture API scope has Contract only.',
+                'approved_by': 'fixture-reviewer',
+                'approval_reference': 'https://github.com/321Team/example/issues/1'}
+
+    def test_explicit_unit_scope_runs_remaining_tests_without_fabricating_pass(self):
+        scope = self.unit_scope_fixture()
+        self.config['services']['transaction-api']['unit'] = scope
+        rc, result = self.execute()
+        self.assertEqual((rc, result['BUILD_SCAN']), (0, 'PASS'))
+        self.assertEqual(result['not_applicable_tests'],
+                         [{'service': 'transaction-api', 'phase': 'unit', **scope}])
+        self.assertNotIn('transaction-api-unit-0', self.events)
+        self.assertFalse((self.evidence / 'transaction-api-unit-0.log').exists())
+        self.assertFalse(any(s['name'].startswith('transaction-api-unit') for s in result['steps']))
+        ordered = ['fds-engine-unit-0', 'transaction-api-contract-0', 'fds-engine-contract-0',
+                   'transaction-api-base-pull', 'transaction-api-build', 'fds-engine-build', 'scan-pair']
+        self.assertEqual([name for name in self.events if name in ordered], ordered)
+        self.assertEqual(result['source']['commit'], self.config['source']['commit'])
+        self.assertEqual(result['DELIVERY_GATE'], 'NOT_VERIFIED')
+        self.assertEqual(result['PUSH'], 'NOT_EXECUTED')
+        self.assertEqual(result['DEPLOY'], 'NOT_EXECUTED')
+        saved = json.loads((self.evidence / 'result.json').read_text())
+        self.assertEqual(saved['not_applicable_tests'], result['not_applicable_tests'])
+        for record in saved['not_applicable_tests']:
+            self.assertNotIn('exit_code', record)
+            self.assertNotIn('log_sha256', record)
+
+    def test_incomplete_or_invalid_unit_scope_and_missing_phases_run_nothing(self):
+        valid = self.unit_scope_fixture()
+        cases = [('null', 'unit', None), ('empty', 'unit', {}),
+                 ('implicit-string', 'unit', 'NOT_APPLICABLE'),
+                 ('contract-exemption', 'contract', valid), ('setup-exemption', 'setup', [valid])]
+        for key in valid:
+            missing = valid.copy()
+            missing.pop(key)
+            cases.append(('missing-' + key, 'unit', missing))
+        for key, value in [('status', 'SKIP'), ('reason', '  '), ('reason', 'line\nbreak'),
+                           ('approved_by', ''), ('approved_by', None),
+                           ('approval_reference', None), ('approval_reference', 'http://github.com/x')]:
+            cases.append((f'invalid-{key}-{len(cases)}', 'unit', {**valid, key: value}))
+        cases.append(('mixed-command', 'unit', {**valid, 'argv': ['/bin/true']}))
+        original = copy.deepcopy(self.config)
+        for name, phase, value in cases:
+            self.config = copy.deepcopy(original)
+            self.config['services']['transaction-api'][phase] = value
+            self.evidence = self.root / name
+            self.evidence.mkdir()
+            with self.subTest(name=name):
+                self.assertEqual(self.execute()[0], 1)
+                self.commands.assert_not_called()
+                self.scanner.assert_not_called()
+        self.config = copy.deepcopy(original)
+        for service in self.config['services'].values():
+            service['unit'] = valid.copy()
+        self.evidence = self.root / 'no-unit-phase'
+        self.evidence.mkdir()
+        rc, result = self.execute()
+        self.assertEqual((rc, result['error_code']), (1, 'UNIT_PHASE_REQUIRED'))
+        self.commands.assert_not_called()
+        self.scanner.assert_not_called()
+        self.assertEqual(result['not_applicable_tests'], [])
+
+    def test_unit_scope_does_not_hide_required_test_failure_or_interruption(self):
+        self.config['services']['transaction-api']['unit'] = self.unit_scope_fixture()
+        for fault in ('fds-engine-unit-0', 'transaction-api-contract-0', 'fds-engine-contract-0',
+                      'timeout', 'signal'):
+            self.evidence = self.root / ('scope-failure-' + fault)
+            self.evidence.mkdir()
+            self.events = []
+            self.fault = fault
+            with self.subTest(fault=fault):
+                rc, result = self.execute()
+                self.assertEqual((rc, result['BUILD_SCAN']), (1, 'FAIL'))
+                self.assertFalse(any(name.endswith('-build') or name.endswith('-base-pull')
+                                     for name in self.events))
+                self.scanner.assert_not_called()
+
+    def test_unit_scope_preserves_required_source_directory_checks(self):
+        self.config['services']['transaction-api']['unit'] = self.unit_scope_fixture()
+        original = copy.deepcopy(self.config)
+        for name, phase in (('fds-engine', 'unit'), ('transaction-api', 'contract'),
+                            ('fds-engine', 'contract')):
+            self.config = copy.deepcopy(original)
+            self.config['services'][name][phase]['cwd'] = 'missing-directory'
+            self.evidence = self.root / f'missing-{name}-{phase}'
+            self.evidence.mkdir()
+            self.events = []
+            with self.subTest(service=name, phase=phase):
+                rc, result = self.execute()
+                self.assertEqual((rc, result['error_code']), (1, 'TEST_CWD_MISSING'))
+                self.assertNotIn('podman-version', self.events)
+                self.scanner.assert_not_called()
 
     def test_default_pending_input_runs_nothing(self):
         self.config = json.loads((flow.ROOT / flow.CONFIG).read_text())
@@ -174,7 +269,7 @@ class FlowTests(unittest.TestCase):
             self.evidence = self.root / fault
             self.evidence.mkdir()
             self.events = []
-            self.fail = fault
+            self.fault = fault
             with self.subTest(fault=fault):
                 self.assertEqual(self.execute()[0], 1)
                 self.assertFalse(any(name.endswith('-build') or name.endswith('-base-pull') for name in self.events))
@@ -185,7 +280,7 @@ class FlowTests(unittest.TestCase):
             self.evidence = self.root / fault
             self.evidence.mkdir()
             self.events = []
-            self.fail = fault
+            self.fault = fault
             with self.subTest(fault=fault):
                 self.assertEqual(self.execute()[0], 1)
                 self.scanner.assert_not_called()
