@@ -13,8 +13,9 @@
 - [앱 인계](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5694905546)는
   서비스별 `pip install -r requirements-test.txt && pytest`와 edge01 26 PASS 보고다.
   원본 로그 재검증·CICD Runner Runtime PASS가 아니다.
-- [PR #12](https://github.com/321Team/infra-cicd/pull/12)의 독립 리뷰는 작성 시작 시 0건이었다.
-  아래 준비 변경을 포함한 새 HEAD를 이하영이 검토해야 한다.
+- [PR #12](https://github.com/321Team/infra-cicd/pull/12)는 이하영의 기술 리뷰 지적을 수정하고
+  HEAD `bb143c1` 재검토 후 main `90f2f37`에 병합됐다. 일반 댓글의 기술 리뷰를 포함해 판정한다.
+  아래 입력 후보의 병합은 실제 공급 경로·Source·실행 입력 승인과 구분한다.
 
 ## 중복 없는 시험 매핑 후보
 
@@ -76,6 +77,10 @@ Harbor 미러가 실제 인계되는 경우에만 실제 repository와 미러 �
 private mirror 선택은 코드/자격증명 변경 검토를 동반한다. 앱 담당에게 임의 Harbor 경로를 보내지 않는다.
 
 ## 실제 실행 전에 수집할 입력
+
+[로컬 수집기와 공급·digest 인계 절차](app-supply-preflight.md)를 후속으로 준비했다.
+아래 수동 명령 대신 수집기를 사용하면 홈 폴더에 압축본·체크섬을 함께 만들고,
+route/rule·서비스 상태·설정 메타데이터와 수집 한계를 한 번에 보존할 수 있다.
 
 아래 수집은 준비 범위다. #11에 공개 식별값만 기록하고 Secret은 기존 보호 인계 방식으로 다룬다.
 새 네트워크 경로·DNS·방화벽·프록시를 임의 적용하거나 TLS 검증을 끄지 않는다.
