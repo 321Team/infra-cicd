@@ -10,7 +10,10 @@
 
 이 Workflow는 같은 검사를 실제 GitHub Actions 서비스 환경에서 수행하고
 Workflow SHA·Run URL·Attempt·계정·DB 해시를 연결한다.
-아직 이 Workflow의 실제 Run 결과는 없으며 앱 이미지/Push/Deploy 차단은 미검증이다.
+2026-09-16 [Run 35047422631 / Attempt 1](https://github.com/321Team/infra-cicd/actions/runs/35047422631)은
+merge SHA `434a6ddf0d475ffb9857a01dfa2b229eaf637526`에서 PASS였다.
+수신한 원시 파일 11개의 체크섬, HIGH 15/CRITICAL 6, rc=10 및 DB 누락 rc=1,
+Run/SHA/Attempt를 대조했다. 앱 이미지/Push/Deploy 차단은 미검증이다.
 
 ## 실행 조건
 
@@ -21,6 +24,25 @@ Workflow SHA·Run URL·Attempt·계정·DB 해시를 연결한다.
 - Python 3.11 이상, Git, Podman, getenforce와 기존 Trivy 0.74.0이 필요하다.
 - 설치 바이너리는 앞서 검증한 SHA-256을 고정한다. 다른 버전으로 변경할 때 코드·오류 계약을 다시 검토한다.
 - `$HOME/.cache/trivy/db`의 trivy.db와 metadata.json이 필요하다. Job은 DB를 자동 다운로드하지 않는다.
+
+## 검증 단계의 명령 경로
+
+9월 16일 수집 결과, 서비스 PATH와 실제 Job PATH가 달랐다. Job에는 관측 당시
+존재하지 않던 Runner HOME의 `.local/bin`과 `bin`이 시스템 경로보다 먼저 포함돼 있었다.
+현재 git/podman/getenforce는 root 소유 RPM 파일로 해석됐지만, 홈에 같은 이름의
+실행파일이 추가되면 이후 탐색 결과가 바뀔 수 있다.
+
+검증 step은 PATH를 `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`으로 고정한 뒤
+`/usr/bin/python3`로 판정기를 실행한다. 이 PATH는 판정기가 실행하는 자식 프로세스에도
+상속되며 `TOOLCHECK_PATH` 로그로 확인한다. checkout action이나 Runner 서비스 전역 PATH를
+변경하는 설정은 아니다. ACL·전체 부모 경로·동시 바이너리 교체까지 보증하지 않는다.
+
+Trivy의 버전/해시 고정은 수동 반입한 릴리스와 오류 계약을 유지하기 위한 조건이다.
+OS 패키지 도구 전체의 바이너리 해시 고정 정책을 추가하지 않는다.
+사전 점검에서 Trivy 해시는 기존 값과 같았고 조사한 설정에 직접 갱신 참조는 없었다.
+다만 간접 스크립트·외부 구성관리까지 포함한 자동 갱신 부재는 미확인이다.
+이 PATH 변경은 별도 리뷰·병합 후 실제 Job 로그로 확인해야 하며,
+위 성공 Run은 변경 전 결과다.
 
 ## 검사 동작과 판정
 
