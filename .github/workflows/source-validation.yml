@@ -32,5 +32,6 @@ jobs:
           python3 -m unittest discover -s tools/parallel-prep -p 'test_*.py' -v
           python3 -m unittest discover -s tools/pki -p 'test_*.py' -v
           python3 -m unittest discover -s tools/trivy -p 'test_*.py' -v
+          python3 -m unittest discover -s tools/delivery -p 'test_*.py' -v
           cmp -- templates/runner-smoke.yml .github/workflows/runner-smoke.yml
           printf 'SOURCE_VALIDATION=PASS\nDELIVERY_GATE=NOT_VERIFIED\n'

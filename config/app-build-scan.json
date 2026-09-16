@@ -1,0 +1,28 @@
+{
+  "schema": "P1-CICD-app-build-scan-1",
+  "status": "PENDING_APP_HANDOFF",
+  "source": {
+    "repository": "supreme33-kr/fds-msa",
+    "commit": null,
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "services": {
+    "transaction-api": {
+      "context": "transaction-api",
+      "dockerfile": "transaction-api/Dockerfile",
+      "base_image": null,
+      "setup": [],
+      "unit": null,
+      "contract": null
+    },
+    "fds-engine": {
+      "context": "fds-engine",
+      "dockerfile": "fds-engine/Dockerfile",
+      "base_image": null,
+      "setup": [],
+      "unit": null,
+      "contract": null
+    }
+  }
+}
