@@ -10,9 +10,10 @@ import re
 import socket
 import stat
 import subprocess
+import sys
 import tempfile
 
-from verify_runner import BINARY_SHA256, TRIVY
+from verify_runner import BINARY_SHA256, TRIVY, sha256
 
 DB_REPOSITORY = 'ghcr.io/aquasecurity/trivy-db:2'
 SYSTEM_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin'
@@ -31,11 +32,6 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
-def digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
-
-
 def regular(path):
     require(stat.S_ISREG(path.lstat().st_mode), 'EXPECTED_REGULAR_FILE')
 
@@ -45,12 +41,14 @@ def verify_binary():
     require(stat.S_ISREG(info.st_mode), 'BINARY_NOT_REGULAR')
     require(info.st_uid == 0 and info.st_gid == 0 and
             stat.S_IMODE(info.st_mode) == 0o755, 'BINARY_OWNERSHIP_OR_MODE')
-    require(digest(TRIVY) == BINARY_SHA256, 'BINARY_HASH_MISMATCH')
+    require(sha256(TRIVY) == BINARY_SHA256, 'BINARY_HASH_MISMATCH')
 
 
 def timestamp(value):
     require(isinstance(value, str), 'METADATA_TIME_INVALID')
     try:
+        # Python >= 3.11 accepts RFC3339Nano; datetime keeps microseconds.
+        # Preserve the original strings in result.json and metadata.json.
         parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
     except ValueError:
         raise PreflightError('METADATA_TIME_INVALID') from None
@@ -141,9 +139,9 @@ def prepare(evidence, context, env):
         checked = utcnow()
         result['metadata'] = validate_metadata(data, checked)
         phase = 'hash'
-        result['db_sha256'] = digest(db)
+        result['db_sha256'] = sha256(db)
         result['metadata_sha256'] = hashlib.sha256(raw).hexdigest()
-        require(digest(metadata) == result['metadata_sha256'], 'METADATA_CHANGED')
+        require(sha256(metadata) == result['metadata_sha256'], 'METADATA_CHANGED')
         verify_binary()
         checked = utcnow()  # Hashing may cross NextUpdate.
         validate_metadata(data, checked)
@@ -161,7 +159,7 @@ def prepare(evidence, context, env):
         result['phase'] = phase
         result['finished_at'] = utcnow().isoformat()
         (evidence / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        hashes = [(digest(evidence / 'result.json'), 'result.json')]
+        hashes = [(sha256(evidence / 'result.json'), 'result.json')]
         if result['DB_PREFLIGHT'] == 'PASS':
             hashes += [(result['db_sha256'], 'cache/db/trivy.db'),
                        (result['metadata_sha256'], 'cache/db/metadata.json')]
@@ -170,12 +168,19 @@ def prepare(evidence, context, env):
 
 
 def main():
+    python_version = '.'.join(str(part) for part in sys.version_info[:3])
+    print(f'PYTHON_VERSION={python_version}', flush=True)
+    print(f'PYTHON_EXECUTABLE={sys.executable}', flush=True)
+    if sys.version_info < (3, 11):
+        print('DB_PREFLIGHT=FAIL\nERROR_CODE=PYTHON_3_11_REQUIRED\nDELIVERY_GATE=NOT_VERIFIED')
+        return 1
     os.umask(0o077)
     try:
         context = runtime_context(os.environ)
     except (PreflightError, OSError, ValueError, KeyError, subprocess.SubprocessError):
         print('DB_PREFLIGHT=FAIL\nERROR_CODE=RUNNER_CONTEXT_INVALID\nDELIVERY_GATE=NOT_VERIFIED')
         return 1
+    context.update(python_version=python_version, python_executable=sys.executable)
     evidence = Path(tempfile.mkdtemp(prefix=f'trivy-db-{context["run_id"]}-{context["attempt"]}-',
                                    dir=Path.home()))
     print(f'EVIDENCE_DIR={evidence}', flush=True)

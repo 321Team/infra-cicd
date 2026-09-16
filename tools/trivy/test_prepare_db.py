@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from contextlib import redirect_stdout
 import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -13,9 +15,33 @@ import prepare_db as db
 NOW = datetime(2026, 9, 16, 4, tzinfo=timezone.utc)
 METADATA = {'Version': 2, 'UpdatedAt': '2026-09-16T00:00:00Z',
             'DownloadedAt': '2026-09-16T03:59:00Z', 'NextUpdate': '2026-09-17T00:00:00Z'}
+# Public metadata values from Runner toolcheck Run 35047422631 / attempt 1.
+# This is a parser fixture, not a current or reusable DB approval.
+NANO_METADATA = {'Version': 2, 'UpdatedAt': '2026-09-15T07:08:16.463168542Z',
+                 'DownloadedAt': '2026-09-15T11:52:31.993296276Z',
+                 'NextUpdate': '2026-09-16T07:08:16.463168061Z'}
 
 
 class MetadataTests(unittest.TestCase):
+    def test_rfc3339_fraction_lengths_and_actual_nanosecond_metadata(self):
+        self.assertEqual(db.validate_metadata(NANO_METADATA, NOW), NANO_METADATA)
+        for digits in range(1, 10):
+            fraction = '077925977'[:digits]
+            value = {**METADATA, 'DownloadedAt': f'2026-09-16T12:59:00.{fraction}+09:00'}
+            with self.subTest(digits=digits):
+                self.assertEqual(db.validate_metadata(value, NOW), value)
+                parsed = db.timestamp(value['DownloadedAt'])
+                self.assertEqual(parsed.hour, 3)
+                self.assertEqual(parsed.microsecond, int((fraction + '000000')[:6]))
+
+    def test_nanosecond_next_update_does_not_extend_refresh_boundary(self):
+        value = {**METADATA, 'NextUpdate': '2026-09-16T04:00:00.077925977Z'}
+        # Truncation may reject <1 microsecond early; it must not grant extra time.
+        for microsecond in (77925, 77926):
+            with self.subTest(microsecond=microsecond), self.assertRaisesRegex(
+                    db.PreflightError, 'DB_REFRESH_REQUIRED'):
+                db.validate_metadata(value, NOW.replace(microsecond=microsecond))
+
     def test_valid_timezone_conversion(self):
         value = {**METADATA, 'DownloadedAt': '2026-09-16T12:59:00+09:00'}
         self.assertEqual(db.validate_metadata(value, NOW), value)
@@ -73,6 +99,41 @@ class PrepareTests(unittest.TestCase):
         (folder / 'trivy.db').write_bytes(b'mock db bytes; not a real scanner database')
         (folder / 'metadata.json').write_text(json.dumps(METADATA))
         return subprocess.CompletedProcess(command, 0)
+
+    def test_main_rejects_unsupported_python_before_context_or_files(self):
+        for version in ((3, 9, 25), (3, 10, 19)):
+            output = io.StringIO()
+            with self.subTest(version=version), patch.object(db.sys, 'version_info', version), \
+                    patch.object(db, 'runtime_context') as context, \
+                    patch.object(db.tempfile, 'mkdtemp') as mkdir, \
+                    patch.object(db.subprocess, 'run') as download, redirect_stdout(output):
+                self.assertEqual(db.main(), 1)
+            context.assert_not_called()
+            mkdir.assert_not_called()
+            download.assert_not_called()
+            self.assertIn('ERROR_CODE=PYTHON_3_11_REQUIRED', output.getvalue())
+            self.assertIn('DELIVERY_GATE=NOT_VERIFIED', output.getvalue())
+            self.assertNotIn('DB_PREFLIGHT=PASS', output.getvalue())
+
+    def test_main_records_python_and_accepts_actual_nanosecond_metadata(self):
+        def nano_download(command, **kwargs):
+            outcome = self.downloader(command, **kwargs)
+            (self.out / 'cache/db/metadata.json').write_text(json.dumps(NANO_METADATA))
+            return outcome
+        output = io.StringIO()
+        with patch.object(db, 'runtime_context', return_value={'run_id': '123', 'attempt': 1}), \
+                patch.object(db.tempfile, 'mkdtemp', return_value=str(self.out)), \
+                patch.object(db.os, 'umask'), patch.dict(db.os.environ, {}, clear=True), \
+                patch.object(db.subprocess, 'run', side_effect=nano_download), redirect_stdout(output):
+            self.assertEqual(db.main(), 0)
+        result = json.loads((self.out / 'result.json').read_text())
+        version = '.'.join(str(part) for part in db.sys.version_info[:3])
+        self.assertEqual(result['context']['python_version'], version)
+        self.assertEqual(result['context']['python_executable'], db.sys.executable)
+        self.assertEqual(result['metadata'], NANO_METADATA)
+        self.assertIn(f'PYTHON_VERSION={version}', output.getvalue())
+        self.assertIn('DB_PREFLIGHT=PASS', output.getvalue())
+        self.assertEqual(result['DELIVERY_GATE'], 'NOT_VERIFIED')
 
     def test_success_has_traceable_snapshot_and_no_delivery_pass(self):
         with patch.object(db.subprocess, 'run', side_effect=self.downloader):

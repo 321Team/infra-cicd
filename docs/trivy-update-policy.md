@@ -16,7 +16,8 @@
 없는 점검 시점에 교체한다. 변경된 실제 도구 동작을 검증한 뒤 다음 Delivery에 사용한다.
 
 운영 바이너리·고정값은 현재 `verify_runner.py`의 상수와 동일하다. 새 DB 도구는 이 상수를
-가져오므로 두 구현의 버전 고정값이 독립적으로 어긋나지 않는다. 상수 변경은 기존
+가져오며 파일 해시도 같은 `sha256()` 함수를 재사용한다. 두 구현의 버전 고정값과
+파일 해시 구현이 독립적으로 어긋나지 않는다. 상수 변경은 기존
 toolcheck의 버전 판정 및 탐지/오류 계약도 함께 검토해야 한다.
 
 기존 [9/14 결정](https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-5659051242)의
@@ -29,6 +30,14 @@ CI Scan/Digest는 P1-CICD 책임이다. 기존 AC·역할·권한·네트워크 
 `.github/workflows/trivy-db-preflight.yml`은 main의 수동 실행만 허용하며,
 내부 Runner에 준비된 Trivy로 **공식 GHCR DB를 새 Run 전용 캐시에 준비**한다.
 각 Run에서 새 캐시를 사용하므로 다운로드가 필요하다. 일괄 자동 바이너리 갱신은 없다.
+
+실행기는 `/usr/bin/python3`이며 Python 3.11 이상이 필요하다. 기존 파일 해시 함수의
+`hashlib.file_digest()` 의존성을 명시하고, DB의 RFC3339Nano 시각 파싱도 같은 지원 범위에서
+검증한다. 실제 버전과 실행 경로를 로그 및 성공적으로 생성된 context 증적에 기록한다.
+3.11 미만이면 `PYTHON_3_11_REQUIRED`로 증적 디렉터리 생성·해시·통신 전에 종료한다.
+자동 Python 설치/업그레이드는 하지 않는다. Runner의 현재 정확한 Python 버전은 아직
+수신한 증적에 없으므로 첫 Runtime 로그로 확인한다. 기존 toolcheck의 파일 해시 성공은
+관련 API 동작 근거이나 정확한 버전 확인을 대신하지 않는다.
 
 1. 호스트·계정/UID·repo·manual event·main ref·실제 checkout SHA를 검사한다.
 2. `/usr/local/bin/trivy`의 일반 파일 여부·root:root/0755·기존 SHA-256을 대조한다.
@@ -86,4 +95,13 @@ Trivy 원시 stdout/stderr는 기록하지 않는다. 프록시 자격증명이 
 외부 자동화 존재 여부는 UNKNOWN을 유지한다. 592개 로컬 파일의 참조 0건을 전체 환경의
 자동 갱신 부재로 확대하지 않는다.
 
+PR #9 최초 리뷰에 따라 소수점 초 1~9자리·시간대 변환, 실제 수신 metadata의 9자리 시각,
+NextUpdate 경계, 지원하지 않는 Python의 조기 실패 및 버전 증적을 시험한다.
+Python datetime은 마이크로초 정밀도이며, 입력 원문은 metadata/result에 보존한다.
+NextUpdate 비교에서는 절삭으로 최대 1마이크로초 미만 일찍 실패할 수 있으나 유예하지 않는다.
+정확한 나노초 순서 검증을 수행한다고 주장하지 않는다. 이 보완 역시 소스/Mock 검증이며
+새 HEAD의 독립 리뷰와 실제 Runner DB preflight는 별도로 확인한다.
+
 기능 근거: [Trivy DB 관리](https://trivy.dev/docs/latest/configuration/db/).
+Python 근거: [file_digest (3.11 추가)](https://docs.python.org/3.11/library/hashlib.html#hashlib.file_digest),
+[datetime.fromisoformat](https://docs.python.org/3.11/library/datetime.html#datetime.datetime.fromisoformat).
