@@ -7,12 +7,14 @@
 | 앱 Source | 저장소, 승인 Commit, Dockerfile·Unit/Contract Test 명령 및 두 서비스 호환성 |
 | Runner | 실제 등록 상태, 설치 버전, Job 수신, 빌더·kubectl·Trivy 버전, 자격증명 분리·작업 정리 |
 | Harbor | 승인 CA Trust, CI Push+Pull Robot, Worker Pull 계정, Registry repository 경로 |
-| Trivy | 기존 승인 Critical 차단 원칙, DB 공급·갱신 경로, 검사 오류 처리, 예외 승인·만료 |
+| Trivy | 09-14 채택 HIGH·CRITICAL 차단, DB 공급·갱신 경로, 검사 오류 처리, 예외 승인·만료 |
 | Kubernetes | API 인증 연결, 기존 두 Deployment 및 컨테이너명, SA·RBAC, 단기 Token 정책 |
 | Health/E2E | 실행 주체·승인 경로·명령·예상 결과; 임의 Runner→NodePort 경로를 추가하지 않음 |
 | 승인·복구 | 승인 대상 SHA/Digest, 재실행·동시 배포 통제, 이전 Digest·DB Schema 영향 |
 
-현재 미확인 값을 임의로 채워 실행 Workflow를 활성화하지 않는다. 특히 Trivy 기준을 임의로 HIGH까지 확대하거나 승인 예외 없이 완화하지 않는다.
+현재 미확인 값을 임의로 채워 실행 Workflow를 활성화하지 않는다. [2026-09-14 이권욱 결정](https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-5659051242)에 따라 미해결 HIGH·CRITICAL은 Push와 Deploy를 모두 차단한다. 수정 버전 미제공도 자동 면제하지 않는다. 스캐너·DB 오류는 실패이며 취약점 0개로 처리하지 않는다. 예외는 CVE·Image Digest·사유·만료·승인자를 특정해야 하며 승인되지 않은 ignore 설정으로 완화하지 않는다.
+
+DB 운영은 [채택 운영안](trivy-update-policy.md)을 따른다. 실제 Scan 어댑터와 아직 필요한 Test/Build·Push/Deploy 연결은 [앱 이미지 검사 인계](app-image-scan.md)에 구분한다. 기존 Draft PR #3 모의 Gate의 CRITICAL 단독 조건은 현행 기준을 충족하지 않으므로 그대로 활성화하지 않는다.
 
 ## 구현 순서
 
