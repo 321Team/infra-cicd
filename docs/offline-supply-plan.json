@@ -1,0 +1,136 @@
+{
+  "schema": "P1-CICD-offline-supply-plan-1",
+  "status": "PREPARATION_ONLY",
+  "source_repository": "supreme33-kr/fds-msa",
+  "observed_source_sha": "254b82231f8af79a06419b581174647bbccbe2bc",
+  "approved_source_sha": null,
+  "approval_reference": null,
+  "method_recommendation": "PREIMPORT",
+  "producer": {
+    "host": null,
+    "operator": null,
+    "authorized_network_reference": null
+  },
+  "preparation_owner": "이권욱",
+  "policy_lead": "이하영",
+  "code_reviewer_substitution": "이재환 / supreme33-kr",
+  "base": {
+    "reference": "docker.io/library/python@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
+    "config_digest": "sha256:ec7d6c95cd3692a2e2d228a8b1ca74e4025b54121fcc4c5da6f09cfa473315ad",
+    "platform": "linux/amd64",
+    "config_declared_python_version": "3.12.14",
+    "full_image_archive_sha256": null,
+    "full_image_archive": "NOT_ACQUIRED",
+    "layers": [
+      {
+        "digest": "sha256:6310eb16bf4251731feab01e8f633bf5e2d75a657ccad97f420b1f83cce457be",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29792658
+      },
+      {
+        "digest": "sha256:dbd0b7849e6c06b61e1fa6b7ffe053f246ce0075890620e3db64b47bb662433a",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 4265332
+      },
+      {
+        "digest": "sha256:1560cfed01dc4c72c07f789d860078d74466a1f9a26b33a2e35d887b5f90dd3f",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 12116924
+      },
+      {
+        "digest": "sha256:56235e4245636e401a28cf88944d543b29ee028ae3b6c27e03d6b43e7b4eac5f",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 249
+      }
+    ],
+    "layer_bytes_total": 46175163,
+    "layer_bytes_received": false
+  },
+  "requirements": [
+    {
+      "path": "transaction-api/requirements.txt",
+      "content": "fastapi==0.115.5\nuvicorn[standard]==0.30.6\npydantic==2.9.2\nsqlalchemy[asyncio]==2.0.35\nasyncpg==0.29.0\nhttpx==0.27.2\nprometheus-client==0.20.0\n",
+      "git_blob_sha": "f27a2ff21438b4e9ff7a6956b4b769aff13cc619",
+      "sha256": "0b8f3430a64f4b81429277bf651b2e1b62a68084f8d79b36a63d09d065b76947"
+    },
+    {
+      "path": "transaction-api/requirements-test.txt",
+      "content": "-r requirements.txt\npytest==8.3.3\n",
+      "git_blob_sha": "60e163f8a8b0c1f6004c47d09c42ebadc5e17feb",
+      "sha256": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2"
+    },
+    {
+      "path": "fds-engine/requirements.txt",
+      "content": "fastapi==0.115.5\nuvicorn[standard]==0.30.6\npydantic==2.9.2\nprometheus-client==0.20.0\n",
+      "git_blob_sha": "b938c29243a55c8710dfadae132a96b891a512ae",
+      "sha256": "11b1f940e83bded8fa8e901005f0467c4652bfac332657b11c118ee8f9b80ca3"
+    },
+    {
+      "path": "fds-engine/requirements-test.txt",
+      "content": "-r requirements.txt\npytest==8.3.3\nhttpx==0.27.2\n",
+      "git_blob_sha": "b918a15c927212297f3c2a997701629b71bd12ad",
+      "sha256": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "transaction-api-runtime",
+      "target": "pinned-base-image",
+      "input": "transaction-api/requirements.txt",
+      "lock_sha256": null,
+      "wheel_inventory_sha256": null,
+      "compatible_tags_evidence": null,
+      "offline_resolution": "NOT_EXECUTED",
+      "offline_install_and_pip_check": "NOT_EXECUTED"
+    },
+    {
+      "id": "fds-engine-runtime",
+      "target": "pinned-base-image",
+      "input": "fds-engine/requirements.txt",
+      "lock_sha256": null,
+      "wheel_inventory_sha256": null,
+      "compatible_tags_evidence": null,
+      "offline_resolution": "NOT_EXECUTED",
+      "offline_install_and_pip_check": "NOT_EXECUTED"
+    },
+    {
+      "id": "transaction-api-test",
+      "target": "cicd-runner01-host-venv",
+      "input": "transaction-api/requirements-test.txt",
+      "lock_sha256": null,
+      "wheel_inventory_sha256": null,
+      "compatible_tags_evidence": null,
+      "offline_resolution": "NOT_EXECUTED",
+      "offline_install_and_pip_check": "NOT_EXECUTED"
+    },
+    {
+      "id": "fds-engine-test",
+      "target": "cicd-runner01-host-venv",
+      "input": "fds-engine/requirements-test.txt",
+      "lock_sha256": null,
+      "wheel_inventory_sha256": null,
+      "compatible_tags_evidence": null,
+      "offline_resolution": "NOT_EXECUTED",
+      "offline_install_and_pip_check": "NOT_EXECUTED"
+    }
+  ],
+  "integration_gaps": [
+    "build_scan.execute uses a new storage directory and always performs remote base-pull",
+    "Both Dockerfiles call network-capable pip install without wheelhouse or full hash locks",
+    "Build source is reconstructed from committed git archive; untracked wheel files are not copied into it",
+    "Host setup pip and image build pip need separate offline inputs and compatibility evidence",
+    "Loading an archive alone does not prove the original repository@digest resolves in isolated Podman 6.1.0 storage"
+  ],
+  "execution": {
+    "downloads": "NOT_EXECUTED",
+    "image_import": "NOT_EXECUTED",
+    "python_install": "NOT_EXECUTED",
+    "build_scan": "NOT_EXECUTED",
+    "network_policy_changes": "NONE",
+    "delivery_gate": "NOT_VERIFIED"
+  },
+  "references": {
+    "canonical": "https://github.com/321Team/fds-project-baseline/blob/docs-v3.1.18/baseline/FDS_Project_Implementation_Baseline_v3.1.18.md",
+    "metadata_receipt": "https://github.com/321Team/infra-cicd/issues/11"
+  }
+}
