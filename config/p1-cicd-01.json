@@ -118,7 +118,8 @@
     ],
     "image_reference": "sha256_digest",
     "scan_block_severity": [
-      "CRITICAL"
+      "CRITICAL",
+      "HIGH"
     ],
     "scan_error_blocks_deploy": true,
     "ci_robot_permissions": [
