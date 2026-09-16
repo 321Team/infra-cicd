@@ -46,7 +46,8 @@
           "-m",
           "pytest",
           "-q",
-          "tests/test_health.py"
+          "tests/test_health.py",
+          "tests/test_metrics.py"
         ],
         "timeout_seconds": 300
       }
@@ -99,7 +100,8 @@
           "-m",
           "pytest",
           "-q",
-          "tests/test_health.py"
+          "tests/test_health.py",
+          "tests/test_metrics.py"
         ],
         "timeout_seconds": 300
       }
