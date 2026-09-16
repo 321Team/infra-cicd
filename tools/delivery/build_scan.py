@@ -152,6 +152,41 @@ def validate_source_files(root, config):
             require((root / step['cwd']).is_dir(), 'TEST_CWD_MISSING')
 
 
+def validate_scan_receipt(scan_rc, scan, context, source_sha, built, archives):
+    """Bind PASS and fail-fast BLOCK receipts to the actual build and run."""
+    require(type(scan_rc) is int and scan_rc in (0, 10), 'IMAGE_SCAN_FAILED')
+    status = 'PASS' if scan_rc == 0 else 'BLOCK'
+    require(isinstance(scan, dict) and scan.get('IMAGE_SCAN') == status and
+            scan.get('source_sha') == source_sha and scan.get('context') == context,
+            'SCAN_RECEIPT_MISMATCH')
+    images = scan.get('images')
+    require(isinstance(images, dict) and 0 < len(images) <= len(SERVICES),
+            'SCAN_RECEIPT_MISMATCH')
+    # scan_pair stops on the first vulnerability, so BLOCK can have one image.
+    # Only a contiguous prefix can have been scanned; later images are unknown.
+    scanned = SERVICES[:len(images)]
+    require(set(images) == set(scanned), 'SCAN_RECEIPT_MISMATCH')
+    if scan_rc == 0:
+        require(len(images) == len(SERVICES), 'SCAN_RECEIPT_MISMATCH')
+    else:
+        require(scan.get('error_code') == 'HIGH_CRITICAL_FINDINGS', 'SCAN_RECEIPT_MISMATCH')
+    statuses = {name: 'NOT_SCANNED' for name in SERVICES}
+    for name in scanned:
+        image = images[name]
+        expected = 'BLOCK' if scan_rc == 10 and name == scanned[-1] else 'PASS'
+        require(isinstance(image, dict) and image.get('scan') == expected and
+                type(image.get('exit_code')) is int and
+                image['exit_code'] == (10 if expected == 'BLOCK' else 0),
+                'SCAN_RECEIPT_MISMATCH')
+        for key in ('archive_sha256', 'manifest_digest', 'config_digest'):
+            require(image.get(key) == built[name][key], 'SCAN_BUILD_IDENTITY_MISMATCH')
+        statuses[name] = expected
+    for name in SERVICES:
+        # Preserve both built artifacts, including the one not reached by Scan.
+        require(sha256(archives[name]) == built[name]['archive_sha256'], 'BUILT_ARCHIVE_CHANGED')
+    return statuses
+
+
 def execute(config, source_dir, evidence, context, incoming_env):
     """Caller provides a new private directory and reviewed main input record."""
     result = {'BUILD_SCAN': 'FAIL', 'DELIVERY_GATE': 'NOT_VERIFIED',
@@ -238,20 +273,9 @@ def execute(config, source_dir, evidence, context, incoming_env):
         scan_dir.mkdir(mode=0o700)
         scan_rc, scan = scan_pair(scan_dir, context, source_sha, archives, incoming_env)
         result['scan_result_sha256'] = sha256(scan_dir / 'result.json')
-        require(scan_rc in (0, 10), 'IMAGE_SCAN_FAILED')
-        if scan_rc == 10:
-            result['BUILD_SCAN'], rc = 'BLOCK', 10
-        else:
-            require(scan.get('IMAGE_SCAN') == 'PASS' and scan.get('source_sha') == source_sha and
-                    scan.get('context') == context and set(scan.get('images', {})) == set(SERVICES),
-                    'SCAN_RECEIPT_MISMATCH')
-            for name in SERVICES:
-                for key in ('archive_sha256', 'manifest_digest', 'config_digest'):
-                    require(scan['images'][name].get(key) == result['images'][name][key],
-                            'SCAN_BUILD_IDENTITY_MISMATCH')
-                require(sha256(archives[name]) == result['images'][name]['archive_sha256'],
-                        'BUILT_ARCHIVE_CHANGED')
-            result['BUILD_SCAN'], rc = 'PASS', 0
+        result['scan_status'] = validate_scan_receipt(scan_rc, scan, context, source_sha,
+                                                     result['images'], archives)
+        result['BUILD_SCAN'], rc = ('BLOCK' if scan_rc == 10 else 'PASS'), scan_rc
     except PreflightError as exc:
         result['error_code'] = str(exc)
     except subprocess.TimeoutExpired:

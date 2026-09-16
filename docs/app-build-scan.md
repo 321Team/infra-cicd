@@ -46,7 +46,7 @@
 4. 별도 test 사본에서 setup → 두 Unit → 두 Contract를 모두 성공시킨다. 각 step은 제한 시간·nonzero·SIGINT/TERM을 실패 처리한다. timeout/상위 중단 시 직접 시작한 프로세스 그룹을 종료한다. 로그는 private 파일로만 보관한다.
 5. 같은 archive로 새 Build 사본을 만들어 test 생성 파일이 섞이지 않게 한다. Podman 6.1.0·실제 rootless=true 확인 후 각 승인 base digest를 TLS 검증으로 Pull한다. Run 전용 HOME, XDG_RUNTIME_DIR, storage/runroot와 빈 authfile을 사용한다. Runner의 기존 이미지 store·로그인 파일을 대상으로 prune/reset/delete를 실행하지 않는다.
 6. `podman build --format oci --platform linux/amd64 --pull=never --iidfile ...`로 Build한다. `podman save --format oci-archive <image ID>`를 호출하고 실제 archive config digest와 iidfile을 비교한다. 실패하면 다음 단계로 넘어가지 않는다.
-7. 두 archive가 모두 준비된 뒤 같은 Run/Attempt의 `scan_pair()`를 호출한다. Build archive/config/manifest와 Scan 결과의 각 identity 및 Source/Run을 대조한다. 취약점 rc10은 전체 BLOCK/rc10, scanner/DB 실패는 전체 FAIL/nonzero다. 성공해도 Push/Deploy 승인으로 사용하지 않는다.
+7. 두 archive가 모두 준비된 뒤 같은 Run/Attempt의 `scan_pair()`를 호출한다. PASS와 취약점 BLOCK 모두 Source/Run, 실제 검사한 이미지의 archive/config/manifest identity를 Build와 대조한다. PASS는 두 이미지 모두 PASS/rc0이어야 한다. BLOCK은 첫 이미지 BLOCK/rc10 또는 첫 이미지 PASS/rc0·두 번째 BLOCK/rc10만 허용하며, `HIGH_CRITICAL_FINDINGS` 사유를 확인한다. 조기 종료로 검사하지 않은 이미지를 PASS로 간주하지 않는다. 두 Build archive의 바이트 해시는 미검사 이미지까지 다시 확인한다. 일치하는 취약점 증적은 전체 BLOCK/rc10, 불일치·누락·scanner/DB 실패는 전체 FAIL/nonzero다. 성공해도 Push/Deploy 승인으로 사용하지 않는다.
 
 Test/Build용 자식 환경에는 GitHub Token, kubeconfig, 상위 Trivy/Podman override 등을 넘기지 않는다. 기존 proxy 변수는 공급 경로 유지를 위해 허용한다. 실제 네트워크 정책을 우회하거나 rootful·host network·insecure TLS로 실패를 해결하지 않는다. 이미지/패키지 공급과 rootless Podman의 실제 환경 호환성은 운영 검증 대상이다.
 
@@ -55,6 +55,8 @@ Test/Build용 자식 환경에는 GitHub Token, kubeconfig, 상위 Trivy/Podman 
 ## 증적과 후속
 
 `result.json`은 실제 Source SHA/설정 해시·Workflow SHA·Run/Attempt, 단계 종료 코드/로그 해시, 두 이미지 config/manifest/archive 해시와 Scan 결과 해시를 연결한다. raw log/OCI/소스 사본에는 민감정보가 있을 수 있으므로 자동 artifact 업로드나 콘솔 출력 없이 private 디렉터리에 보존한다. 최상위 SHA256SUMS는 result.json을 검증하고, result 안의 해시가 각 단계 로그와 중첩 Scan/DB 증적을 연결한다. 이것은 서명·원격 승인 증명이나 배포 허가 토큰이 아니다.
+
+검증을 통과한 Scan receipt에는 최상위 `scan_status`를 기록한다. 첫 서비스에서 취약점으로 중단하면 `transaction-api=BLOCK`, `fds-engine=NOT_SCANNED`다. 두 번째에서 중단하면 `transaction-api=PASS`, `fds-engine=BLOCK`이다. `images`는 Build한 이미지들의 identity이며 모든 이미지가 Scan을 마쳤다는 뜻이 아니다. receipt 검증에 실패하면 `BUILD_SCAN=FAIL`이며 검증된 `scan_status`를 기록하지 않는다.
 
 별도 Podman store와 이미지는 후속 전달/오류 조사 때문에 자동 삭제하지 않는다. 실행 전 디스크 여유, 실행 후 잔여 Build 자원 및 본 Run 디렉터리만 대상으로 하는 정리·보존 절차를 운영 인계에서 확정한다. 실패 시 자원 정리 필요 여부를 별도 확인하며 기존 Runner store 전체를 정리하지 않는다.
 
@@ -68,6 +70,6 @@ python3 tools/delivery/build_scan.py
 
 `--execute --source-dir <승인 SHA checkout>`는 향후 검토된 중앙 Workflow에서 사용하는 인터페이스다. 현재 설정/이번 PR만으로 내부 Runner에서 실행하라는 지시가 아니다.
 
-검증: 로컬 Git fixture의 Commit snapshot, dirty/untracked/test-output 분리, 명령 프로세스·그룹 timeout, argv 비해석은 실제 임시 자원으로 검사한다. Podman/Trivy 호출은 Mock이며 실제 앱 빌드 성공을 주장하지 않는다.
+검증: 로컬 Git fixture의 Commit snapshot, dirty/untracked/test-output 분리, 명령 프로세스·그룹 timeout, argv 비해석은 실제 임시 자원으로 검사한다. PASS/BLOCK의 Source·Run·세 identity 불일치, 잘못된 검사 범위/상태, 조기 종료 후 미검사 archive 변경을 회귀시험한다. 두 시험 모듈은 `tools/trivy/oci_test_fixtures.py`의 합성 OCI 생성기를 공유한다. Podman/Trivy 호출은 Mock이며 실제 앱 빌드 성공을 주장하지 않는다.
 
 참고: [Podman Build 옵션](https://docs.podman.io/en/stable/markdown/podman-build.1.html), [Podman global root/runroot](https://docs.podman.io/en/stable/markdown/podman.1.html), [OCI archive 저장](https://docs.podman.io/en/stable/markdown/podman-save.1.html).

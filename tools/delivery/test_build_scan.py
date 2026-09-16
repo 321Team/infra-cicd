@@ -1,47 +1,18 @@
 """Real local Git/snapshots and command process tests; Podman/Trivy are mocked."""
 import contextlib
 import copy
-import hashlib
 import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
 
 import build_scan as flow
-
-
-def digest(raw):
-    return 'sha256:' + hashlib.sha256(raw).hexdigest()
-
-
-def create_oci(path):
-    members = {'oci-layout': b'{"imageLayoutVersion":"1.0.0"}'}
-
-    def blob(raw, media):
-        value = digest(raw)
-        members['blobs/sha256/' + value[7:]] = raw
-        return {'mediaType': media, 'digest': value, 'size': len(raw)}
-
-    prefix = 'application/vnd.oci.image.'
-    layer = blob(b'fixture only, not an actual application layer', prefix + 'layer.v1.tar')
-    config = blob(json.dumps({'os': 'linux', 'architecture': 'amd64',
-                             'rootfs': {'type': 'layers', 'diff_ids': [layer['digest']]}}).encode(),
-                  prefix + 'config.v1+json')
-    manifest = blob(json.dumps({'schemaVersion': 2, 'mediaType': prefix + 'manifest.v1+json',
-                               'config': config, 'layers': [layer]}).encode(), prefix + 'manifest.v1+json')
-    members['index.json'] = json.dumps({'schemaVersion': 2, 'manifests': [manifest]}).encode()
-    with tarfile.open(path, 'w') as archive:
-        for name, raw in members.items():
-            info = tarfile.TarInfo(name)
-            info.size = len(raw)
-            archive.addfile(info, io.BytesIO(raw))
-    return config['digest']
+from oci_test_fixtures import image_members, write_archive
 
 
 class FlowTests(unittest.TestCase):
@@ -72,10 +43,13 @@ class FlowTests(unittest.TestCase):
         self.git('remote', 'add', 'origin', 'https://github.com/' + flow.SOURCE_REPOSITORY + '.git')
         self.commit()
         self.fixture = self.root / 'image.tar'
-        self.image_id = create_oci(self.fixture)
+        write_archive(self.fixture, image_members())
+        self.image_id = flow.inspect_archive(self.fixture)['config_digest']
         self.context = {'workflow_sha': 'b' * 40, 'run_id': '123', 'attempt': 1}
         self.events, self.envs = [], []
-        self.fail, self.scan_rc, self.receipt_fault = None, 0, None
+        self.fail, self.scan_rc = None, 0
+        self.blocked_service = 'transaction-api'
+        self.receipt_mutator, self.mutated_archive = None, None
         self.evidence = self.root / 'evidence'
         self.evidence.mkdir()
         self.original_command = flow.run_command
@@ -126,15 +100,22 @@ class FlowTests(unittest.TestCase):
 
     def fake_scan(self, directory, context, source_sha, archives, env):
         self.events.append('scan-pair')
-        images = {name: flow.inspect_archive(path) for name, path in archives.items()}
-        data = {'IMAGE_SCAN': 'PASS' if self.scan_rc == 0 else 'BLOCK',
-                'context': context, 'source_sha': source_sha, 'images': images}
-        if self.receipt_fault == 'source':
-            data['source_sha'] = 'f' * 40
-        if self.receipt_fault == 'manifest':
-            data['images']['fds-engine']['manifest_digest'] = 'sha256:' + 'f' * 64
-        if self.receipt_fault == 'archive':
-            archives['transaction-api'].write_bytes(b'changed')
+        images = {}
+        for name in flow.SERVICES:
+            blocked = self.scan_rc == 10 and name == self.blocked_service
+            images[name] = {**flow.inspect_archive(archives[name]),
+                            'scan': 'BLOCK' if blocked else 'PASS',
+                            'exit_code': 10 if blocked else 0}
+            if blocked:
+                break  # Match scan_pair's first-vulnerability short circuit.
+        data = {'IMAGE_SCAN': {0: 'PASS', 10: 'BLOCK'}.get(self.scan_rc, 'FAIL'),
+                'context': copy.deepcopy(context), 'source_sha': source_sha, 'images': images}
+        if self.scan_rc == 10:
+            data['error_code'] = 'HIGH_CRITICAL_FINDINGS'
+        if self.receipt_mutator:
+            self.receipt_mutator(data)
+        if self.mutated_archive:
+            archives[self.mutated_archive].write_bytes(b'changed')
         (directory / 'result.json').write_text(json.dumps(data))
         return self.scan_rc, data
 
@@ -180,6 +161,7 @@ class FlowTests(unittest.TestCase):
         self.assertLess(self.events.index('fds-engine-contract-0'), self.events.index('transaction-api-base-pull'))
         self.assertLess(self.events.index('fds-engine-save'), self.events.index('scan-pair'))
         self.assertEqual(set(result['images']), set(flow.SERVICES))
+        self.assertEqual(result.get('scan_status'), {name: 'PASS' for name in flow.SERVICES})
         for env in self.envs:
             self.assertNotIn('GITHUB_TOKEN', env)
             self.assertNotIn('KUBECONFIG', env)
@@ -219,13 +201,86 @@ class FlowTests(unittest.TestCase):
                 self.assertEqual(data['PUSH'], 'NOT_EXECUTED')
                 self.assertEqual(data['DEPLOY'], 'NOT_EXECUTED')
 
-    def test_scan_source_manifest_or_archive_mismatch_blocks(self):
-        for fault in ('source', 'manifest', 'archive'):
-            self.evidence = self.root / ('receipt-' + fault)
+    def test_first_or_second_image_vulnerability_records_only_actual_scans(self):
+        self.scan_rc = 10
+        for blocked in flow.SERVICES:
+            self.evidence = self.root / ('blocked-' + blocked)
             self.evidence.mkdir()
-            self.receipt_fault = fault
-            with self.subTest(fault=fault):
-                self.assertEqual(self.execute()[0], 1)
+            self.blocked_service = blocked
+            with self.subTest(blocked=blocked):
+                rc, data = self.execute()
+                self.assertEqual((rc, data['BUILD_SCAN']), (10, 'BLOCK'))
+                expected = {'transaction-api': 'BLOCK', 'fds-engine': 'NOT_SCANNED'} if (
+                    blocked == 'transaction-api') else {'transaction-api': 'PASS', 'fds-engine': 'BLOCK'}
+                self.assertEqual(data.get('scan_status'), expected)
+                self.assertNotIn('error_code', data)
+
+    def test_pass_and_block_receipts_must_match_source_context_and_build_identity(self):
+        for value, last in ((0, 'fds-engine'), (10, 'transaction-api'), (10, 'fds-engine')):
+            self.scan_rc, self.blocked_service = value, last
+            faults = [('source', lambda d: d.update(source_sha='f' * 40), 'SCAN_RECEIPT_MISMATCH'),
+                      ('context', lambda d: d['context'].update(run_id='999'), 'SCAN_RECEIPT_MISMATCH')]
+            for service in flow.SERVICES[:flow.SERVICES.index(last) + 1]:
+                for key in ('archive_sha256', 'manifest_digest', 'config_digest'):
+                    faults.append((service + '-' + key,
+                                   lambda d, s=service, k=key: d['images'][s].update({k: 'wrong'}),
+                                   'SCAN_BUILD_IDENTITY_MISMATCH'))
+            for name, mutate, error in faults:
+                self.evidence = self.root / f'receipt-{value}-{last}-{name}'
+                self.evidence.mkdir()
+                self.receipt_mutator = mutate
+                with self.subTest(scan_rc=value, last=last, fault=name):
+                    rc, data = self.execute()
+                    self.assertEqual((rc, data['BUILD_SCAN'], data.get('error_code')), (1, 'FAIL', error))
+
+    def test_receipt_service_coverage_and_status_must_match_exit_code(self):
+        faults = [
+            ('empty', lambda d: d.update(images={})),
+            ('unknown', lambda d: d['images'].update(other=d['images']['transaction-api'])),
+            ('missing-first', lambda d: d['images'].pop('transaction-api')),
+            ('top-status', lambda d: d.update(IMAGE_SCAN='FAIL')),
+            ('exit-code', lambda d: d['images']['fds-engine'].update(exit_code=1)),
+            ('image-status', lambda d: d['images']['fds-engine'].update(scan='FAIL')),
+        ]
+        for value in (0, 10):
+            self.scan_rc, self.blocked_service = value, 'fds-engine'
+            for name, mutate in faults:
+                self.evidence = self.root / f'coverage-{value}-{name}'
+                self.evidence.mkdir()
+                self.receipt_mutator = mutate
+                with self.subTest(scan_rc=value, fault=name):
+                    rc, data = self.execute()
+                    self.assertEqual((rc, data['BUILD_SCAN'], data.get('error_code')),
+                                     (1, 'FAIL', 'SCAN_RECEIPT_MISMATCH'))
+
+    def test_block_requires_vulnerability_and_stops_at_first_blocked_service(self):
+        self.scan_rc, self.blocked_service = 10, 'fds-engine'
+        faults = [
+            ('no-block', lambda d: d['images']['fds-engine'].update(scan='PASS', exit_code=0)),
+            ('continued-after-block', lambda d: d['images']['transaction-api'].update(scan='BLOCK', exit_code=10)),
+            ('scanner-error', lambda d: d.update(error_code='SCANNER_EXECUTION_ERROR')),
+            ('missing-reason', lambda d: d.pop('error_code')),
+        ]
+        for name, mutate in faults:
+            self.evidence = self.root / name
+            self.evidence.mkdir()
+            self.receipt_mutator = mutate
+            with self.subTest(fault=name):
+                rc, data = self.execute()
+                self.assertEqual((rc, data['BUILD_SCAN'], data.get('error_code')),
+                                 (1, 'FAIL', 'SCAN_RECEIPT_MISMATCH'))
+
+    def test_built_archives_rechecked_even_when_second_service_is_not_scanned(self):
+        for value in (0, 10):
+            self.scan_rc = value
+            for name in flow.SERVICES:
+                self.evidence = self.root / f'mutated-{value}-{name}'
+                self.evidence.mkdir()
+                self.mutated_archive = name
+                with self.subTest(scan_rc=value, archive=name):
+                    rc, data = self.execute()
+                    self.assertEqual((rc, data['BUILD_SCAN'], data.get('error_code')),
+                                     (1, 'FAIL', 'BUILT_ARCHIVE_CHANGED'))
 
     def test_source_sha_mismatch_blocks_before_podman_and_tests(self):
         self.config['source']['commit'] = '0' * 40
