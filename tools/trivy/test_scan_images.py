@@ -1,8 +1,6 @@
 """Local fixtures and mocked Trivy/DB calls; never run Podman, Push or Deploy."""
 import copy
 from datetime import datetime, timedelta, timezone
-import hashlib
-import io
 import json
 from pathlib import Path
 import subprocess
@@ -13,39 +11,9 @@ from unittest.mock import patch
 
 import oci_archive as oci
 import scan_images as scan
+from oci_test_fixtures import encoded, image_members, write_archive
 from prepare_db import PreflightError
 from verify_runner import sha256
-
-
-def encoded(value):
-    return json.dumps(value).encode()
-
-
-def image_members():
-    members = {'oci-layout': encoded({'imageLayoutVersion': '1.0.0'})}
-
-    def add(raw, media_type):
-        digest = hashlib.sha256(raw).hexdigest()
-        members['blobs/sha256/' + digest] = raw
-        return {'mediaType': media_type, 'digest': 'sha256:' + digest, 'size': len(raw)}
-
-    layer = add(b'fixture layer bytes; not a runnable application', next(iter(oci.LAYERS)))
-    config = add(encoded({'os': 'linux', 'architecture': 'amd64',
-                          'rootfs': {'type': 'layers', 'diff_ids': [layer['digest']]}}), oci.CONFIG)
-    manifest = add(encoded({'schemaVersion': 2, 'mediaType': oci.MANIFEST,
-                            'config': config, 'layers': [layer]}), oci.MANIFEST)
-    members['index.json'] = encoded({'schemaVersion': 2, 'manifests': [manifest]})
-    return members
-
-
-def write_archive(path, members, extra=None):
-    with tarfile.open(path, 'w') as tar:
-        for name, raw in members.items():
-            item = tarfile.TarInfo(name)
-            item.size = len(raw)
-            tar.addfile(item, io.BytesIO(raw))
-        if extra:
-            tar.addfile(extra)
 
 
 def report(identity, severity=None):

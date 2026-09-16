@@ -16,6 +16,8 @@
 
 DB 운영은 [채택 운영안](trivy-update-policy.md)을 따른다. 실제 Scan 어댑터와 아직 필요한 Test/Build·Push/Deploy 연결은 [앱 이미지 검사 인계](app-image-scan.md)에 구분한다. 기존 Draft PR #3 모의 Gate의 CRITICAL 단독 조건은 현행 기준을 충족하지 않으므로 그대로 활성화하지 않는다.
 
+Test/Build 호출기와 입력의 미승인 기본값은 [앱 Build·Scan 연결](app-build-scan.md)에 정의한다. 앱 승인 Source/Test 인계 없이 관측 SHA를 실행 승인으로 채택하지 않는다.
+
 ## 구현 순서
 
 승인 Source 확인 → Unit/Contract Test → Build → Trivy → Harbor Push와 manifest Digest 확인 → 승인 Digest의 기존 Deployment 갱신 → Health/E2E → 증적 연결 순서로 구현한다. 중간 실패·검사 오류·권한/Token 실패 때 Deploy가 실행되지 않아야 한다. 이전 Digest 복구는 호환성·Schema 영향을 확인한 뒤 수행한다.
