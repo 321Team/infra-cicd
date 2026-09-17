@@ -53,6 +53,26 @@ def test_step(step):
             'TEST_TIMEOUT_INVALID')
 
 
+def unit_not_applicable(value):
+    return isinstance(value, dict) and value.get('status') == 'NOT_APPLICABLE'
+
+
+def validate_unit(value):
+    if not unit_not_applicable(value):
+        test_step(value)  # null is unresolved, never an implicit exemption.
+        return
+    require(set(value) == {'status', 'reason', 'approved_by', 'approval_reference'},
+            'UNIT_SCOPE_FIELDS_INVALID')
+    for key in ('reason', 'approved_by'):
+        text = value[key]
+        require(isinstance(text, str) and text.strip() and len(text) <= 2000 and
+                not any(ord(c) < 32 for c in text), 'UNIT_SCOPE_JUSTIFICATION_REQUIRED')
+    reference = value['approval_reference']
+    require(isinstance(reference, str) and
+            re.fullmatch(r'https://github\.com/[^\s]+', reference),
+            'UNIT_SCOPE_APPROVAL_REFERENCE_REQUIRED')
+
+
 def validate_config(data):
     require(isinstance(data, dict) and data.get('schema') == 'P1-CICD-app-build-scan-1',
             'INPUT_SCHEMA_INVALID')
@@ -83,8 +103,11 @@ def validate_config(data):
                 'BASE_IMAGE_DIGEST_REQUIRED')
         require(isinstance(service['setup'], list) and len(service['setup']) <= 20,
                 'SETUP_STEPS_INVALID')
-        for step in [*service['setup'], service['unit'], service['contract']]:
+        validate_unit(service['unit'])
+        for step in [*service['setup'], service['contract']]:
             test_step(step)
+    require(any(not unit_not_applicable(services[name]['unit']) for name in SERVICES),
+            'UNIT_PHASE_REQUIRED')
     return data
 
 
@@ -148,7 +171,10 @@ def validate_source_files(root, config):
         require(len(from_lines) == 1 and
                 re.fullmatch(r'(?i:FROM)\s+' + re.escape(service['base_image']), from_lines[0]),
                 'DOCKERFILE_BASE_NOT_PINNED_OR_UNSUPPORTED')
-        for step in [*service['setup'], service['unit'], service['contract']]:
+        steps = [*service['setup'], service['contract']]
+        if not unit_not_applicable(service['unit']):
+            steps.append(service['unit'])
+        for step in steps:
             require((root / step['cwd']).is_dir(), 'TEST_CWD_MISSING')
 
 
@@ -191,7 +217,8 @@ def execute(config, source_dir, evidence, context, incoming_env):
     """Caller provides a new private directory and reviewed main input record."""
     result = {'BUILD_SCAN': 'FAIL', 'DELIVERY_GATE': 'NOT_VERIFIED',
               'PUSH': 'NOT_EXECUTED', 'DEPLOY': 'NOT_EXECUTED', 'context': context,
-              'started_at': utcnow().isoformat(), 'steps': [], 'images': {}}
+              'started_at': utcnow().isoformat(), 'steps': [], 'images': {},
+              'not_applicable_tests': []}
     rc = 1
     try:
         validate_config(config)  # No source command/network before input completion.
@@ -241,6 +268,9 @@ def execute(config, source_dir, evidence, context, incoming_env):
         for phase in ('setup', 'unit', 'contract'):
             for name in SERVICES:
                 value = config['services'][name][phase]
+                if phase == 'unit' and unit_not_applicable(value):
+                    result['not_applicable_tests'].append({'service': name, 'phase': phase, **value})
+                    continue  # No command, log, exit code or fabricated PASS.
                 steps = value if phase == 'setup' else [value]
                 for index, step in enumerate(steps):
                     command(f'{name}-{phase}-{index}', step['argv'],

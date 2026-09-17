@@ -20,11 +20,11 @@
 |---|---|
 | Source | `supreme33-kr/fds-msa`, 승인된 40자리 Commit, 승인자와 GitHub 기록 링크 |
 | 서비스별 Build | repository 기준 context/Dockerfile 상대경로, 완전한 registry/repository@sha256 base image |
-| 서비스별 Unit/Contract | repository 기준 cwd, argv 배열, timeout_seconds(1~1800), 정상 결과·실패 nonzero 의미와 승인 근거 |
+| Unit/Contract | 실행할 시험의 cwd, argv, timeout_seconds(1~1800), 정상·실패 의미와 승인 근거. 서비스 Unit의 해당 없음은 아래 명시적 범위 인계 필요; 두 Contract와 파이프라인 Unit은 필수 |
 | Setup | 필요한 경우 승인된 의존성 설치/fixture 준비 argv. 불필요하면 빈 배열 |
 | 호환성 | 두 서비스 업무·실패/DB 계약의 기존 승인 범위와 시험 의미 |
 
-각 `unit`/`contract`와 `setup` 원소의 구조는 다음과 같다. 아래는 **형식 예시**이며 실제 앱 실행 명령·승인값이 아니다.
+실행할 `unit`/`contract`와 `setup` 원소의 구조는 다음과 같다. 아래는 **형식 예시**이며 실제 앱 실행 명령·승인값이 아니다.
 
 ```json
 {
@@ -36,6 +36,25 @@
 
 명령은 shell 문자열이 아닌 argv 배열로 전달한다. 환경 변수 치환, `&&`, pipe 등을 자동 해석하지 않는다. 필요한 복합 절차는 앱 담당이 승인 Source 안의 스크립트로 제공하고 전체 동작을 검토한다. exit 0만으로 시험의 의미/커버리지가 입증되는 것은 아니므로 `true`/시험 생략/실패를 숨기는 wrapper를 승인 명령으로 채택하지 않는다. Secret 값·운영 DB 접속정보를 argv나 이 설정에 넣지 않는다. 현재 실행기는 전용 test credential/provisioning 주입을 구현하지 않았으므로 그런 입력이 필요한 시험은 별도 검토 후 연결한다.
 
+### Unit 범위를 명시하는 입력
+
+정본 [v3.1.18 §10](https://github.com/321Team/fds-project-baseline/blob/docs-v3.1.18/baseline/FDS_Project_Implementation_Baseline_v3.1.18.md)은 파이프라인의 Test 흐름을 규정한다. 기존 [시험 매핑 검토](app-handoff-mapping.md)의 API Unit 공백은 서비스마다 새 suite를 만들어야 한다는 AC가 아니다. [PR #14](https://github.com/321Team/infra-cicd/pull/14)의 후보 배정은 엔진 Unit 16개, 엔진 Contract 8개, API Contract 8개다. 숫자는 앱 인계·정적 함수 배정이며 내부 Runner의 새 실행 결과가 아니다.
+
+입력 schema `P1-CICD-app-build-scan-1`의 `unit`에 다음 명시적 형태를 추가 지원한다. 기존 명령 형태는 그대로 유효하다. `null`은 계속 **미확정**이며 승인 상태로 바꿔도 실행 전에 거부한다.
+
+| 필드 | 필요한 내용 |
+|---|---|
+| `status` | 정확히 `NOT_APPLICABLE` |
+| `reason` | 해당 Source·서비스의 Unit 범위에 대한 구체적 사유, 공백 제외 필수 |
+| `approved_by` | 범위를 확인한 승인자, 공백 제외 필수 |
+| `approval_reference` | 해당 판단을 확인할 실제 GitHub 인계/검토 기록 URL |
+
+네 필드만 허용한다. 명령 필드를 섞거나 승인 근거를 비우면 실패한다. 사유·승인자는 제어문자 없이 최대 2,000자다. URL과 이름은 구조만 검사하며, 사람의 실제 승인·시험 적합성을 자동 인증하지 않는다. 앱 담당이 해당 Source의 시험 범위를 확인하고 CICD 변경 전체의 독립 검토와 최종 판단을 거쳐야 한다. 임의의 링크나 명목상 `NOT_APPLICABLE`로 필요한 시험을 면제하지 않는다.
+
+적어도 한 서비스의 Unit 명령과 **두 서비스의 Contract 명령**은 반드시 남긴다. 양쪽 Unit을 모두 해당 없음으로 지정하면 `UNIT_PHASE_REQUIRED`로 Git·앱·Podman 호출 전에 중단한다. `contract`나 `setup`에는 이 형태를 허용하지 않는다. 실행할 나머지 시험의 실패·timeout·중단은 계속 Build/Scan을 차단한다.
+
+이번 준비는 입력 표현과 검증 기능만 추가한다. 실제 config의 `PENDING_APP_HANDOFF`, API `unit=null`, Source 승인 필드와 두 base digest는 유지한다. 이후 인계에서는 확정 Source SHA에 대한 시험 범위 사유·승인 근거를 config에 기록하고, 변경된 Workflow SHA와 입력 바이트 결합을 다시 검토한다. 기존 실행기는 이 새 형태를 거부하므로 새 입력만 구버전에 가져가 실행하지 않는다.
+
 현재 관측 Source `01758583c03bcbf45c96eb9d7b868cee4a2ed9df`의 두 Dockerfile은 `FROM python:3.12-slim`이다. 이 실행기가 지원하는 것은 **단일 literal FROM과 승인 digest가 일치하는 Dockerfile**이다. 앱 담당과 base image 공급 경로·digest pin 변경을 검토해야 하며, CICD에서 Dockerfile을 몰래 치환하거나 임의 digest를 선택하지 않는다. multi-stage/ARG 기반 FROM·다른 architecture는 지원 확대 검토가 필요하다. 이 지원 범위는 새 업무 AC를 추가하는 것이 아니다.
 
 ## 실제 호출 순서
@@ -43,7 +62,7 @@
 1. 입력 완결성 확인. 실제 실행에서는 기존 `runtime_context`의 infra-cicd/main, workflow_dispatch, cicd-runner01, UID 1000, 사용자, checkout SHA 조건과 설정 Commit 일치를 추가로 확인한다. Python 3.11 이상이 필요하다.
 2. 사전 checkout된 앱의 HEAD와 승인 SHA, origin repository를 대조한다. checkout/인증 자체는 미래 중앙 Workflow에서 승인된 읽기 전용 수단으로 제공한다. Token·앱 승인값을 이 도구가 생성하지 않는다.
 3. `git archive <승인 SHA>`로 Source 사본을 만들고 해시를 기록한다. working tree 수정/미추적 파일을 넣지 않고 Git replace object를 비활성화한다. submodule, symlink, 특수파일, 경로 이탈, 중복 경로를 거부한다. 현재 source archive 지원 한도는 10,000개 member/512MiB다.
-4. 별도 test 사본에서 setup → 두 Unit → 두 Contract를 모두 성공시킨다. 각 step은 제한 시간·nonzero·SIGINT/TERM을 실패 처리한다. timeout/상위 중단 시 직접 시작한 프로세스 그룹을 종료한다. 로그는 private 파일로만 보관한다.
+4. 별도 test 사본에서 setup → 배정된 Unit → 두 Contract를 모두 성공시킨다. 명시적으로 검토된 Unit 해당 없음은 별도 기록하고 실행 단계에서 제외한다. 각 실행 step은 제한 시간·nonzero·SIGINT/TERM을 실패 처리한다. timeout/상위 중단 시 직접 시작한 프로세스 그룹을 종료한다. 로그는 private 파일로만 보관한다.
 5. 같은 archive로 새 Build 사본을 만들어 test 생성 파일이 섞이지 않게 한다. Podman 6.1.0·실제 rootless=true 확인 후 각 승인 base digest를 TLS 검증으로 Pull한다. Run 전용 HOME, XDG_RUNTIME_DIR, storage/runroot와 빈 authfile을 사용한다. Runner의 기존 이미지 store·로그인 파일을 대상으로 prune/reset/delete를 실행하지 않는다.
 6. `podman build --format oci --platform linux/amd64 --pull=never --iidfile ...`로 Build한다. `podman save --format oci-archive <image ID>`를 호출하고 실제 archive config digest와 iidfile을 비교한다. 실패하면 다음 단계로 넘어가지 않는다.
 7. 두 archive가 모두 준비된 뒤 같은 Run/Attempt의 `scan_pair()`를 호출한다. PASS와 취약점 BLOCK 모두 Source/Run, 실제 검사한 이미지의 archive/config/manifest identity를 Build와 대조한다. PASS는 두 이미지 모두 PASS/rc0이어야 한다. BLOCK은 첫 이미지 BLOCK/rc10 또는 첫 이미지 PASS/rc0·두 번째 BLOCK/rc10만 허용하며, `HIGH_CRITICAL_FINDINGS` 사유를 확인한다. 조기 종료로 검사하지 않은 이미지를 PASS로 간주하지 않는다. 두 Build archive의 바이트 해시는 미검사 이미지까지 다시 확인한다. 일치하는 취약점 증적은 전체 BLOCK/rc10, 불일치·누락·scanner/DB 실패는 전체 FAIL/nonzero다. 성공해도 Push/Deploy 승인으로 사용하지 않는다.
@@ -55,6 +74,8 @@ Test/Build용 자식 환경에는 GitHub Token, kubeconfig, 상위 Trivy/Podman 
 ## 증적과 후속
 
 `result.json`은 실제 Source SHA/설정 해시·Workflow SHA·Run/Attempt, 단계 종료 코드/로그 해시, 두 이미지 config/manifest/archive 해시와 Scan 결과 해시를 연결한다. raw log/OCI/소스 사본에는 민감정보가 있을 수 있으므로 자동 artifact 업로드나 콘솔 출력 없이 private 디렉터리에 보존한다. 최상위 SHA256SUMS는 result.json을 검증하고, result 안의 해시가 각 단계 로그와 중첩 Scan/DB 증적을 연결한다. 이것은 서명·원격 승인 증명이나 배포 허가 토큰이 아니다.
+
+`not_applicable_tests`는 Unit 단계에서 실제로 처리한 서비스·phase·`NOT_APPLICABLE`·사유·승인자·근거를 기록한다. 해당 명령·로그·exit 0·PASS는 만들지 않으며 기존 `steps`는 실행한 명령의 기록으로 유지한다. 앞 단계에서 중단되면 아직 처리하지 않은 해당 없음 항목도 기록하지 않는다. 전체 `BUILD_SCAN=PASS`는 승인된 배정의 실행 결과이며 모든 서비스에 Unit 시험이 있었다는 뜻이 아니다. Source/설정 해시와 이 기록을 함께 확인한다.
 
 검증을 통과한 Scan receipt에는 최상위 `scan_status`를 기록한다. 첫 서비스에서 취약점으로 중단하면 `transaction-api=BLOCK`, `fds-engine=NOT_SCANNED`다. 두 번째에서 중단하면 `transaction-api=PASS`, `fds-engine=BLOCK`이다. `images`는 Build한 이미지들의 identity이며 모든 이미지가 Scan을 마쳤다는 뜻이 아니다. receipt 검증에 실패하면 `BUILD_SCAN=FAIL`이며 검증된 `scan_status`를 기록하지 않는다.
 
