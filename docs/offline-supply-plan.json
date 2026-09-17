@@ -1,15 +1,18 @@
 {
   "schema": "P1-CICD-offline-supply-plan-1",
-  "status": "PREPARATION_ONLY",
+  "status": "ADOPTED_INPUT_PREPARATION",
   "source_repository": "supreme33-kr/fds-msa",
   "observed_source_sha": "254b82231f8af79a06419b581174647bbccbe2bc",
   "approved_source_sha": null,
   "approval_reference": null,
-  "method_recommendation": "PREIMPORT",
+  "method_recommendation": "BOUNDED_RUNNER_SUPPLY_THEN_OFFLINE_CI",
   "producer": {
-    "host": null,
-    "operator": null,
-    "authorized_network_reference": null
+    "host": "cicd-runner01",
+    "address": "10.250.10.20",
+    "account": "server01_cicd-runner",
+    "uid": 1000,
+    "operator": "이권욱",
+    "authorized_network_reference": "P1-CICD-OID03-20260917-03"
   },
   "preparation_owner": "이권욱",
   "policy_lead": "이하영",
@@ -132,5 +135,21 @@
   "references": {
     "canonical": "https://github.com/321Team/fds-project-baseline/blob/docs-v3.1.18/baseline/FDS_Project_Implementation_Baseline_v3.1.18.md",
     "metadata_receipt": "https://github.com/321Team/infra-cicd/issues/11"
+  },
+  "network_scope": {
+    "adoption": "USER_REQUEST_착수_AFTER_RESOURCE_RECOMMENDATION",
+    "https_hosts": [
+      "auth.docker.io",
+      "registry-1.docker.io",
+      "production.cloudfront.docker.com",
+      "pypi.org",
+      "files.pythonhosted.org"
+    ],
+    "port": 443,
+    "duration_seconds": 3600,
+    "start": "FIRST_ACTUAL_DOWNLOAD",
+    "actual_start": null,
+    "automatic_extension": false,
+    "client_enforcement_only": true
   }
 }

@@ -1,3 +1,5 @@
+> **2026-09-17 사용자 채택:** 아래 최초 사전 반입 권장안 이후, 기존 cicd-runner01에서 별도 60분/5개 HTTPS 목적지 범위로 공급 파일을 생산한 다음 오프라인 CI에 연결하는 방식을 채택했다. 현재 실행안은 [runner-supply.md](runner-supply.md), 고정 입력은 [offline-supply-plan.json](offline-supply-plan.json)을 따른다. 아래 실행기 통합 제약은 여전히 남아 있다.
+
 # P1-CICD 이미지·Python 의존성 사전 반입 준비
 
 상태: **PREPARATION_ONLY / 실제 공급·실행 승인 미완료**.
