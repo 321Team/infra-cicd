@@ -45,7 +45,8 @@ def expected_input(data):
 
 def safe_file(path, limit, retain=False):
     flow.offline.plain_path(path)
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    # Opening a FIFO for reading must not wait before the regular-file check.
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as stream:
         before = os.fstat(stream.fileno())
         flow.require(stat.S_ISREG(before.st_mode) and before.st_size <= limit, 'FILE_TYPE_OR_SIZE')

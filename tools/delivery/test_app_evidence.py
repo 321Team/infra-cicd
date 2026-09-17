@@ -2,7 +2,10 @@
 import copy
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -207,6 +210,36 @@ class EvidenceTests(unittest.TestCase):
         self.flush()
         with self.assertRaisesRegex(evidence.flow.PreflightError, 'TEST_BUILD_SCOPE_MISMATCH'):
             self.check()
+
+    def test_fifo_inputs_fail_without_waiting_for_a_writer(self):
+        expected = self.root / 'expected.json'
+        expected.write_text(json.dumps(self.expected))
+        script = Path(evidence.__file__)
+        for kind in ('expected', 'archive', 'receipt', 'payload'):
+            path = {'expected': expected, 'archive': self.root / 'input.tar.gz',
+                    'receipt': self.run / 'result.json',
+                    'payload': self.run / 'source-fetch.log'}[kind]
+            old = path.read_bytes() if path.exists() else None
+            if path.exists():
+                path.unlink()
+            os.mkfifo(path, 0o600)
+            args = (['verify', '--archive', str(self.root / 'input.tar.gz'),
+                     '--sha256', '0' * 64] if kind in ('expected', 'archive') else
+                    ['collect', '--run-dir', str(self.run),
+                     '--output-dir', str(self.root / ('export-' + kind))])
+            try:
+                with self.subTest(kind=kind):
+                    result = subprocess.run([sys.executable, '-B', str(script), *args,
+                        '--expected', str(expected)], capture_output=True, timeout=3)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(result.stdout,
+                        b'EVIDENCE_CHECK=FAIL\nDELIVERY_GATE=NOT_VERIFIED\n')
+                    self.assertEqual(result.stderr, b'')
+                    self.assertFalse((self.root / ('export-' + kind)).exists())
+            finally:
+                path.unlink()
+                if old is not None:
+                    path.write_bytes(old)
 
     def test_scan_partial_or_wrong_identity_rejected(self):
         image = self.scan['images'].pop('fds-engine')
