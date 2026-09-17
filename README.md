@@ -1,6 +1,8 @@
 # infra-cicd
 
-**2026-09-15 후속:** [실제 구성·증거 범위와 첫 Job 안내](docs/implementation-state-20260915.md). PR #2 승인·병합, CA 발급/백업·공개 인계, Runner 로컬/Idle 결과와 남은 Runtime 검증을 구분한다.
+**2026-09-17:** Runtime AC **1/10**, 전체 Delivery **NOT_VERIFIED**. 최종 앱 인계와 최신 독립 리뷰 후 중앙 수동 실행한다. [시점별 상태와 증적](docs/implementation-state-20260915.md#2026-09-17-후속-상태). PR #5·#19의 부재 대체 리뷰 요청은 이재환(`supreme33-kr`)이다.
+
+**2026-09-15 이력:** [실제 구성·증거 범위와 첫 Job 안내](docs/implementation-state-20260915.md). PR #2 승인·병합, CA 발급/백업·공개 인계, Runner 로컬/Idle 결과와 남은 Runtime 검증을 구분한다.
 
 P1-CICD-01 GitHub Actions·Self-hosted Runner 기반 CI/CD 구축 및 검증 저장소. Test·Build·Trivy·Harbor Push·Kubernetes 배포와 롤백, 승인 Digest 및 실행 증적을 관리합니다.
 
@@ -10,8 +12,8 @@ Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, �
 
 - 담당: **이권욱(Lead)** / **이하영(Support·독립 기술 리뷰)** — [역할 결정 기록](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/decisions/p1-cicd-01-roles.md)
 - 티켓: **P1-CICD-01 — In Progress**
-- Runtime / Delivery Gate: **NOT_VERIFIED**
-- 이 초기 구성에는 문서·기록 양식만 포함한다. 실행 Workflow와 Runner 설치·배포 스크립트는 선행조건 확인 후 별도 PR로 구현한다.
+- Runtime AC: **1/10** / Delivery Gate: **NOT_VERIFIED**
+- 초기 문서 외에 Runner·Trivy·Build 검증 도구가 추가됐다. 앱 공급 소비·중앙 Workflow는 [PR #19](https://github.com/321Team/infra-cicd/pull/19)에서 검토 중이다. 코드 준비와 실제 앱 실행을 구분한다.
 
 ## 관리 범위
 
@@ -45,7 +47,7 @@ Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, �
 | infra-cicd | Runner·파이프라인·배포/롤백 자동화·CI/CD 검증 기준 |
 | [infra-harbor-trivy](https://github.com/321Team/infra-harbor-trivy) | Harbor 서버·Trivy 운영, Robot 권한, 서버 인증서 적용·복구 |
 | [infra-ansible](https://github.com/321Team/infra-ansible) | Ansible 코드·인프라 자동화; 앱 Delivery AC와 별도 추적 |
-| 앱 저장소 — 확인 필요 | 업무 Source·Dockerfile·테스트·최초 Application Manifest 정본 |
+| [fds-msa](https://github.com/supreme33-kr/fds-msa) — 최종 SHA 승인 대기 | 업무 Source·Dockerfile·테스트·최초 Application Manifest 정본 |
 | [fds-project-evidence](https://github.com/321Team/fds-project-evidence) | 실행 원본·독립 검증 증적; 이 저장소에서는 Commit·경로·해시로 연결 |
 
 TLS는 CI/CD 선행조건으로 관리한다. 이미 채택한 역할에 따라 이권욱이 CA 관리·발급과 Runner Trust 검증을, 이하영이 Harbor 개인키·CSR 생성과 서버 적용을 담당한다. 이 저장소 생성으로 별도 PKI 저장소 생성이나 CA 발급 완료를 선언하지 않는다.

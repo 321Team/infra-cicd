@@ -1,0 +1,29 @@
+name: P1 Trivy DB preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1-trivy-db-preflight
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, p1-cicd, onprem, podman]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Prepare and validate the official vulnerability database
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+          /usr/bin/python3 tools/trivy/prepare_db.py

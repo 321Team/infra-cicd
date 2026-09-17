@@ -1,10 +1,12 @@
 # P1-CICD-01 베이스라인 기반 구현안 v1.1
 
-**2026-09-15 갱신:** 아래 채택 이력과 구분하여 [실제 구성·완료 범위](implementation-state-20260915.md)를 확인한다. 신규 CA/Leaf 발급·백업/파일 복구와 Runner 로컬/Idle 증거를 확보했으며 PR #2는 병합됐다. 정식 Harbor·실제 Job·Delivery는 미검증이다. 09-14 #13/#16의 사용자 결정에 따라 미해결 CRITICAL/HIGH 및 검사/DB 오류의 Push·Deploy 차단, Robot 30일, Harbor Scanner 유지를 아래 구현값에 반영한다. 고정된 v3.1.17 정본 자체를 수정한 것은 아니다.
+**2026-09-17 상태 대조:** 정본은 docs-v3.1.18, v3.1.19는 수집 후보다. Runner의 Trivy DB 사전검증과 공급·base probe는 실행 증적을 확보했으며 Runtime AC는 1/10이다. 최종 앱 Source/시험 범위 인계와 최신 독립 리뷰가 남아 앱 Test→Build→Scan은 미실행, 전체 Delivery는 NOT_VERIFIED다. [후속 상태와 근거](implementation-state-20260915.md#2026-09-17-후속-상태)를 따른다.
 
-채택일: 2026-09-09. 근거: 사용자 지시 “우리가 설계한 베이스라인 기준으로 권장안 적용”. 상태: **구현 선택 채택 및 저장소 반영 / 서버 적용 미실행 / DELIVERY_GATE=NOT_VERIFIED**.
+**2026-09-15 갱신 이력:** 아래 채택 이력과 구분하여 [실제 구성·완료 범위](implementation-state-20260915.md)를 확인한다. 신규 CA/Leaf 발급·백업/파일 복구와 Runner 로컬/Idle 증거를 확보했으며 PR #2는 병합됐다. 정식 Harbor·실제 Job·Delivery는 미검증이다. 09-14 #13/#16의 사용자 결정에 따라 미해결 CRITICAL/HIGH 및 검사/DB 오류의 Push·Deploy 차단, Robot 30일, Harbor Scanner 유지를 아래 구현값에 반영한다. 고정된 v3.1.17 정본 자체를 수정한 것은 아니다.
 
-기준 정본은 [베이스라인 v3.1.17](https://github.com/321Team/fds-project-baseline/blob/2d93395a0e19ea67e5be199d7183a7edbaa6cf4c/baseline/FDS_Project_Implementation_Baseline_v3.1.17.md)이다. 2026-09-09 조회한 main에서 같은 Commit과 파일 Git blob `9090e23e62f9e59f74f1ce174d404fa6ead4db91`을 확인했다. 아래의 등록 범위·빌더·경로·수명은 이번에 채택한 구현값이며 베이스라인에 원래 명시된 값으로 소급하지 않는다. 공식 베이스라인·Notion 변경 또는 PR 병합을 뜻하지 않는다.
+채택일: 2026-09-09. 당시 근거: 사용자 지시 “우리가 설계한 베이스라인 기준으로 권장안 적용”. 당시 상태: **구현 선택 채택 및 저장소 반영 / 서버 적용 미실행 / DELIVERY_GATE=NOT_VERIFIED**.
+
+09-09 채택 당시 기준 정본은 [베이스라인 v3.1.17](https://github.com/321Team/fds-project-baseline/blob/2d93395a0e19ea67e5be199d7183a7edbaa6cf4c/baseline/FDS_Project_Implementation_Baseline_v3.1.17.md)이다. 2026-09-09 조회한 main에서 같은 Commit과 파일 Git blob `9090e23e62f9e59f74f1ce174d404fa6ead4db91`을 확인했다. 아래의 등록 범위·빌더·경로·수명은 이번에 채택한 구현값이며 베이스라인에 원래 명시된 값으로 소급하지 않는다. 공식 베이스라인·Notion 변경 또는 PR 병합을 뜻하지 않는다.
 
 2026-09-10 후속 결정: 사용자 지시 “기존 승인 CA는 폐기 신규 발급 필요”에 따라 기존 CA 재사용 선택을 신규 키·Root 발급으로 변경했다. 신규 발급은 이후 09-15 완료 증적을 확보했으며 기존 CA 폐기는 미검증이다.
 
@@ -31,7 +33,7 @@ Podman은 현재 설치된 빌더를 사용하는 구현 선택이다. 실제 �
 
 ## 최초 구축의 병행 실행 순서 — 이력 참조
 
-아래 1~3단계의 신규 발급·등록 준비는 완료 증거와 대조하며 현재 자산에 반복 실행하지 않는다. 다음 실제 작업은 main smoke와 HBR 연계다.
+아래 1~3단계의 신규 발급·등록 준비는 완료 증거와 대조하며 현재 자산에 반복 실행하지 않는다. 09-15 당시 다음 작업은 main smoke와 HBR 연계였다. 이후 상태와 현재 실행 순서는 위 후속 상태를 따른다.
 
 1. **Harbor:** 이미 검토한 `harbor01-sn0wepv7` 요청의 개인키·CSR을 유지한다. 새 CA에 동일 CSR을 제출하며 CA 교체를 이유로 CSR 생성 도구를 다시 실행하지 않는다.
 2. **Runner:** [설치 Runbook](runner-bootstrap.md)으로 Git과 rootless 전제조건을 확인·보완하고, GitHub가 제시하는 Linux x64 패키지·해시로 다운로드·등록·서비스 설정을 진행한다.

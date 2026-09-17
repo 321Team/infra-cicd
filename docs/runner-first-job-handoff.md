@@ -1,14 +1,16 @@
 # P1-CICD-01 첫 Runner Job 인계 v1.0
 
-**2026-09-15 후속 상태:** PR #2 최신 HEAD는 이하영 APPROVED 후 main `ffaa764623c5941b14fe12384e9ba5629bd60a6f`에 병합됐다. Runner 로그인 사전점검·GitHub Idle·필요 라벨 6개를 확인했다. 현재 다음 작업은 §2의 main 수동 smoke 실행과 실제 Run 수신이다. 아래 09-09 표·미수신/리뷰 대기는 당시 기록이며 [최신 실제 구성](implementation-state-20260915.md)과 구분한다. 같은 로그인 점검을 다시 수행할 필요는 없고, 재시작 후 Job 수신은 별도 미검증이다.
+**2026-09-17 상태 대조:** 정본은 docs-v3.1.18, v3.1.19는 수집 후보다. Runner의 Trivy DB 사전검증과 공급·base probe는 실행 증적을 확보했으며 Runtime AC는 1/10이다. 최종 앱 Source/시험 범위 인계와 최신 독립 리뷰가 남아 앱 Test→Build→Scan은 미실행, 전체 Delivery는 NOT_VERIFIED다. [후속 상태와 근거](implementation-state-20260915.md#2026-09-17-후속-상태)를 따른다.
 
-첫 실행: [P1 Runner smoke](https://github.com/321Team/infra-cicd/actions/workflows/runner-smoke.yml) → Run workflow → main → 한 번 실행. Run URL·Workflow Commit·Attempt와 `JOB_RECEPTION=VERIFIED`, `BUILDER_ROOTLESS=VERIFIED`를 확인한다. 대기/실패 시 해당 Job 결과로 후속 조치하며 임시 PR 트리거로 우회하지 않는다.
+**2026-09-15 후속 상태 이력:** PR #2 최신 HEAD는 이하영 APPROVED 후 main `ffaa764623c5941b14fe12384e9ba5629bd60a6f`에 병합됐다. Runner 로그인 사전점검·GitHub Idle·필요 라벨 6개를 확인했다. 09-15 당시 다음 작업은 §2의 main 수동 smoke 실행과 실제 Run 수신이었다. 아래 09-09 표·미수신/리뷰 대기는 당시 기록이며 [09-15 실제 구성](implementation-state-20260915.md)과 구분한다. 같은 로그인 점검을 다시 수행할 필요는 없고, 재시작 후 Job 수신은 별도 미검증이다.
 
-작성일: 2026-09-09. **사전 소스 점검 완료 / 독립 기술 리뷰 및 첫 Job 실행 대기**.
+최초 실행 절차 이력(현재 재실행 지시 아님): [P1 Runner smoke](https://github.com/321Team/infra-cicd/actions/workflows/runner-smoke.yml) → Run workflow → main → 한 번 실행. Run URL·Workflow Commit·Attempt와 `JOB_RECEPTION=VERIFIED`, `BUILDER_ROOTLESS=VERIFIED`를 확인한다. 대기/실패 시 해당 Job 결과로 후속 조치하며 임시 PR 트리거로 우회하지 않는다.
+
+작성일: 2026-09-09. 아래 본문은 당시 기록이다. **사전 소스 점검 완료 / 독립 기술 리뷰 및 첫 Job 실행 대기**.
 
 PR #1은 main에 병합됐다. 다음 대상은 [PR #2](https://github.com/321Team/infra-cicd/pull/2)의 독립 기술 검토와 승인 후 첫 수동 Job이다. 이 문서의 사전 점검은 작성 측 검증이며 이하영님의 독립 승인을 대체하지 않는다.
 
-## 확인한 소스와 현재 단계
+## 09-09에 확인한 소스와 단계
 
 | 항목 | 확인 결과 |
 |---|---|

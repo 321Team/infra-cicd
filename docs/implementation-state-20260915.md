@@ -2,6 +2,25 @@
 
 이 문서는 09-15 제출 증적과 GitHub 조회 결과를 연결한다. 실시간 상태 조회나 전체 인수 승인 기록은 아니다. 실행 증거는 [baseline #16](https://github.com/321Team/fds-project-baseline/issues/16)에 기록했다.
 
+## 2026-09-17 후속 상태
+
+아래 별도 관측을 09-15 기록 위에 덧붙인다. 이후 본문의 첫 Job 미실행·Runtime AC 0/10은 **09-15 당시 상태**다. CA·Runner 신규 생성/등록 및 성공한 공급·probe를 다시 수행하라는 지시가 아니다.
+
+| 범위 | 이후 확인 결과와 한계 |
+|---|---|
+| 정본 | docs-v3.1.18 유지. v3.1.19는 수집 후보이며 발행 미완료 |
+| 실제 Runner Job | Trivy DB 사전검증 [Run35061666680](https://github.com/321Team/infra-cicd/actions/runs/35061666680), Job104683095209 PASS. 앱 Runtime의 성공으로 확대하지 않음 |
+| 공급 수집 | 09-17 10:07:57–10:09:09 KST, 내부 hash59/59·명령22/22·offline pip4프로필 PASS. archive SHA256 `6ae2fe28d2ab8eef0d4cf2e92a48b469b7a60fed3b59b8070461e61db2367403` |
+| base 소비 probe | 09-17 11:41:25–30 KST, 내부 hash7/7·명령6/6 및 고정 digest의 최소 Build PASS. archive SHA256 `db6c4a18857aa5ecb1f9a923888268193d7653932b9b0eeb0174116fe07f7831`. 실제 앱 시험/Build/Scan 미포함 |
+| 코드 | main의 Scan·Build 어댑터와 [PR #19](https://github.com/321Team/infra-cicd/pull/19)의 공급 소비·중앙 Workflow 후보를 구분. 기존 PR #3의 CRITICAL 단독 모의 Gate는 현행 HIGH/CRITICAL 기준을 충족하지 않음 |
+| 앱 인계 | 최종 승인 SHA, pin/lock 반영 및 API Unit 범위가 미확정. [Issue #11](https://github.com/321Team/infra-cicd/issues/11)의 최종 인계 후 config를 대조 |
+| 리뷰 | 사용자 부재 대체 지시에 따라 PR #5·#19 리뷰 요청은 이재환(supreme33-kr). PR #2의 과거 승인을 새 변경에 이전하지 않음 |
+| 인수 | Runtime AC **1/10**, APP_TEST_BUILD_SCAN **NOT_EXECUTED**, DELIVERY_GATE **NOT_VERIFIED**. 공급·probe PASS와 구분 |
+
+Harbor 서버 상태는 이번 문서 충돌 해소에서 새로 조회하지 않았다. 이하영 Lead의 [HBR #13](https://github.com/321Team/fds-project-baseline/issues/13) 인계와 실제 서비스·엄격 TLS·인증 Push/Pull 증적을 별도로 대조한다. 이후 실행 순서는 최종 앱 인계 → 최신 config/코드 독립 리뷰·main 반영 → 중앙 수동 실행이다.
+
+## 09-15 관측 이력
+
 ## 코드 승인·병합
 
 - PR #2 HEAD: `5f575fc8bfbd68d29fc3995fe68bceb87f1b194b`.

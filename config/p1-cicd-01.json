@@ -6,7 +6,8 @@
     "version": "3.1.17",
     "commit": "2d93395a0e19ea67e5be199d7183a7edbaa6cf4c",
     "blob": "9090e23e62f9e59f74f1ce174d404fa6ead4db91",
-    "path": "baseline/FDS_Project_Implementation_Baseline_v3.1.17.md"
+    "path": "baseline/FDS_Project_Implementation_Baseline_v3.1.17.md",
+    "scope": "HISTORICAL_ADOPTION_20260909"
   },
   "runner": {
     "host": "cicd-runner01",
@@ -35,7 +36,7 @@
     "github_service_containers": false,
     "initial_trigger": "workflow_dispatch",
     "untrusted_pr_execution": false,
-    "runtime_status": "NOT_VERIFIED",
+    "runtime_status": "PARTIALLY_VERIFIED",
     "last_observation": {
       "basis": "USER_SCREEN_EVIDENCE",
       "service": "active/running",
@@ -45,7 +46,9 @@
       "github_runner_status": "Idle",
       "expected_labels_observed": true,
       "actual_job": "NOT_EXECUTED",
-      "restart_job_reception": "NOT_VERIFIED"
+      "restart_job_reception": "NOT_VERIFIED",
+      "observed_date": "2026-09-15",
+      "scope": "HISTORICAL_SCREEN_OBSERVATION"
     }
   },
   "harbor": {
@@ -60,7 +63,9 @@
     "new_credentials_required": true,
     "https_certificate": "/etc/harbor/pki/current/harbor01.crt",
     "https_private_key": "/etc/harbor/pki/current/harbor01.key",
-    "runtime_status": "NOT_APPLIED"
+    "runtime_status": "NOT_APPLIED",
+    "observation_date": "2026-09-15",
+    "observation_scope": "HISTORICAL_NOT_REFRESHED_BY_THIS_CHANGE"
   },
   "tls": {
     "trust_model": "D19_PROJECT_PRIVATE_ROOT_CA_SEPARATE_SERVER_LEAVES",
@@ -187,7 +192,8 @@
     ],
     "policy_decision_reference": "https://github.com/321Team/fds-project-baseline/issues/13",
     "policy_decision_date": "2026-09-14",
-    "runtime_enforcement": "NOT_INTEGRATED"
+    "runtime_enforcement": "APP_RUNTIME_AND_PUSH_DEPLOY_NOT_VERIFIED",
+    "implementation_status": "SCAN_BUILD_ADAPTER_ON_MAIN_OFFLINE_APP_WORKFLOW_IN_PR19"
   },
   "remaining_runtime_inputs": [
     "Legacy CA fingerprint, actual consumers, trust transition and disposal evidence; new CA issuance and encrypted file/key/cert/ledger restore already evidenced",
@@ -196,5 +202,21 @@
     "Harbor stop window, consistent protected backup and selected installer digest"
   ],
   "observation_record": "docs/implementation-state-20260915.md",
-  "observation_date": "2026-09-15"
+  "observation_date": "2026-09-15",
+  "observation_scope": "HISTORICAL_20260915_WITH_SEPARATE_LATEST_STATUS",
+  "latest_status": {
+    "as_of": "2026-09-17",
+    "canonical": "docs-v3.1.18",
+    "candidate": "v3.1.19_COLLECTION_ONLY",
+    "runner_db_preflight": "PASS",
+    "runner_db_run_id": "35061666680",
+    "runner_db_job_id": "104683095209",
+    "supply_runtime": "PASS",
+    "base_probe_runtime": "PASS",
+    "app_test_build_scan": "NOT_EXECUTED",
+    "runtime_ac_pass": 1,
+    "runtime_ac_total": 10,
+    "delivery_gate": "NOT_VERIFIED",
+    "reference": "docs/implementation-state-20260915.md#2026-09-17-후속-상태"
+  }
 }

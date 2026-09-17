@@ -7,12 +7,18 @@
 | 앱 Source | 저장소, 승인 Commit, Dockerfile·Unit/Contract Test 명령 및 두 서비스 호환성 |
 | Runner | 실제 등록 상태, 설치 버전, Job 수신, 빌더·kubectl·Trivy 버전, 자격증명 분리·작업 정리 |
 | Harbor | 승인 CA Trust, CI Push+Pull Robot, Worker Pull 계정, Registry repository 경로 |
-| Trivy | 09-14 결정의 미해결 CRITICAL/HIGH 차단, DB 공급·갱신 경로, 검사·DB 오류 시 Push/Deploy 차단, 예외 승인·만료 |
+| Trivy | 09-14 채택 HIGH·CRITICAL 차단, DB 공급·갱신 경로, 검사 오류 처리, 예외 승인·만료 |
 | Kubernetes | API 인증 연결, 기존 두 Deployment 및 컨테이너명, SA·RBAC, 단기 Token 정책 |
 | Health/E2E | 실행 주체·승인 경로·명령·예상 결과; 임의 Runner→NodePort 경로를 추가하지 않음 |
 | 승인·복구 | 승인 대상 SHA/Digest, 재실행·동시 배포 통제, 이전 Digest·DB Schema 영향 |
 
-현재 미확인 값을 임의로 채워 실행 Workflow를 활성화하지 않는다. [09-14 사용자 결정: #13](https://github.com/321Team/fds-project-baseline/issues/13)과 [#16](https://github.com/321Team/fds-project-baseline/issues/16)에 따라 미해결 CRITICAL/HIGH와 스캐너/DB 오류는 Push·Deploy를 차단한다. 예외는 CVE·Digest·사유·만료·승인자를 연결한다. Harbor Scanner 서비스는 유지하고 Robot은 30일로 발급한다. 이 정책 기록과 실제 실행 차단 검증을 구분하며 현재 runtime enforcement는 미통합이다.
+현재 미확인 값을 임의로 채워 실행 Workflow를 활성화하지 않는다. [2026-09-14 이권욱 결정](https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-5659051242)에 따라 미해결 HIGH·CRITICAL은 Push와 Deploy를 모두 차단한다. 수정 버전 미제공도 자동 면제하지 않는다. 스캐너·DB 오류는 실패이며 취약점 0개로 처리하지 않는다. 예외는 CVE·Image Digest·사유·만료·승인자를 특정해야 하며 승인되지 않은 ignore 설정으로 완화하지 않는다.
+
+DB 운영은 [채택 운영안](trivy-update-policy.md)을 따른다. 실제 Scan 어댑터와 아직 필요한 Test/Build·Push/Deploy 연결은 [앱 이미지 검사 인계](app-image-scan.md)에 구분한다. 기존 Draft PR #3 모의 Gate의 CRITICAL 단독 조건은 현행 기준을 충족하지 않으므로 그대로 활성화하지 않는다.
+
+Test/Build 호출기와 입력의 미승인 기본값은 [앱 Build·Scan 연결](app-build-scan.md)에 정의한다. 앱 승인 Source/Test 인계 없이 관측 SHA를 실행 승인으로 채택하지 않는다.
+
+Harbor Scanner 서비스 유지와 Robot 30일 발급은 09-14 사용자 결정으로 기록한다. Scan·Build 어댑터 구현과 실제 앱 Runtime·Push/Deploy 검증을 구분하며, 전체 Delivery는 아직 NOT_VERIFIED다. [시점별 상태](implementation-state-20260915.md#2026-09-17-후속-상태)를 따른다.
 
 ## 구현 순서
 
