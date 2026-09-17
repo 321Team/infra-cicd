@@ -1,5 +1,39 @@
 # 앱 담당 검토용: 공급 완료에 따른 pin·lock 반영안
 
+## 바로 적용할 수 있는 단일 패치
+
+2026-09-17 최신 확인에서 앱 main은 아래 기준 SHA이고 이 연결 계정은 `pull=true / push=false`다. 따라서 앱 저장소에 직접 변경 브랜치/PR을 작성하지 않았다. 아래 패치는 기존6개 후보를 하나로 묶은 적용 준비물이며, 앱 승인·병합 또는 실행 완료를 의미하지 않는다.
+
+- 파일: [offline-app-254b822.patch](offline-app-254b822.patch), 12,492bytes
+- SHA256: `eee3869cb0135769d7da2f3929455aa46ac19b8e185b5770b4cf6e00b782bb02`
+- sidecar: [offline-app-254b822.patch.sha256](offline-app-254b822.patch.sha256)
+- 회신: [최종 SHA·Unit/Contract 판단 양식](APPROVAL_REPLY.md)
+
+패치 검증은 GitHub 기준 Commit의 Dockerfile2개·requirements4개 원본 Git blob 일치 확인 → 격리 로컬 저장소의 `git apply --check`/적용 → 후보6파일 바이트 일치 및 기존 requirements4개 불변 → 중복 적용 차단 → 역적용 원상복귀 → Dockerfile이 다른 기준에서 적용 차단까지 PASS다. 앱 pytest/Build/Scan은 실행하지 않았다.
+
+**앱 담당 적용 절차:** 앱 저장소의 기존 변경을 보존하도록 아래 검사는 dirty/untracked 파일이 있으면 중단한다. 먼저 패치 파일을 내려받고 `p1_patch`를 실제 절대경로로 지정한다. 아래는 앱 담당이 검토하여 수행할 절차이며 CICD Runner에서 수행하는 명령이 아니다.
+
+```bash
+(
+  set -eu
+  # 현재 디렉터리는 앱 담당의 fds-msa 저장소여야 한다.
+  p1_patch=/absolute/path/offline-app-254b822.patch
+  test "$(git rev-parse HEAD)" = 254b82231f8af79a06419b581174647bbccbe2bc
+  test -z "$(git status --porcelain=v1 --untracked-files=all)"
+  printf '%s  %s\n' 'eee3869cb0135769d7da2f3929455aa46ac19b8e185b5770b4cf6e00b782bb02' "$p1_patch" | sha256sum -c -
+  git apply --check "$p1_patch"
+  git switch -c cicd/offline-app-handoff-20260917
+  git apply "$p1_patch"
+  git add -- transaction-api/Dockerfile transaction-api/requirements-runtime.lock transaction-api/requirements-test.lock fds-engine/Dockerfile fds-engine/requirements-runtime.lock fds-engine/requirements-test.lock
+  git diff --cached --check
+  git diff --cached --stat
+)
+```
+
+이후 앱 담당이 staged6파일을 검토하고 자신의 PR/Commit 절차로 반영한다. 최종 반영된40자리 SHA와 [회신 양식](APPROVAL_REPLY.md)의 실제 판단을 Issue11에 남긴다. 위 단계는 자동 Commit/Push/승인/병합을 수행하지 않는다. 기준 SHA가 달라지면 검사를 생략하지 말고 새 Source와 requirements 변경을 다시 대조한다.
+
+## 기존 인계 후보의 근거
+
 원본 requirements Source: `supreme33-kr/fds-msa@254b82231f8af79a06419b581174647bbccbe2bc`.
 기존 승인 `01758583...`를 이 변경의 승인으로 승계하지 않는다. 이 폴더는 **앱 저장소에 아직 반영되지 않은 인계 후보**다.
 
