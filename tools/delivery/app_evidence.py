@@ -19,6 +19,7 @@ from verify_runner import BINARY_SHA256
 SCHEMA = 'P1-CICD-app-evidence-1'
 JSON_LIMIT = 4 * 1024**2
 PACKAGE_LIMIT = 32 * 1024**2
+TAR_LIMIT = PACKAGE_LIMIT + 64 * 1024
 FILE_LIMIT = 4 * 1024**3
 RECEIPTS = {'result.json', 'handoff.json', 'build-scan/result.json',
             'build-scan/scan/result.json', 'build-scan/scan/db/result.json',
@@ -328,8 +329,12 @@ def verify(archive, checksum, expected):
     flow.require(isinstance(checksum, str) and re.fullmatch(HEX, checksum), 'ARCHIVE_SHA_REQUIRED')
     info, raw = safe_file(archive, PACKAGE_LIMIT, retain=True)
     flow.require(info['sha256'] == checksum, 'ARCHIVE_HASH_MISMATCH')
+    # Bound decoded bytes before tarfile consumes PAX/GNU metadata or padding.
+    with gzip.GzipFile(fileobj=io.BytesIO(raw), mode='rb') as gz:
+        decoded = gz.read(TAR_LIMIT + 1)
+    flow.require(len(decoded) <= TAR_LIMIT, 'DECOMPRESSED_PACKAGE_TOO_LARGE')
     files, total = {}, 0
-    with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as tar:
+    with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:') as tar:
         for member in tar:
             flow.require(member.isfile() and member.name in RECEIPTS | {'manifest.json'} and
                          member.name not in files and 0 <= member.size <= JSON_LIMIT, 'ARCHIVE_MEMBER_INVALID')

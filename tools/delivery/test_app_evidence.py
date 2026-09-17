@@ -250,6 +250,15 @@ class EvidenceTests(unittest.TestCase):
             with self.subTest(name=name, kind=kind), self.assertRaises(evidence.flow.PreflightError):
                 evidence.verify(target, evidence.flow.sha256(target), self.expected)
 
+    def test_compressed_padding_cannot_bypass_package_limit(self):
+        archive, _, _ = evidence.collect(self.run, self.root / 'export', self.expected)
+        # A valid tar followed by compressed padding used to stop at the first tar EOF.
+        decoded = evidence.gzip.decompress(archive.read_bytes())
+        archive.write_bytes(evidence.gzip.compress(decoded + b'\0' * evidence.TAR_LIMIT))
+        self.assertLess(archive.stat().st_size, evidence.PACKAGE_LIMIT)
+        with self.assertRaisesRegex(evidence.flow.PreflightError, 'DECOMPRESSED_PACKAGE_TOO_LARGE'):
+            evidence.verify(archive, evidence.flow.sha256(archive), self.expected)
+
     def test_rehashed_package_with_unbound_payload_rejected(self):
         archive, _, _ = evidence.collect(self.run, self.root / 'export', self.expected)
         with tarfile.open(archive, 'r:gz') as tar:

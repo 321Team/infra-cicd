@@ -38,7 +38,7 @@
 
 ## 수신 측 대조
 
-전달 경로에서 별도로 확인한 archive hash와 동일한 외부 expected 파일로 검사한다. archive는 파일시스템에 압축 해제하지 않으며 비허용 경로·link·중복·과대 파일을 거부한다.
+전달 경로에서 별도로 확인한 archive hash와 동일한 외부 expected 파일로 검사한다. archive는 파일시스템에 압축 해제하지 않으며 비허용 경로·link·중복·과대 파일을 거부한다. 압축 바이트는 32MiB, 해제한 tar 전체는 32MiB+64KiB로 먼저 제한하여 tar metadata·padding도 제한을 우회하지 못하게 한다.
 
 ```bash
 python3 -B tools/delivery/app_evidence.py verify \
