@@ -1,5 +1,5 @@
 {
-  "schema": "P1-CICD-app-build-scan-1",
+  "schema": "P1-CICD-app-build-scan-2",
   "status": "PENDING_APP_HANDOFF",
   "source": {
     "repository": "supreme33-kr/fds-msa",
@@ -11,33 +11,8 @@
     "transaction-api": {
       "context": "transaction-api",
       "dockerfile": "transaction-api/Dockerfile",
-      "base_image": null,
-      "setup": [
-        {
-          "cwd": "transaction-api",
-          "argv": [
-            "/usr/bin/python3",
-            "-m",
-            "venv",
-            ".venv"
-          ],
-          "timeout_seconds": 120
-        },
-        {
-          "cwd": "transaction-api",
-          "argv": [
-            ".venv/bin/python",
-            "-m",
-            "pip",
-            "--disable-pip-version-check",
-            "install",
-            "--no-cache-dir",
-            "-r",
-            "requirements-test.txt"
-          ],
-          "timeout_seconds": 600
-        }
-      ],
+      "base_image": "docker.io/library/python@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
+      "setup": [],
       "unit": null,
       "contract": {
         "cwd": "transaction-api",
@@ -46,7 +21,8 @@
           "-m",
           "pytest",
           "-q",
-          "tests/test_health.py"
+          "tests/test_health.py",
+          "tests/test_metrics.py"
         ],
         "timeout_seconds": 300
       }
@@ -54,33 +30,8 @@
     "fds-engine": {
       "context": "fds-engine",
       "dockerfile": "fds-engine/Dockerfile",
-      "base_image": null,
-      "setup": [
-        {
-          "cwd": "fds-engine",
-          "argv": [
-            "/usr/bin/python3",
-            "-m",
-            "venv",
-            ".venv"
-          ],
-          "timeout_seconds": 120
-        },
-        {
-          "cwd": "fds-engine",
-          "argv": [
-            ".venv/bin/python",
-            "-m",
-            "pip",
-            "--disable-pip-version-check",
-            "install",
-            "--no-cache-dir",
-            "-r",
-            "requirements-test.txt"
-          ],
-          "timeout_seconds": 600
-        }
-      ],
+      "base_image": "docker.io/library/python@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
+      "setup": [],
       "unit": {
         "cwd": "fds-engine",
         "argv": [
@@ -99,10 +50,45 @@
           "-m",
           "pytest",
           "-q",
-          "tests/test_health.py"
+          "tests/test_health.py",
+          "tests/test_metrics.py"
         ],
         "timeout_seconds": 300
       }
+    }
+  },
+  "offline_supply": {
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Supply.20260917T010757Z.974fb972",
+    "archive_sha256": "c8fa45563815bd6a3de3a8b115103cbb3c838229bcda68ca255b70a9f2202d8c",
+    "manifest_digest": "sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
+    "config_digest": "sha256:ec7d6c95cd3692a2e2d228a8b1ca74e4025b54121fcc4c5da6f09cfa473315ad",
+    "profiles": {
+      "transaction-api-runtime": {
+        "roots_sha256": "0b8f3430a64f4b81429277bf651b2e1b62a68084f8d79b36a63d09d065b76947",
+        "lock_sha256": "3a71d0d227415f3f818642b5370920f02a23a9bcb28f4dd31aac1d59d96c756e",
+        "inventory_sha256": "b5ddd2595efad3a48dc6d09bb963515ab5cb8bfcd38604116ea2329d819640a4"
+      },
+      "transaction-api-test": {
+        "roots_sha256": "dc9cf9fa2bfb10708504fc283835f8f7e138d115f83de8b94eededa9ef6eceb0",
+        "lock_sha256": "72137816616e16e2b88f86630c507800414c3b37c14c7f624b9042fd66a8ef85",
+        "inventory_sha256": "acf41ad32fc8aed812f545b5b3e60d74250d5c37b88c30530c95bb0d410d26e9"
+      },
+      "fds-engine-runtime": {
+        "roots_sha256": "11b1f940e83bded8fa8e901005f0467c4652bfac332657b11c118ee8f9b80ca3",
+        "lock_sha256": "c9d6138da341b431f0b7fdaf4aee78d59f9207e9d3f2bf4636b0505681c1f80b",
+        "inventory_sha256": "6bf41b600e46f61d8c7e1a7886c411938da44fdd9dc65ea5d25127e7df2b80a5"
+      },
+      "fds-engine-test": {
+        "roots_sha256": "3f6aee59d8afee889d56f97bfef08830ce94d630d05097fb2dfa3e8b9bf2d16c",
+        "lock_sha256": "3a51dbbb6dd56d09658f0d2343e4b4847394f006f1f2aa082886bc468e797b65",
+        "inventory_sha256": "56ec48ee8d9827d90b9e2281ddae125be2f3b8760656404e5f9daa5490f60acb"
+      }
+    },
+    "requirements": {
+      "transaction-api/requirements.txt": "0b8f3430a64f4b81429277bf651b2e1b62a68084f8d79b36a63d09d065b76947",
+      "transaction-api/requirements-test.txt": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2",
+      "fds-engine/requirements.txt": "11b1f940e83bded8fa8e901005f0467c4652bfac332657b11c118ee8f9b80ca3",
+      "fds-engine/requirements-test.txt": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78"
     }
   }
 }

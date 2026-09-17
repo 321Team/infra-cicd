@@ -1,5 +1,7 @@
 # 승인 입력을 소비하는 Test·Build·Scan 실행기
 
+**2026-09-17 갱신:** 현재 기본 설정은 [schema2 오프라인 공급 연결](offline-build-scan.md)이다. 공급 base digest·4개 profile hash를 고정했고 setup은 실행기가 새 venv의 오프라인 설치로 생성한다. Source 승인·API Unit은 계속 미확정이다. 아래 원격 Pull·일반 setup·base null 설명은 보존된 schema1 및 PR15 당시 기록이며 현재 schema2 실행 순서와 구분한다.
+
 [후속 #11](https://github.com/321Team/infra-cicd/issues/11)의 첫 연결 단계다. `tools/delivery/build_scan.py`는 승인 입력과 지정 Source Commit의 사본으로 두 서비스의 Unit/Contract 시험, Podman rootless Build, [PR #10 Scan 어댑터](app-image-scan.md)를 순서대로 호출한다. 아직 실제 앱 시험/Build/Scan은 실행하지 않았다. Push/Deploy 코드는 포함하지 않으며 `DELIVERY_GATE=NOT_VERIFIED`를 유지한다.
 
 ## 기본 상태와 승인 경계
