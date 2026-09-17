@@ -45,6 +45,16 @@ def preflight():
     return home
 
 
+def read_bundle_input():
+    # zipimporter expects its exact archive prefix. Path() removes a leading
+    # './', breaking get_data when the user invokes `python ./bundle.pyz`.
+    path = os.path.join(os.path.dirname(__file__), 'offline-probe-input.json')
+    try:
+        return __loader__.get_data(path)
+    except OSError:
+        raise PreflightError('BUNDLE_INPUT_READ_FAILED') from None
+
+
 def execute(record, base, folder):
     result = {'schema': 'P1-CICD-offline-probe-1', 'OFFLINE_PROBE': 'FAIL',
               'SUPPLY_COPY': 'NOT_EXECUTED', 'REPOSITORY_DIGEST_RESOLUTION': 'NOT_EXECUTED',
@@ -114,10 +124,13 @@ def main(argv=None):
     parser.parse_args(argv)
     os.umask(0o077)
     folder = None
+    phase = 'preflight'
     try:
         home = preflight()
-        raw = __loader__.get_data(str(Path(__file__).with_name('offline-probe-input.json')))
+        phase = 'bundle-input'
+        raw = read_bundle_input()
         record = supply.json_object(raw)
+        phase = 'lock'
         lock = home / 'FDS_CICD_OfflineProbe.lock'
         descriptor = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
         with os.fdopen(descriptor, 'r+') as stream:
@@ -132,8 +145,10 @@ def main(argv=None):
             for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGALRM):
                 signal.signal(sig, interrupted)
             signal.alarm(900)
+            phase = 'execute'
             rc, result = execute(record, 'docker.io/library/python@' + record['manifest_digest'], folder)
             signal.alarm(0)
+            phase = 'export'
             result['input_sha256'] = hashlib.sha256(raw).hexdigest()
             result['tool_sha256'] = supply.sha256(Path(sys.argv[0]).resolve())
             (folder / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -151,7 +166,7 @@ def main(argv=None):
             return rc
     except (PreflightError, OSError, ValueError, KeyError) as exc:
         code = str(exc) if isinstance(exc, PreflightError) else 'PROBE_PREFLIGHT_OR_EXPORT_ERROR'
-        print('OFFLINE_PROBE=FAIL\nERROR_CODE=' + code)
+        print('OFFLINE_PROBE=FAIL\nERROR_CODE=' + code + '\nFAILED_PHASE=' + phase)
         if folder:
             print('PARTIAL_EVIDENCE_DIR=' + str(folder))
         return 1

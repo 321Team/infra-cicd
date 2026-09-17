@@ -321,6 +321,21 @@ class ProbeTests(unittest.TestCase):
             record = json.loads(z.read('offline-probe-input.json'))
         supply.validate_record(record)
 
+    def test_bundle_reads_actual_input_via_dot_relative_and_absolute_paths(self):
+        archive = self.root / 'probe.pyz'
+        bundle.build(archive)
+        with zipfile.ZipFile(archive) as z:
+            expected = hashlib.sha256(z.read('offline-probe-input.json')).hexdigest()
+        code = ('import hashlib,sys; sys.path.insert(0,sys.argv[1]); '
+                'import probe_offline_supply as p; '
+                'print(hashlib.sha256(p.read_bundle_input()).hexdigest())')
+        for path in ('./probe.pyz', 'probe.pyz', str(archive)):
+            with self.subTest(path=path):
+                result = subprocess.run([sys.executable, '-I', '-B', '-c', code, path],
+                    cwd=self.root, capture_output=True, text=True, timeout=15)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), expected)
+
 
 if __name__ == '__main__':
     unittest.main()
