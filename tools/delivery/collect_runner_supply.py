@@ -107,8 +107,10 @@ def produce(folder, commands, result):
     result['requests'] = client.receipts
     signal.alarm(max(1, math.ceil(lease['expires_epoch'] - time.time())))
     archive = folder / 'base.oci.tar'
+    result['BASE_BLOBS_AND_DIFFIDS'] = 'FAIL'
     result['base_archive_sha256'] = base_archive(client, archive)
     result['BASE_BLOBS_AND_DIFFIDS'] = 'PASS'
+    result['IMAGE_IMPORT_CONFIG_ID'] = 'FAIL'
     commands.run(commands.podman + ['load', '--input', archive])
     identities = json.loads(commands.run(commands.podman + ['image', 'inspect', '--format=json', CONFIG_DIGEST]))
     require(isinstance(identities, list) and len(identities) == 1, 'IMPORTED_IMAGE_COUNT')
