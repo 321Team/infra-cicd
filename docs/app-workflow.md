@@ -41,6 +41,8 @@ python3 tools/delivery/app_workflow.py --config /path/to/reviewed-config.json --
 
 ## 검증 범위
 
+실제 실행 종료 후 [앱 증적 회수·대조](app-evidence.md)로 Run/Attempt·Source·config·Build/Scan/DB 연결을 검사한다. 도구의 증적 검사 성공과 원래 앱 실행 결과, 독립 리뷰·Delivery 판정을 구분한다.
+
 새 시험은 실제 임시 Git Commit·bare fetch·고정 SHA 수신·10파일 검사, dirty/untracked 제외, 변경/누락/잘못된 Source·승인 입력 차단, credential 환경 제거, 기존 디렉터리 보존, downstream 호출 차단과 PASS/BLOCK/FAIL 반환을 확인한다. fetch 시험의 transport만 로컬 fixture로 치환한다. 실제 GitHub 네트워크, Runner Job, 앱 시험, Podman/Trivy는 이 시험으로 검증됐다고 주장하지 않는다.
 
 **APP_TEST_BUILD_SCAN NOT_EXECUTED / DELIVERY_GATE NOT_VERIFIED.** 공급 수집·base probe의 기존 Runtime PASS와 분리한다.
