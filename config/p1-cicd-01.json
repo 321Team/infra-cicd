@@ -6,7 +6,8 @@
     "version": "3.1.17",
     "commit": "2d93395a0e19ea67e5be199d7183a7edbaa6cf4c",
     "blob": "9090e23e62f9e59f74f1ce174d404fa6ead4db91",
-    "path": "baseline/FDS_Project_Implementation_Baseline_v3.1.17.md"
+    "path": "baseline/FDS_Project_Implementation_Baseline_v3.1.17.md",
+    "scope": "HISTORICAL_ADOPTION_20260909"
   },
   "runner": {
     "host": "cicd-runner01",
@@ -35,7 +36,20 @@
     "github_service_containers": false,
     "initial_trigger": "workflow_dispatch",
     "untrusted_pr_execution": false,
-    "runtime_status": "NOT_VERIFIED"
+    "runtime_status": "PARTIALLY_VERIFIED",
+    "last_observation": {
+      "basis": "USER_SCREEN_EVIDENCE",
+      "service": "active/running",
+      "uid": 1000,
+      "selinux": "Enforcing",
+      "login_rootless": true,
+      "github_runner_status": "Idle",
+      "expected_labels_observed": true,
+      "actual_job": "NOT_EXECUTED",
+      "restart_job_reception": "NOT_VERIFIED",
+      "observed_date": "2026-09-15",
+      "scope": "HISTORICAL_SCREEN_OBSERVATION"
+    }
   },
   "harbor": {
     "formal_setup": "NOT_STARTED_USER_CONFIRMED",
@@ -49,15 +63,17 @@
     "new_credentials_required": true,
     "https_certificate": "/etc/harbor/pki/current/harbor01.crt",
     "https_private_key": "/etc/harbor/pki/current/harbor01.key",
-    "runtime_status": "NOT_APPLIED"
+    "runtime_status": "NOT_APPLIED",
+    "observation_date": "2026-09-15",
+    "observation_scope": "HISTORICAL_NOT_REFRESHED_BY_THIS_CHANGE"
   },
   "tls": {
     "trust_model": "D19_PROJECT_PRIVATE_ROOT_CA_SEPARATE_SERVER_LEAVES",
     "ca_owner": "이권욱",
     "harbor_key_csr_apply_owner": "이하영",
     "ca_custody_target": "GU_CONTROLLED_OFFLINE_ADMIN_ENVIRONMENT_ENCRYPTED_VOLUME",
-    "ca_custody_actual_asset_reference": null,
-    "approved_ca_asset_status": "NEW_ROOT_REQUIRED_NOT_GENERATED",
+    "ca_custody_actual_asset_reference": "docs/implementation-state-20260915.md#ca-자산과-공개-인계",
+    "approved_ca_asset_status": "NEW_ROOT_CREATED_PUBLIC_BYTES_VERIFIED",
     "ca_selection_rule": "REPLACE_LEGACY_CA_WITH_NEW_KEY_AND_ROOT",
     "new_root_rsa_bits": 4096,
     "new_root_validity_days": 1825,
@@ -77,7 +93,7 @@
     ],
     "minimum_tls": "1.2",
     "consumer_material": "APPROVED_CA_PUBLIC_CERTIFICATE_ONLY",
-    "issuance_status": "NOT_EXECUTED",
+    "issuance_status": "ISSUED_SCREEN_AND_PUBLIC_BYTES_VERIFIED",
     "ca_replacement_decision": {
       "date": "2026-09-10",
       "by": "이권욱",
@@ -101,7 +117,39 @@
       "ca_data_encryption": "LUKS2",
       "network_after_preparation": "VIRTUAL_NIC_REMOVED",
       "separate_encrypted_backup_required": true,
-      "provisioning_status": "NOT_VERIFIED"
+      "provisioning_status": "COMPLETED_WITH_RECORDED_OS_DISK_DELTA_SCREEN_EVIDENCE"
+    },
+    "ca_deployment_actual": {
+      "observed_date": "2026-09-15",
+      "basis": "USER_SCREEN_EVIDENCE",
+      "physical_host": "server01",
+      "vm_hostname": "ca01",
+      "vcpu": 2,
+      "memory_gib": 4,
+      "os_disk_gib": 40,
+      "ca_data_disk_gib": 2,
+      "os_root_swap_encryption": "LUKS",
+      "ca_data_encryption": "LUKS2",
+      "boot_efi_encrypted": false,
+      "virtual_nic": "REMOVED",
+      "vmware_whole_vm_encryption": "NOT_ENABLED",
+      "backup_file_key_cert_ledger_restore": "PASS_SCREEN_EVIDENCE",
+      "backup_luks_header_restore": "NOT_EXECUTED",
+      "full_vm_restore": "NOT_EXECUTED",
+      "power": "OFF_USER_REPORTED",
+      "backup_media": "DETACHED_STORED_USER_REPORTED",
+      "planned_os_disk_gb": 20
+    },
+    "harbor_public_handoff": {
+      "request_id": "harbor01-sn0wepv7",
+      "directory": "/home/server08/ca01-public-handoff-v1.0/verified",
+      "archive": "ca01-public-handoff-v1.0.tar.gz",
+      "archive_sha256": "bf03bd09fde0c8a19e9da7b782ec782e5a5eda99facd84964b3213eb5826a4a0",
+      "root_fingerprint_sha256": "6a75baf4dbe03ef24cce944e616384d318f7ca919cd7bd914624b4cebac06b10",
+      "leaf_serial_hex": "1000",
+      "next_ca_serial_hex": "1001",
+      "existing_key_leaf_match": "PASS_SCREEN_EVIDENCE",
+      "service_tls_apply": "NOT_EXECUTED"
     }
   },
   "delivery": {
@@ -131,12 +179,44 @@
     ],
     "credential_separation": true,
     "token_policy_owner": "P1-SEC-01",
-    "gate": "NOT_VERIFIED"
+    "gate": "NOT_VERIFIED",
+    "scan_error_blocks_push": true,
+    "robot_expiry_days": 30,
+    "harbor_scanner_required": true,
+    "scan_exception_required_fields": [
+      "cve",
+      "digest",
+      "reason",
+      "expires_at",
+      "approver"
+    ],
+    "policy_decision_reference": "https://github.com/321Team/fds-project-baseline/issues/13",
+    "policy_decision_date": "2026-09-14",
+    "runtime_enforcement": "APP_RUNTIME_AND_PUSH_DEPLOY_NOT_VERIFIED",
+    "implementation_status": "SCAN_BUILD_ADAPTER_ON_MAIN_OFFLINE_APP_WORKFLOW_IN_PR19"
   },
   "remaining_runtime_inputs": [
-    "Protected new CA environment and backup; legacy CA fingerprint, consumers and disposal evidence",
+    "Legacy CA fingerprint, actual consumers, trust transition and disposal evidence; new CA issuance and encrypted file/key/cert/ledger restore already evidenced",
     "App source repositories, approved SHAs, Dockerfiles and Unit/Contract test commands",
     "Actual Kubernetes version, container names and TokenRequest policy",
     "Harbor stop window, consistent protected backup and selected installer digest"
-  ]
+  ],
+  "observation_record": "docs/implementation-state-20260915.md",
+  "observation_date": "2026-09-15",
+  "observation_scope": "HISTORICAL_20260915_WITH_SEPARATE_LATEST_STATUS",
+  "latest_status": {
+    "as_of": "2026-09-17",
+    "canonical": "docs-v3.1.18",
+    "candidate": "v3.1.19_COLLECTION_ONLY",
+    "runner_db_preflight": "PASS",
+    "runner_db_run_id": "35061666680",
+    "runner_db_job_id": "104683095209",
+    "supply_runtime": "PASS",
+    "base_probe_runtime": "PASS",
+    "app_test_build_scan": "NOT_EXECUTED",
+    "runtime_ac_pass": 1,
+    "runtime_ac_total": 10,
+    "delivery_gate": "NOT_VERIFIED",
+    "reference": "docs/implementation-state-20260915.md#2026-09-17-후속-상태"
+  }
 }

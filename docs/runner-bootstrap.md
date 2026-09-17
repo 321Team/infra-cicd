@@ -2,7 +2,9 @@
 
 대상: `cicd-runner01 / 10.250.10.20 / server01_cicd-runner`. 선택값: infra-cicd 저장소 전용·중앙 실행·Podman rootless. 서버에서 실행하는 절차이며 저장소 등록만으로 설치 완료를 뜻하지 않는다.
 
-2026-09-09 17:48:25 KST 후속 증적: Runner 2.337.0의 서비스가 SELinux Enforcing 상태에서 active/running으로 복구됐고 GitHub 연결·Listening for Jobs가 관측됐다. [복구 증적 검토](runner-selinux-recovery.md)의 외부·내부 체크섬 검증은 PASS다. 현재 서버의 다음 작업은 4절의 첫 Job 검증이다. 아래 신규 설치·등록 및 복구 명령은 현재 정상 Runner에서 반복하지 않는다. GitHub 화면의 현재 상태, 첫 Job·재부팅 후 복구·종합 Delivery gate는 아직 미검증이다.
+**2026-09-17 상태 대조:** 정본은 docs-v3.1.18, v3.1.19는 수집 후보다. Runner의 Trivy DB 사전검증과 공급·base probe는 실행 증적을 확보했으며 Runtime AC는 1/10이다. 최종 앱 Source/시험 범위 인계와 최신 독립 리뷰가 남아 앱 Test→Build→Scan은 미실행, 전체 Delivery는 NOT_VERIFIED다. [후속 상태와 근거](implementation-state-20260915.md#2026-09-17-후속-상태)를 따른다.
+
+2026-09-09 17:48:25 KST 후속 증적: Runner 2.337.0의 서비스가 SELinux Enforcing 상태에서 active/running으로 복구됐고 GitHub 연결·Listening for Jobs가 관측됐다. [복구 증적 검토](runner-selinux-recovery.md)의 외부·내부 체크섬 검증은 PASS다. 09-09 당시 다음 작업은 4절의 첫 Job 검증이었다. 아래 신규 설치·등록 및 복구 명령은 현재 정상 Runner에서 반복하지 않는다. 이 문장의 미검증 표시는 09-09 기준이며 이후 결과는 위 후속 상태를 따른다.
 
 ## 1. 키트 검사와 압축 해제
 
@@ -121,9 +123,9 @@ ZIP과 sidecar를 로그인 계정 홈에 놓고 실행한다.
 
 ## 4. 첫 Job과 이후 도구
 
-`.github/workflows/runner-smoke.yml`을 PR에 실행용 소스로 준비했다. 현재 main에는 Workflow가 없으며 PR은 미병합이다. GitHub Actions의 수동 실행은 Workflow가 기본 브랜치에 있어야 하므로 다음 순서로 진행한다. [GitHub 수동 Workflow 실행](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+`.github/workflows/runner-smoke.yml`을 PR에 실행용 소스로 준비했다. 09-09 작성 당시 main에는 Workflow가 없고 PR은 미병합이었다. PR #2는 이후 병합됐으며 아래는 최초 Job 실행 절차 이력이다. GitHub Actions의 수동 실행은 Workflow가 기본 브랜치에 있어야 하므로 다음 순서로 진행한다. [GitHub 수동 Workflow 실행](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 
-1. PR #1·#2의 이하영(hayeounglee) 독립 기술 리뷰와 이권욱 최종 승인·main 병합을 완료한다. 현재 리뷰 요청 상태만으로 승인 완료를 판정하지 않는다.
+1. 최초 실행 전 PR #1·#2의 독립 기술 리뷰와 최종 승인·main 병합이 필요했다. PR #2의 이후 승인/병합 기록은 위 상태 문서에 연결한다. 새 변경은 별도 리뷰 대상이다.
 2. 저장소 Settings → Actions → Runners에서 cicd-runner01의 현재 Online/Idle 상태와 지정 라벨을 확인한다.
 3. Actions → **P1 Runner smoke** → Run workflow → **main**을 선택해 한 번 수동 실행한다.
 4. 성공한 Run URL·Commit·Attempt 및 Job 로그를 제출한다. Job이 대기하면 Runner 상태/라벨을 확인하고, 실패하면 해당 단계 오류를 검토한다.
@@ -134,6 +136,6 @@ Workflow는 수동 workflow_dispatch만 사용하고 infra-cicd/main에서만 Jo
 
 GitHub 통신은 기존 두 TLS 검사 외에 실제 등록·Job·Action 다운로드·로그/Artifact·업데이트 도메인을 기능별로 확인한다. 필요한 outbound 경로는 [공식 요구사항](https://docs.github.com/en/actions/reference/runners/self-hosted-runners#communication)을 따르며 임의 inbound 규칙이나 DNS/SNAT 변경을 추가하지 않는다.
 
-Trivy는 공식 배포물의 고정 버전·체크섬으로 설치하고 DB 공급·갱신 기록을 남긴다. Podman 이미지의 로컬 archive를 스캔하는 흐름을 사용하며 CRITICAL 또는 검사 오류면 Push/Deploy를 중단한다. kubectl은 실제 API 서버 버전을 인계받아 호환 버전을 고정한다. 두 항목은 Runner 등록의 선행 필수값이 아니므로 준비를 병행한다. 토큰·Robot 인증정보는 Job별 임시 파일/표준입력으로 주입하고 작업 종료 시 정리한다.
+Trivy는 공식 배포물의 고정 버전·체크섬으로 설치하고 DB 공급·갱신 기록을 남긴다. Podman 이미지의 로컬 archive를 스캔하는 흐름을 사용하며 09-14 #13/#16 사용자 결정에 따라 미해결 CRITICAL/HIGH 또는 검사·DB 오류면 Push/Deploy를 중단한다. 예외는 CVE·Digest·사유·만료·승인자를 기록하며 실제 집행은 후속 Pipeline 검증 대상이다. kubectl은 실제 API 서버 버전을 인계받아 호환 버전을 고정한다. 두 항목은 Runner 등록의 선행 필수값이 아니므로 준비를 병행한다. 토큰·Robot 인증정보는 Job별 임시 파일/표준입력으로 주입하고 작업 종료 시 정리한다.
 
 공유할 결과: Runner 버전, Online 상태, 서비스의 실행 사용자, smoke Run URL/Commit/Attempt/결과, rootless 결과. 등록 토큰·`.credentials*`·전체 환경변수·개인키는 공유하지 않는다. DELIVERY_GATE는 종합 인수 전까지 NOT_VERIFIED다.

@@ -18,6 +18,8 @@ DB 운영은 [채택 운영안](trivy-update-policy.md)을 따른다. 실제 Sca
 
 Test/Build 호출기와 입력의 미승인 기본값은 [앱 Build·Scan 연결](app-build-scan.md)에 정의한다. 앱 승인 Source/Test 인계 없이 관측 SHA를 실행 승인으로 채택하지 않는다.
 
+Harbor Scanner 서비스 유지와 Robot 30일 발급은 09-14 사용자 결정으로 기록한다. Scan·Build 어댑터 구현과 실제 앱 Runtime·Push/Deploy 검증을 구분하며, 전체 Delivery는 아직 NOT_VERIFIED다. [시점별 상태](implementation-state-20260915.md#2026-09-17-후속-상태)를 따른다.
+
 ## 구현 순서
 
 승인 Source 확인 → Unit/Contract Test → Build → Trivy → Harbor Push와 manifest Digest 확인 → 승인 Digest의 기존 Deployment 갱신 → Health/E2E → 증적 연결 순서로 구현한다. 중간 실패·검사 오류·권한/Token 실패 때 Deploy가 실행되지 않아야 한다. 이전 Digest 복구는 호환성·Schema 영향을 확인한 뒤 수행한다.

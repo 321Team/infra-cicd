@@ -1,10 +1,16 @@
 # P1-CICD-01 첫 Runner Job 인계 v1.0
 
-작성일: 2026-09-09. **사전 소스 점검 완료 / 독립 기술 리뷰 및 첫 Job 실행 대기**.
+**2026-09-17 상태 대조:** 정본은 docs-v3.1.18, v3.1.19는 수집 후보다. Runner의 Trivy DB 사전검증과 공급·base probe는 실행 증적을 확보했으며 Runtime AC는 1/10이다. 최종 앱 Source/시험 범위 인계와 최신 독립 리뷰가 남아 앱 Test→Build→Scan은 미실행, 전체 Delivery는 NOT_VERIFIED다. [후속 상태와 근거](implementation-state-20260915.md#2026-09-17-후속-상태)를 따른다.
+
+**2026-09-15 후속 상태 이력:** PR #2 최신 HEAD는 이하영 APPROVED 후 main `ffaa764623c5941b14fe12384e9ba5629bd60a6f`에 병합됐다. Runner 로그인 사전점검·GitHub Idle·필요 라벨 6개를 확인했다. 09-15 당시 다음 작업은 §2의 main 수동 smoke 실행과 실제 Run 수신이었다. 아래 09-09 표·미수신/리뷰 대기는 당시 기록이며 [09-15 실제 구성](implementation-state-20260915.md)과 구분한다. 같은 로그인 점검을 다시 수행할 필요는 없고, 재시작 후 Job 수신은 별도 미검증이다.
+
+최초 실행 절차 이력(현재 재실행 지시 아님): [P1 Runner smoke](https://github.com/321Team/infra-cicd/actions/workflows/runner-smoke.yml) → Run workflow → main → 한 번 실행. Run URL·Workflow Commit·Attempt와 `JOB_RECEPTION=VERIFIED`, `BUILDER_ROOTLESS=VERIFIED`를 확인한다. 대기/실패 시 해당 Job 결과로 후속 조치하며 임시 PR 트리거로 우회하지 않는다.
+
+작성일: 2026-09-09. 아래 본문은 당시 기록이다. **사전 소스 점검 완료 / 독립 기술 리뷰 및 첫 Job 실행 대기**.
 
 PR #1은 main에 병합됐다. 다음 대상은 [PR #2](https://github.com/321Team/infra-cicd/pull/2)의 독립 기술 검토와 승인 후 첫 수동 Job이다. 이 문서의 사전 점검은 작성 측 검증이며 이하영님의 독립 승인을 대체하지 않는다.
 
-## 확인한 소스와 현재 단계
+## 09-09에 확인한 소스와 단계
 
 | 항목 | 확인 결과 |
 |---|---|
@@ -92,4 +98,4 @@ PR #1은 main에 병합됐다. 다음 대상은 [PR #2](https://github.com/321Te
 
 첫 Job이 성공하면 앱 Source SHA·Dockerfile·테스트 계약 인계, Trivy 버전·DB 공급, Harbor CA/Robot, Kubernetes 버전·단기 Token을 갖춰 Build→Scan→Push→승인 Digest 갱신을 구현한다. 실제 값은 담당 인계로 채우며 임의 이름·성공 명령을 넣지 않는다.
 
-Harbor는 이미 생성한 키/CSR을 보존한다. 기존 승인 CA 자산 여부와 보호 환경을 확인한 뒤 서명한다. 개인키를 전달하거나 검토 완료 CSR을 다시 생성하는 단계가 아니다. 현재의 로그인 점검과 첫 smoke Job은 Harbor CA 발급을 선행조건으로 요구하지 않는다.
+Harbor는 기존 키/CSR과 발급된 Leaf를 보존한다. CA 발급·암호화 백업/파일 복구·공개 인계는 완료했으며 Harbor 서비스 적용과 Consumer Trust가 남는다. 개인키 전달·CSR 재생성·재발급을 요구하지 않는다. 첫 smoke Job은 Harbor 서비스 전환 완료를 선행조건으로 요구하지 않는다.
