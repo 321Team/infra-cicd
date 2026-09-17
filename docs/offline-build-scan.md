@@ -1,5 +1,7 @@
 # 수집한 공급물을 실제 Test·Build·Scan에 연결
 
+후속 현황: 제출된 2026-09-17 11:41 KST probe에서 repository@digest 조회·최소 base Build는 Runtime PASS다([Issue11](https://github.com/321Team/infra-cicd/issues/11)). [중앙 수동 Workflow·고정 SHA Git 인수·최종 앱 인계 검사](app-workflow.md)를 추가 준비했다. 아래 최초 준비 시점의 미실행 설명은 이 현황과 구분하며, 실제 앱 실행은 계속 미완료다.
+
 2026-09-17 사용자 “권장안으로 착수”를 반영한다. 공급 Runtime은 [Issue11](https://github.com/321Team/infra-cicd/issues/11)에 제출된 증적 기준 PASS다. 이번 변경은 소비 실행기와 독립된 base 조회·빌드 시험을 추가한다. 실제 앱 Test→Build→Scan은 미실행이며 최종 앱 SHA/승인과 독립 코드 리뷰가 남아 있다.
 
 ## 입력과 코드 계승
