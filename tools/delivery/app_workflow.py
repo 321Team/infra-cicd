@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Main/manual orchestration; anonymous pinned Git intake, then Test/Build/Scan."""
+"""Main/manual orchestration; pinned Git intake, then Test/Build/Scan."""
 import argparse
 import fcntl
 import hashlib
@@ -14,14 +14,11 @@ import subprocess
 import tempfile
 
 import build_scan as flow
+import source_auth as auth
 
 WORKFLOW = '.github/workflows/app-test-build-scan.yml'
 ORIGIN = 'https://github.com/' + flow.SOURCE_REPOSITORY + '.git'
-GIT = ['/usr/bin/git', '--no-replace-objects',
-       '-c', 'core.hooksPath=/dev/null', '-c', 'credential.helper=',
-       '-c', 'http.sslVerify=true', '-c', 'http.followRedirects=false',
-       '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always',
-       '-c', 'fetch.recurseSubmodules=false', '-c', 'fetch.fsckObjects=true']
+GIT = auth.GIT
 
 
 def read_config(path):
@@ -56,14 +53,22 @@ def command_runner(folder, incoming, steps):
     return command
 
 
-def fetch_source(config, target, command):
+def fetch_source(config, target, command, private_fetch=None):
     # A new bare object repository avoids worktree filters, hooks and app execution.
+    repository = config['source']['repository']
+    origin = auth.origin(repository)
+    private = repository == auth.PRIVATE_REPOSITORY
+    flow.require(not private or private_fetch is not None, 'SOURCE_READ_TOKEN_REQUIRED')
     flow.require(not os.path.lexists(target), 'SOURCE_TARGET_ALREADY_EXISTS')
     target.mkdir(mode=0o700)
     command('source-init', GIT + ['init', '--bare', '--template=', str(target)])
-    command('source-origin-set', GIT + ['-C', str(target), 'remote', 'add', 'origin', ORIGIN])
-    command('source-fetch', GIT + ['-C', str(target), 'fetch', '--no-tags', '--depth=1',
-            '--no-recurse-submodules', 'origin', config['source']['commit']], timeout=300)
+    command('source-origin-set', GIT + ['-C', str(target), 'remote', 'add', 'origin', origin])
+    if private:
+        private_fetch(target, config['source']['commit'])
+    else:
+        command('source-fetch', GIT + ['-C', str(target), 'fetch', '--no-tags', '--depth=1',
+                '--no-auto-maintenance', '--no-recurse-submodules', 'origin',
+                config['source']['commit']], timeout=300)
     fetched = command('source-fetched', GIT + ['-C', str(target), 'rev-parse', 'FETCH_HEAD^{commit}'])
     flow.require(flow.read_output(fetched) == config['source']['commit'], 'FETCHED_SOURCE_SHA_MISMATCH')
     command('source-head-set', GIT + ['-C', str(target), 'update-ref', '--no-deref',
@@ -79,7 +84,9 @@ def validate_handoff(config, source, command):
     head = command('handoff-head', GIT + ['-C', str(source), 'rev-parse', 'HEAD'])
     flow.require(flow.read_output(head) == sha, 'SOURCE_HEAD_MISMATCH')
     origin = command('handoff-origin', GIT + ['-C', str(source), 'remote', 'get-url', 'origin'])
-    flow.require(flow.read_output(origin) in (ORIGIN, ORIGIN.removesuffix('.git')), 'SOURCE_ORIGIN_MISMATCH')
+    expected_origin = auth.origin(config['source']['repository'])
+    flow.require(flow.read_output(origin) in (expected_origin, expected_origin.removesuffix('.git')),
+                 'SOURCE_ORIGIN_MISMATCH')
     tree = command('handoff-tree', GIT + ['-C', str(source), 'ls-tree', '-r', '-z', sha])
     flow.require(tree.stat().st_size <= 1024**2, 'SOURCE_TREE_TOO_LARGE')
     entries = {}
@@ -136,6 +143,8 @@ def save_receipt(folder, result):
 
 
 def run(config, folder, context, incoming, source=None, execute=False):
+    # Consume the dedicated credential. No raw inherited mapping reaches app execution.
+    token = incoming.pop(auth.TOKEN_ENV, '')
     result = {'APP_WORKFLOW': 'FAIL', 'started_at': flow.utcnow().isoformat(),
               'context': context, 'steps': [], 'APP_TEST_BUILD_SCAN': 'NOT_EXECUTED',
               'PUSH': 'NOT_EXECUTED', 'DEPLOY': 'NOT_EXECUTED', 'DELIVERY_GATE': 'NOT_VERIFIED'}
@@ -143,10 +152,15 @@ def run(config, folder, context, incoming, source=None, execute=False):
     try:
         flow.validate_config(config)
         flow.require(config['schema'] == 'P1-CICD-app-build-scan-2', 'OFFLINE_SCHEMA_REQUIRED')
+        if execute and config['source']['repository'] == auth.PRIVATE_REPOSITORY:
+            auth.validate_token(token)
         command = command_runner(folder, incoming, result['steps'])
         if execute:
             source = folder / 'app.git'
-            fetch_source(config, source, command)
+            fetch_source(config, source, command, private_fetch=lambda target, sha: auth.fetch(
+                target, sha, token, git_environment(folder / 'git-home', incoming),
+                folder, result['steps']))
+        token = None
         flow.require(source is not None, 'SOURCE_CHECKOUT_REQUIRED')
         handoff = validate_handoff(config, source, command)
         handoff_path = folder / 'handoff.json'
@@ -157,7 +171,8 @@ def run(config, folder, context, incoming, source=None, execute=False):
             build_dir = folder / 'build-scan'
             build_dir.mkdir(mode=0o700)
             build_context = {**context, 'handoff_sha256': result['handoff_sha256']}
-            rc, built = flow.execute(config, source, build_dir, build_context, incoming)
+            rc, built = flow.execute(config, source, build_dir, build_context,
+                                     flow.scanner_environment(incoming))
             result['APP_TEST_BUILD_SCAN'] = built['BUILD_SCAN']
             result['build_result_sha256'] = flow.sha256(build_dir / 'result.json')
             result['APP_WORKFLOW'] = built['BUILD_SCAN']
@@ -171,6 +186,7 @@ def run(config, folder, context, incoming, source=None, execute=False):
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         result['error_code'] = 'WORKFLOW_OR_HANDOFF_ERROR'
     finally:
+        token = None
         result['finished_at'] = flow.utcnow().isoformat()
         save_receipt(folder, result)
     return rc, result
@@ -200,6 +216,8 @@ def runner_home():
 
 
 def main(argv=None):
+    incoming = dict(os.environ)
+    os.environ.pop(auth.TOKEN_ENV, None)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--source-dir', type=Path, help='Local committed source for a read-only handoff check')
@@ -213,7 +231,7 @@ def main(argv=None):
         signal.signal(signal.SIGTERM, flow.interrupted)
         signal.signal(signal.SIGINT, flow.interrupted)
         if args.execute:
-            context = bind_context(raw, os.environ)
+            context = bind_context(raw, incoming)
             home = runner_home()
             # No truncate/chmod/chown of an existing control file or old run directory.
             fd = os.open(home / 'FDS_CICD_AppWorkflow.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -224,13 +242,13 @@ def main(argv=None):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 folder = Path(tempfile.mkdtemp(prefix='FDS_CICD_AppWorkflow.', dir=home))
                 print(f'EVIDENCE_DIR={folder}', flush=True)
-                rc, result = run(config, folder, context, os.environ, execute=True)
+                rc, result = run(config, folder, context, incoming, execute=True)
         else:
             flow.require(args.source_dir is not None, 'SOURCE_CHECKOUT_REQUIRED')
             folder = Path(tempfile.mkdtemp(prefix='FDS_CICD_HandoffCheck.'))
             print(f'EVIDENCE_DIR={folder}', flush=True)
             rc, result = run(config, folder, {'input_sha256': hashlib.sha256(raw).hexdigest()},
-                             os.environ, source=args.source_dir.absolute())
+                             incoming, source=args.source_dir.absolute())
         print(f'APP_WORKFLOW={result["APP_WORKFLOW"]}\nERROR_CODE={result.get("error_code", "NONE")}')
         print('PUSH=NOT_EXECUTED\nDEPLOY=NOT_EXECUTED\nDELIVERY_GATE=NOT_VERIFIED')
         return rc

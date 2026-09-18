@@ -1,5 +1,6 @@
 """Real committed Git intake and six-file checks; transport redirect is fixture-only."""
 import contextlib
+import base64
 import copy
 import hashlib
 import io
@@ -180,6 +181,120 @@ class WorkflowTests(unittest.TestCase):
                 app.fetch_source(self.config, target, command)
             command.assert_not_called()
         self.assertEqual((target / 'keep').read_text(), 'keep')
+
+    def test_private_missing_or_invalid_token_stops_before_git_and_build(self):
+        self.config['source']['repository'] = app.auth.PRIVATE_REPOSITORY
+        for i, token in enumerate(('', 'short', 'fixture_token_0123456789\n', 'x' * 513)):
+            folder = self.root / ('token-' + str(i))
+            folder.mkdir()
+            incoming = {app.auth.TOKEN_ENV: token, 'GITHUB_TOKEN': 'no-fallback'}
+            with self.subTest(i=i), patch.object(app, 'command_runner') as git, \
+                    patch.object(app.flow, 'execute') as build:
+                rc, result = app.run(self.config, folder, {}, incoming, execute=True)
+            self.assertEqual(rc, 1)
+            self.assertIn(result['error_code'], ('SOURCE_READ_TOKEN_REQUIRED', 'SOURCE_READ_TOKEN_INVALID'))
+            self.assertNotIn(app.auth.TOKEN_ENV, incoming)
+            git.assert_not_called()
+            build.assert_not_called()
+
+    def test_unapproved_repository_rejected_before_token_use(self):
+        for i, repository in enumerate(('other/fds-msa', '321Team/fds-msa.git',
+                                        '321Team/fds-msa@evil.invalid', ['321Team/fds-msa'])):
+            self.config['source']['repository'] = repository
+            folder = self.root / ('repository-' + str(i))
+            folder.mkdir()
+            with patch.object(app, 'command_runner') as git:
+                rc, result = app.run(self.config, folder, {}, {}, execute=True)
+            self.assertEqual((rc, result['error_code']), (1, 'SOURCE_REPOSITORY_INVALID'))
+            git.assert_not_called()
+
+    def test_private_fetch_secret_only_in_transport_env_and_never_persisted(self):
+        self.config['source']['repository'] = app.auth.PRIVATE_REPOSITORY
+        token = 'fixture_private_token_0123456789'
+        encoded = base64.b64encode(('x-access-token:' + token).encode()).decode()
+        incoming = {app.auth.TOKEN_ENV: token, 'GITHUB_TOKEN': 'fixture-unrelated-secret',
+                    'GIT_TRACE_CURL': '1', 'GIT_CONFIG_PARAMETERS': 'unsafe',
+                    'GIT_ASKPASS': '/bad', 'GIT_CONFIG_COUNT': '1'}
+        calls = []
+        original = app.flow.run_command
+
+        def transport(argv, cwd, env, output, timeout):
+            calls.append((argv[:], env.copy(), output))
+            if 'fetch' in argv:
+                self.assertEqual(argv[-2:], [app.auth.PRIVATE_ORIGIN, self.config['source']['commit']])
+                self.assertIsNone(output)
+                self.assertEqual(env[app.auth.HEADER_ENV], 'AUTHORIZATION: basic ' + encoded)
+                # Only fixture transport redirects to local Git objects, preserving exact SHA.
+                argv = [arg for arg in argv if not arg.startswith('--config-env=')]
+                argv[-2] = str(self.repo)
+                argv[1:1] = ['-c', 'protocol.file.allow=always']
+            else:
+                self.assertNotIn(app.auth.HEADER_ENV, env)
+            self.assertNotIn(token, ' '.join(argv))
+            self.assertNotIn(encoded, ' '.join(argv))
+            for key in incoming:
+                self.assertNotIn(key, env)
+            return original(argv, cwd, env, output, timeout)
+
+        def build(config, source, folder, context, env):
+            self.assertNotIn(app.auth.TOKEN_ENV, incoming)
+            self.assertFalse(any(token in value or encoded in value for value in env.values()))
+            self.assertNotIn('GITHUB_TOKEN', env)
+            result = {'BUILD_SCAN': 'PASS'}
+            (folder / 'result.json').write_text(json.dumps(result))
+            return 0, result
+
+        with patch.object(app.flow, 'run_command', side_effect=transport), \
+                patch.object(app.flow, 'execute', side_effect=build) as build_mock:
+            rc, result = app.run(self.config, self.folder, self.context, incoming, execute=True)
+        self.assertEqual((rc, result['APP_WORKFLOW']), (0, 'PASS'))
+        build_mock.assert_called_once()
+        self.assertEqual(sum('fetch' in argv for argv, _, _ in calls), 1)
+        for path in self.folder.rglob('*'):
+            if path.is_file():
+                self.assertNotIn(token.encode(), path.read_bytes(), str(path))
+                self.assertNotIn(encoded.encode(), path.read_bytes(), str(path))
+        self.assertIn('RAW_OUTPUT=DISCARDED', (self.folder / 'source-fetch.log').read_text())
+        self.assertNotIn('extraheader', (self.folder / 'app.git/config').read_text().lower())
+
+    def test_private_transport_failure_or_timeout_never_retries_or_builds(self):
+        self.config['source']['repository'] = app.auth.PRIVATE_REPOSITORY
+        original = app.flow.run_command
+        for fault in ('denied', 'timeout'):
+            folder = self.root / fault
+            folder.mkdir()
+            fetched = []
+
+            def transport(argv, cwd, env, output, timeout):
+                if 'fetch' in argv:
+                    fetched.append(argv)
+                    self.assertIsNone(output)
+                    if fault == 'timeout':
+                        raise subprocess.TimeoutExpired(argv, timeout)
+                    return 128  # Git authentication, redirect or transport refusal.
+                return original(argv, cwd, env, output, timeout)
+
+            with patch.object(app.flow, 'run_command', side_effect=transport), \
+                    patch.object(app.flow, 'execute') as build:
+                rc, result = app.run(self.config, folder, {},
+                    {app.auth.TOKEN_ENV: 'fixture_private_token_0123456789'}, execute=True)
+            self.assertEqual(rc, 1)
+            self.assertEqual(len(fetched), 1)
+            self.assertEqual(result['error_code'], 'SOURCE_PRIVATE_FETCH_FAILED'
+                             if fault == 'denied' else 'SOURCE_COMMAND_TIMEOUT')
+            self.assertEqual(result['APP_TEST_BUILD_SCAN'], 'NOT_EXECUTED')
+            build.assert_not_called()
+
+    def test_private_local_handoff_needs_exact_origin_without_any_token(self):
+        self.config['source']['repository'] = app.auth.PRIVATE_REPOSITORY
+        self.git('remote', 'set-url', 'origin', app.auth.PRIVATE_ORIGIN)
+        self.assertEqual(self.check()[0], 0)
+
+    def test_cli_removes_source_token_before_input_validation(self):
+        with patch.dict(os.environ, {app.auth.TOKEN_ENV: 'fixture_private_token_0123456789'}):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(app.main(['--execute']), 1)
+            self.assertNotIn(app.auth.TOKEN_ENV, os.environ)
 
     def test_fetch_failure_never_calls_build(self):
         with patch.object(app, 'fetch_source', side_effect=app.flow.PreflightError('SOURCE_COMMAND_FAILED:source-fetch')), \

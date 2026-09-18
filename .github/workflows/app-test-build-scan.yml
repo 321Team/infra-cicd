@@ -39,9 +39,11 @@ jobs:
           submodules: false
           lfs: false
       - name: Validate handoff and run the approved application
+        env:
+          CICD_APP_SOURCE_TOKEN: ${{ secrets.CICD_APP_SOURCE_READ_TOKEN }}
         shell: bash
         working-directory: ${{ env.CICD_CHECKOUT }}
         run: |
           set -euo pipefail
           export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
-          /usr/bin/python3 tools/delivery/app_workflow.py --execute
+          exec /usr/bin/python3 tools/delivery/app_workflow.py --execute

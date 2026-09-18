@@ -129,6 +129,27 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(checked['DELIVERY_GATE'], 'NOT_VERIFIED')
         self.assertEqual(before, {str(p.relative_to(self.run)): p.read_bytes() for p in self.run.rglob('*') if p.is_file()})
 
+    def test_private_evidence_requires_explicit_expected_repository(self):
+        self.handoff['source']['repository'] = '321Team/fds-msa'
+        handoff_sha = self.write_json('handoff.json', self.handoff)
+        self.top['handoff_sha256'] = handoff_sha
+        for record in (self.built, self.scan, self.db):
+            record['context']['handoff_sha256'] = handoff_sha
+        self.scan['db_result_sha256'] = self.write_json('build-scan/scan/db/result.json', self.db)
+        self.flush()
+        with self.assertRaisesRegex(evidence.flow.PreflightError, 'HANDOFF_SOURCE_MISMATCH'):
+            self.check()  # Missing repository keeps the legacy public expectation.
+        self.expected['source_repository'] = '321Team/fds-msa'
+        archive, checksum, _ = evidence.collect(self.run, self.root / 'private-export', self.expected)
+        self.assertEqual(evidence.verify(archive, checksum, self.expected)['RECORDED_APP_WORKFLOW'], 'PASS')
+
+    def test_expected_repository_cannot_be_arbitrary_or_match_wrong_handoff(self):
+        for repository, code in (('other/fds-msa', 'EXPECTED_REPOSITORY_INVALID'),
+                                 ('321Team/fds-msa', 'HANDOFF_SOURCE_MISMATCH')):
+            self.expected['source_repository'] = repository
+            with self.subTest(repository=repository), self.assertRaisesRegex(evidence.flow.PreflightError, code):
+                self.check()
+
     def test_first_and_second_image_block_preserve_not_scanned(self):
         original = copy.deepcopy(self.scan)
         for index, service in enumerate(evidence.flow.SERVICES):

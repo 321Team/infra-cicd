@@ -2,7 +2,8 @@ name: P1 Source validation
 
 on:
   pull_request:
-    branches: [main]
+    # Validate the private-source follow-up while PR #19 is still the stack base.
+    branches: [main, ci/offline-supply-consumption-20260917]
   push:
     branches: [main]
   workflow_dispatch:
