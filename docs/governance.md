@@ -1,6 +1,6 @@
 # 운영·검토 기준
 
-2026-09-18 KST 사용자 결정에 따라 [코드 병합 독립 리뷰와 Lead 위임 정책](https://github.com/321Team/fds-project-baseline/blob/38f682141c279807050c5b1ea1b4e2b58ee22d63/governance/REVIEW_AUTHORITY_POLICY.md)을 적용한다. 아래 과거 역할 결정 기록의 일반적 승인 문구와 충돌하면 승인 절차에 한해 이번 변경을 우선한다. 기술 AC·증적·담당 범위는 유지한다.
+2026-09-18 KST 사용자 결정에 따라 [코드 병합 독립 리뷰와 Lead 위임 정책](https://github.com/321Team/fds-project-baseline/blob/b2e4612cf2e417b10e7f145c5b1e5f58dbe1b948/governance/REVIEW_AUTHORITY_POLICY.md)을 적용한다. 아래 과거 역할 결정 기록의 일반적 승인 문구와 충돌하면 승인 절차에 한해 이번 변경을 우선한다. 기술 AC·증적·담당 범위는 유지한다. fds-project-evidence는 문서·로그·정책을 포함한 모든 PR에 독립 리뷰를 유지하는 예외다. Lead 자체 인수와 증적 저장소 편입 심사는 구분한다.
 
 ## 역할
 
