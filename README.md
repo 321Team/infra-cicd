@@ -1,6 +1,8 @@
 # infra-cicd
 
-**2026-09-17:** Runtime AC **1/10**, 전체 Delivery **NOT_VERIFIED**. 최종 앱 인계와 최신 독립 리뷰 후 중앙 수동 실행한다. [시점별 상태와 증적](docs/implementation-state-20260915.md#2026-09-17-후속-상태). PR #5·#19의 부재 대체 리뷰 요청은 이재환(`supreme33-kr`)이다.
+**2026-09-18 승인 절차 개정:** 독립 리뷰는 코드/실행 설정을 포함한 PR 병합에 한정한다. 그 밖의 실행·증적 수용·인수·종결은 해당 Lead가 결정하며, 같은 코드에 단계마다 독립 승인을 요구하지 않는다. [공통 변경결정](https://github.com/321Team/fds-project-baseline/blob/38f682141c279807050c5b1ea1b4e2b58ee22d63/governance/REVIEW_AUTHORITY_POLICY.md)과 [운영 기준](docs/governance.md)을 따른다. 아래 날짜별 상태는 당시 이력이다.
+
+**2026-09-17 상태 기록:** Runtime AC **1/10**, 전체 Delivery **NOT_VERIFIED**. 최종 앱 인계와 최신 독립 리뷰 후 중앙 수동 실행한다. [시점별 상태와 증적](docs/implementation-state-20260915.md#2026-09-17-후속-상태). PR #5·#19의 부재 대체 리뷰 요청은 이재환(`supreme33-kr`)이다.
 
 **2026-09-15 이력:** [실제 구성·증거 범위와 첫 Job 안내](docs/implementation-state-20260915.md). PR #2 승인·병합, CA 발급/백업·공개 인계, Runner 로컬/Idle 결과와 남은 Runtime 검증을 구분한다.
 
@@ -61,7 +63,7 @@ TLS는 CI/CD 선행조건으로 관리한다. 이미 채택한 역할에 따라 
 
 ## 기본 운영 원칙
 
-- 구현은 feature/docs/fix 브랜치와 PR로 진행한다. 작성자 외 리뷰 결과와 해당 Commit을 확인한 뒤 이권욱이 병합을 결정한다.
+- 구현은 feature/docs/fix 브랜치와 PR로 진행한다. 코드/실행 설정 포함 PR은 작성자 외 독립 리뷰와 최신 Commit을 확인한 뒤 Lead가 병합을 결정한다. 문서·증적 전용 PR은 Lead 검토·판단으로 처리한다.
 - 테스트·Build·Trivy 실패 및 검사 오류는 배포 차단으로 처리한다. 승인되지 않은 취약점 예외를 자동 허용하지 않는다.
 - 이미지 Tag만으로 배포 대상을 판단하지 않고 Harbor manifest Digest를 기록한다.
 - PR 코드를 실행하는 Job에 Harbor Push·Kubernetes 배포 자격증명을 전달하지 않는다. 같은 영속 Runner 재사용에 따른 작업 간 영향도 검토한다.
