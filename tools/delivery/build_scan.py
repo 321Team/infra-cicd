@@ -24,6 +24,7 @@ from prepare_db import (PreflightError, require, runtime_context,  # noqa: E402
                         scanner_environment, utcnow)
 from scan_images import SERVICES, scan_pair  # noqa: E402
 from verify_runner import sha256  # noqa: E402
+import offline_supply as offline  # noqa: E402
 
 CONFIG = 'config/app-build-scan.json'
 PODMAN = '/usr/bin/podman'
@@ -74,9 +75,12 @@ def validate_unit(value):
 
 
 def validate_config(data):
-    require(isinstance(data, dict) and data.get('schema') == 'P1-CICD-app-build-scan-1',
+    require(isinstance(data, dict) and data.get('schema') in
+            ('P1-CICD-app-build-scan-1', 'P1-CICD-app-build-scan-2'),
             'INPUT_SCHEMA_INVALID')
-    require(set(data) == {'schema', 'status', 'source', 'services'}, 'INPUT_FIELDS_INVALID')
+    supplied = data['schema'] == 'P1-CICD-app-build-scan-2'
+    fields = {'schema', 'status', 'source', 'services'} | ({'offline_supply'} if supplied else set())
+    require(set(data) == fields, 'INPUT_FIELDS_INVALID')
     require(data.get('status') == 'APPROVED_FOR_TEST_BUILD_SCAN', 'APP_HANDOFF_PENDING')
     source = data.get('source')
     require(isinstance(source, dict) and source.get('repository') == SOURCE_REPOSITORY,
@@ -108,6 +112,12 @@ def validate_config(data):
             test_step(step)
     require(any(not unit_not_applicable(services[name]['unit']) for name in SERVICES),
             'UNIT_PHASE_REQUIRED')
+    if supplied:
+        offline.validate_record(data['offline_supply'])
+        bases = {service['base_image'] for service in services.values()}
+        require(len(bases) == 1 and next(iter(bases)).endswith('@' + data['offline_supply']['manifest_digest']),
+                'OFFLINE_BASE_BINDING')
+        require(all(service['setup'] == [] for service in services.values()), 'OFFLINE_SETUP_MUST_BE_GENERATED')
     return data
 
 
@@ -222,6 +232,7 @@ def execute(config, source_dir, evidence, context, incoming_env):
     rc = 1
     try:
         validate_config(config)  # No source command/network before input completion.
+        supplied = config['schema'] == 'P1-CICD-app-build-scan-2'
         source_sha = config['source']['commit']
         result['source'] = config['source']
         home, runtime = evidence / 'home', evidence / 'runtime'
@@ -231,6 +242,11 @@ def execute(config, source_dir, evidence, context, incoming_env):
         env.update(HOME=str(home), XDG_RUNTIME_DIR=str(runtime),
                    GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null',
                    GIT_TERMINAL_PROMPT='0', GIT_NO_REPLACE_OBJECTS='1', PYTHONNOUSERSITE='1')
+        if supplied:
+            env = {key: value for key, value in env.items() if 'proxy' not in key.lower()}
+            env['PIP_CONFIG_FILE'] = os.devnull
+            env['XDG_CACHE_HOME'] = str(home / 'cache')
+            env['XDG_RUNTIME_DIR'] = '/run/user/' + str(os.getuid())
 
         def command(label, argv, cwd=evidence, timeout=300):
             output = evidence / (label + '.log')
@@ -258,13 +274,26 @@ def execute(config, source_dir, evidence, context, incoming_env):
         tests_root, build_root = evidence / 'tests-source', evidence / 'build-source'
         unpack_source(snapshot, tests_root)
         validate_source_files(tests_root, config)
+        staged = evidence / 'offline-supply'
+        if supplied:
+            result['offline_supply'] = {'SUPPLY_COPY': 'FAIL', 'REPOSITORY_DIGEST_RESOLUTION': 'NOT_EXECUTED'}
+            result['offline_supply'].update(offline.stage(config['offline_supply'], staged), SUPPLY_COPY='PASS')
+            offline.validate_source(tests_root, config, staged)
         # Tests use a separate copy; generated/ignored files do not enter Build.
         podman = [PODMAN, '--remote=false', '--root', str(evidence / 'storage'),
                   '--runroot', str(evidence / 'runroot')]
+        if supplied:
+            podman += ['--storage-driver', 'vfs', '--tmpdir', str(evidence / 'podman-tmp'),
+                       '--events-backend', 'none']
         version = command('podman-version', podman + ['--version'])
         require(read_output(version) == 'podman version 6.1.0', 'PODMAN_VERSION_MISMATCH')
         rootless = command('podman-rootless', podman + ['info', '--format', '{{.Host.Security.Rootless}}'])
         require(read_output(rootless) == 'true', 'ROOTLESS_REQUIRED')
+        if supplied:
+            base = config['services'][SERVICES[0]]['base_image']
+            result['offline_supply']['REPOSITORY_DIGEST_RESOLUTION'] = 'FAIL'
+            result['offline_supply'].update(offline.import_base(command, podman, config['offline_supply'], staged, base))
+            offline.install_tests(command, tests_root, staged)
         for phase in ('setup', 'unit', 'contract'):
             for name in SERVICES:
                 value = config['services'][name][phase]
@@ -278,16 +307,28 @@ def execute(config, source_dir, evidence, context, incoming_env):
         require(sha256(snapshot) == result['source_archive_sha256'], 'SOURCE_ARCHIVE_CHANGED')
         unpack_source(snapshot, build_root)
         validate_source_files(build_root, config)
+        if supplied:
+            offline.verify_staged(staged, config['offline_supply'])
+            offline.validate_source(build_root, config, staged)
         auth = evidence / 'empty-auth.json'
         auth.write_text('{"auths":{}}\n')
         archives = {}
         for name in SERVICES:
             service = config['services'][name]
-            command(name + '-base-pull', podman + ['pull', '--platform', 'linux/amd64',
-                    '--tls-verify=true', '--authfile', str(auth), service['base_image']], timeout=600)
+            if supplied:
+                # Recheck immediately before each consumer; tests never supply build artifacts.
+                offline.verify_staged(staged, config['offline_supply'])
+                build_options = ['--network=none', '--http-proxy=false', '--no-cache',
+                    '--security-opt=label=disable', '--build-context',
+                    'python-wheels=' + str(staged / (name + '-runtime') / 'wheels')]
+            else:
+                command(name + '-base-pull', podman + ['pull', '--platform', 'linux/amd64',
+                        '--tls-verify=true', '--authfile', str(auth), service['base_image']], timeout=600)
+                build_options = []
             iid = evidence / (name + '.iid')
             command(name + '-build', podman + ['build', '--format', 'oci', '--platform', 'linux/amd64',
                     '--pull=never', '--tls-verify=true', '--authfile', str(auth), '--iidfile', str(iid),
+                    *build_options,
                     '--file', str(build_root / service['dockerfile']),
                     str(build_root / service['context'])], timeout=1800)
             image_id = read_output(iid)
@@ -311,7 +352,7 @@ def execute(config, source_dir, evidence, context, incoming_env):
     except subprocess.TimeoutExpired:
         result['error_code'] = 'COMMAND_TIMEOUT'
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError,
-            tarfile.TarError, subprocess.SubprocessError):
+            tarfile.TarError, offline.zipfile.BadZipFile, EOFError, subprocess.SubprocessError):
         result['error_code'] = 'SOURCE_BUILD_OR_EVIDENCE_ERROR'
     result['finished_at'] = utcnow().isoformat()
     (evidence / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
