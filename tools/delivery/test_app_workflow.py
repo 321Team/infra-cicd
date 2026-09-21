@@ -45,7 +45,7 @@ class WorkflowTests(unittest.TestCase):
         self.git('init', '--quiet')
         self.git('config', 'user.name', 'Fixture')
         self.git('config', 'user.email', 'fixture@example.invalid')
-        self.git('remote', 'add', 'origin', app.ORIGIN)
+        self.git('remote', 'add', 'origin', app.auth.origin(self.config['source']['repository']))
         self.commit()
         self.folder = self.root / 'evidence'
         self.folder.mkdir()
