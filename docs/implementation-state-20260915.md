@@ -2,6 +2,21 @@
 
 이 문서는 09-15 제출 증적과 GitHub 조회 결과를 연결한다. 실시간 상태 조회나 전체 인수 승인 기록은 아니다. 실행 증거는 [baseline #16](https://github.com/321Team/fds-project-baseline/issues/16)에 기록했다.
 
+## 2026-09-21 후속 상태
+
+09-17 이후 남아 있던 코드 리뷰·앱 인계·Runtime 실행 선행조건을 아래와 같이 갱신한다. Runtime AC·Delivery Gate는 실제 앱 Runtime 결과로만 상향하며, 이번 갱신(코드 병합·config 승인)만으로 바꾸지 않는다.
+
+| 범위 | 확인 결과 |
+|---|---|
+| 코드 병합 | [PR #19](https://github.com/321Team/infra-cicd/pull/19)(오프라인 Test·Build·Scan·중앙 Workflow) → [PR #21](https://github.com/321Team/infra-cicd/pull/21)(Private Source 인증) → [PR #24](https://github.com/321Team/infra-cicd/pull/24)(테스트 fixture·CI 트리거 수정) → [PR #23](https://github.com/321Team/infra-cicd/pull/23)(config 승인값 반영) 순서로 main 병합 완료. 최종 main `be8fd912e455dae97055c6ab7615331e858500bf` |
+| 독립 리뷰 | 4건 모두 이재환(`supreme33-kr`) APPROVED, 각 병합 직전 HEAD와 승인 commit_id 일치 확인. PR #21은 "차단 지적 없음"으로 조건 없는 승인 |
+| 실제 CI | main push 트리거 기준 최종 HEAD(`be8fd91`)의 [Run35580238808](https://github.com/321Team/infra-cicd/actions/runs/35580238808) success. 중간 병합 커밋들의 CI는 concurrency 설정으로 취소됨(정상, 다음 push가 대체 검증) |
+| 앱 인계 | 이재환 최종 회신([2026-09-18](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5725640696), [저장소 정정 2026-09-21](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518))의 Source `321Team/fds-msa@ec69b67067decf35abbfed0a6a99f3073132787b`, transaction-api Unit NOT_APPLICABLE 사유를 `config/app-build-scan.json`에 반영. `status: APPROVED_FOR_TEST_BUILD_SCAN` |
+| CI 인프라 | `source-validation.yml` 트리거 브랜치 목록에 `ci/private-app-source-20260918` 누락으로 PR #23·#24가 CI 0건이었던 문제를 [PR #24](https://github.com/321Team/infra-cicd/pull/24)에서 수정. PR #21이 이미 쓴 것과 동일 패턴 |
+| 인수 | Runtime AC **1/10**(불변), APP_TEST_BUILD_SCAN **NOT_EXECUTED**(불변), DELIVERY_GATE **NOT_VERIFIED**(불변). 코드/config 준비 완료와 실제 Runtime 실행 완료는 구분한다 |
+
+다음 실행 순서는 중앙 수동 Workflow(`app-test-build-scan.yml`) `workflow_dispatch` 실행 → cicd-runner01의 실제 Test→Build→Scan 결과 회수 → Lead(이권욱)의 AC 판정이다.
+
 ## 2026-09-17 후속 상태
 
 아래 별도 관측을 09-15 기록 위에 덧붙인다. 이후 본문의 첫 Job 미실행·Runtime AC 0/10은 **09-15 당시 상태**다. CA·Runner 신규 생성/등록 및 성공한 공급·probe를 다시 수행하라는 지시가 아니다.
