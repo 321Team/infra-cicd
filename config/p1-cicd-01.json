@@ -193,7 +193,20 @@
     "policy_decision_reference": "https://github.com/321Team/fds-project-baseline/issues/13",
     "policy_decision_date": "2026-09-14",
     "runtime_enforcement": "APP_RUNTIME_AND_PUSH_DEPLOY_NOT_VERIFIED",
-    "implementation_status": "SCAN_BUILD_ADAPTER_ON_MAIN_OFFLINE_APP_WORKFLOW_IN_PR19"
+    "implementation_status": "SCAN_BUILD_ADAPTER_AND_OFFLINE_APP_WORKFLOW_ON_MAIN_20260921"
+  },
+  "app_handoff": {
+    "status": "APPROVED_FOR_TEST_BUILD_SCAN",
+    "source_repository": "321Team/fds-msa",
+    "source_commit": "ec69b67067decf35abbfed0a6a99f3073132787b",
+    "approved_by": "이재환 (supreme33-kr)",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518",
+    "config_path": "config/app-build-scan.json",
+    "config_approved_date": "2026-09-21",
+    "merged_prs": [19, 21, 24, 23],
+    "final_main_commit": "be8fd912e455dae97055c6ab7615331e858500bf",
+    "runtime_status": "NOT_EXECUTED",
+    "scope": "CONFIG_AND_CODE_ONLY_NOT_RUNTIME_EVIDENCE"
   },
   "remaining_runtime_inputs": [
     "Legacy CA fingerprint, actual consumers, trust transition and disposal evidence; new CA issuance and encrypted file/key/cert/ledger restore already evidenced",
@@ -205,7 +218,7 @@
   "observation_date": "2026-09-15",
   "observation_scope": "HISTORICAL_20260915_WITH_SEPARATE_LATEST_STATUS",
   "latest_status": {
-    "as_of": "2026-09-17",
+    "as_of": "2026-09-21",
     "canonical": "docs-v3.1.18",
     "candidate": "v3.1.19_COLLECTION_ONLY",
     "runner_db_preflight": "PASS",
@@ -213,10 +226,11 @@
     "runner_db_job_id": "104683095209",
     "supply_runtime": "PASS",
     "base_probe_runtime": "PASS",
+    "app_handoff_config": "APPROVED_FOR_TEST_BUILD_SCAN",
     "app_test_build_scan": "NOT_EXECUTED",
     "runtime_ac_pass": 1,
     "runtime_ac_total": 10,
     "delivery_gate": "NOT_VERIFIED",
-    "reference": "docs/implementation-state-20260915.md#2026-09-17-후속-상태"
+    "reference": "docs/implementation-state-20260915.md#2026-09-21-후속-상태"
   }
 }

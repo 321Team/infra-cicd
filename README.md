@@ -1,8 +1,10 @@
 # infra-cicd
 
+**2026-09-21 앱 인계 승인·코드 병합 완료:** PR [#19](https://github.com/321Team/infra-cicd/pull/19)·[#21](https://github.com/321Team/infra-cicd/pull/21)·[#24](https://github.com/321Team/infra-cicd/pull/24)·[#23](https://github.com/321Team/infra-cicd/pull/23)가 이재환 독립 승인 후 이 순서로 main에 병합됐다(최종 `be8fd91`, 실제 GitHub Actions CI success 확인). `config/app-build-scan.json`은 `PENDING_APP_HANDOFF` → `APPROVED_FOR_TEST_BUILD_SCAN`으로 전환됐고 Source는 `321Team/fds-msa@ec69b67067decf35abbfed0a6a99f3073132787b`(이재환 승인, [근거](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518))다. **코드 병합·config 승인과 실제 Runtime 실행은 별개다.** Runtime AC는 이 갱신만으로 상향하지 않으며, 중앙 수동 Workflow(`app-test-build-scan.yml`) 실행 결과로만 판정한다. [상세](docs/implementation-state-20260915.md#2026-09-21-후속-상태).
+
 **2026-09-18 승인 절차 개정:** 독립 리뷰는 코드/실행 설정을 포함한 PR 병합에 한정한다. 그 밖의 실행·증적 수용·인수·종결은 해당 Lead가 결정하며, 같은 코드에 단계마다 독립 승인을 요구하지 않는다. [공통 변경결정](https://github.com/321Team/fds-project-baseline/blob/38f682141c279807050c5b1ea1b4e2b58ee22d63/governance/REVIEW_AUTHORITY_POLICY.md)과 [운영 기준](docs/governance.md)을 따른다. 아래 날짜별 상태는 당시 이력이다.
 
-**2026-09-17 상태 기록:** Runtime AC **1/10**, 전체 Delivery **NOT_VERIFIED**. 최종 앱 인계와 최신 독립 리뷰 후 중앙 수동 실행한다. [시점별 상태와 증적](docs/implementation-state-20260915.md#2026-09-17-후속-상태). PR #5·#19의 부재 대체 리뷰 요청은 이재환(`supreme33-kr`)이다.
+**2026-09-17 상태 기록 (이력):** Runtime AC **1/10**, 전체 Delivery **NOT_VERIFIED**. [시점별 상태와 증적](docs/implementation-state-20260915.md#2026-09-17-후속-상태). PR #5·#19의 부재 대체 리뷰 요청은 이재환(`supreme33-kr`)이었다 — 해당 PR들은 위 09-21 갱신으로 병합 완료됐다.
 
 **2026-09-15 이력:** [실제 구성·증거 범위와 첫 Job 안내](docs/implementation-state-20260915.md). PR #2 승인·병합, CA 발급/백업·공개 인계, Runner 로컬/Idle 결과와 남은 Runtime 검증을 구분한다.
 
@@ -14,8 +16,8 @@ Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, �
 
 - 담당: **이권욱(Lead)** / **이하영(Support·독립 기술 리뷰)** — [역할 결정 기록](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/decisions/p1-cicd-01-roles.md)
 - 티켓: **P1-CICD-01 — In Progress**
-- Runtime AC: **1/10** / Delivery Gate: **NOT_VERIFIED**
-- 초기 문서 외에 Runner·Trivy·Build 검증 도구가 추가됐다. 앱 공급 소비·중앙 Workflow는 [PR #19](https://github.com/321Team/infra-cicd/pull/19)에서 검토 중이다. 코드 준비와 실제 앱 실행을 구분한다.
+- Runtime AC: **1/10** / Delivery Gate: **NOT_VERIFIED** (2026-09-21 코드 병합·config 승인 시점 기준, 실제 앱 Runtime 반영 전)
+- Runner·Trivy·Build·앱 공급 소비·중앙 수동 Workflow·Private Source 인증 코드가 모두 main에 병합됐다. `config/app-build-scan.json`은 승인 상태(`APPROVED_FOR_TEST_BUILD_SCAN`)다. 코드/config 준비 완료와 실제 앱 Test→Build→Scan 실행 완료는 구분한다.
 
 ## 관리 범위
 
@@ -49,7 +51,7 @@ Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, �
 | infra-cicd | Runner·파이프라인·배포/롤백 자동화·CI/CD 검증 기준 |
 | [infra-harbor-trivy](https://github.com/321Team/infra-harbor-trivy) | Harbor 서버·Trivy 운영, Robot 권한, 서버 인증서 적용·복구 |
 | [infra-ansible](https://github.com/321Team/infra-ansible) | Ansible 코드·인프라 자동화; 앱 Delivery AC와 별도 추적 |
-| [fds-msa](https://github.com/supreme33-kr/fds-msa) — 최종 SHA 승인 대기 | 업무 Source·Dockerfile·테스트·최초 Application Manifest 정본 |
+| [fds-msa](https://github.com/321Team/fds-msa) — 최종 SHA 승인 완료(2026-09-21) | 업무 Source·Dockerfile·테스트·최초 Application Manifest 정본. 조직 저장소로 이관 완료, 승인 SHA `ec69b67067decf35abbfed0a6a99f3073132787b`. 이전 공개 fork `supreme33-kr/fds-msa`는 더 이상 승인 Source가 아니다 |
 | [fds-project-evidence](https://github.com/321Team/fds-project-evidence) | 실행 원본·독립 검증 증적; 이 저장소에서는 Commit·경로·해시로 연결 |
 
 TLS는 CI/CD 선행조건으로 관리한다. 이미 채택한 역할에 따라 이권욱이 CA 관리·발급과 Runner Trust 검증을, 이하영이 Harbor 개인키·CSR 생성과 서버 적용을 담당한다. 이 저장소 생성으로 별도 PKI 저장소 생성이나 CA 발급 완료를 선언하지 않는다.
