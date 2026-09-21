@@ -1,11 +1,11 @@
 {
   "schema": "P1-CICD-app-build-scan-2",
-  "status": "PENDING_APP_HANDOFF",
+  "status": "APPROVED_FOR_TEST_BUILD_SCAN",
   "source": {
-    "repository": "supreme33-kr/fds-msa",
-    "commit": null,
-    "approved_by": null,
-    "approval_reference": null
+    "repository": "321Team/fds-msa",
+    "commit": "ec69b67067decf35abbfed0a6a99f3073132787b",
+    "approved_by": "이재환 (supreme33-kr)",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518"
   },
   "services": {
     "transaction-api": {
@@ -13,7 +13,12 @@
       "dockerfile": "transaction-api/Dockerfile",
       "base_image": "docker.io/library/python@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
       "setup": [],
-      "unit": null,
+      "unit": {
+        "status": "NOT_APPLICABLE",
+        "reason": "transaction-api는 자체 판정 로직이 없는 라우팅/영속성 계층이다 — 요청 수신, R01/R07용 context 사전 계산 후 fds-engine 호출, DB 저장만 수행한다. 실제 판정 로직(R01/R02/R04/R07)은 fds-engine에 있으며 fds-engine의 Unit test_rules.py(16개 함수)가 전담 커버한다. transaction-api 자체 동작(기동/DB 연결/metrics)은 위 Contract 테스트가 커버한다.",
+        "approved_by": "이재환 (supreme33-kr)",
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518"
+      },
       "contract": {
         "cwd": "transaction-api",
         "argv": [
