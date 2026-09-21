@@ -233,7 +233,7 @@ class FlowTests(unittest.TestCase):
                 self.scanner.assert_not_called()
 
     def test_default_pending_input_runs_nothing(self):
-        self.config = json.loads((flow.ROOT / flow.CONFIG).read_text())
+        self.config['status'] = 'PENDING_APP_HANDOFF'
         rc, data = self.execute()
         self.assertEqual(rc, 1)
         self.assertEqual(data['error_code'], 'APP_HANDOFF_PENDING')
@@ -430,7 +430,12 @@ class FlowTests(unittest.TestCase):
         self.scanner.assert_not_called()
 
     def test_pending_cli_is_nonzero_and_does_not_enter_runtime(self):
-        with patch.object(flow, 'runtime_context') as context, contextlib.redirect_stdout(io.StringIO()) as out:
+        self.config['status'] = 'PENDING_APP_HANDOFF'
+        (self.root / 'config').mkdir()
+        (self.root / flow.CONFIG).write_text(json.dumps(self.config))
+        with patch.object(flow, 'ROOT', self.root), \
+                patch.object(flow, 'runtime_context') as context, \
+                contextlib.redirect_stdout(io.StringIO()) as out:
             rc = flow.main([])
         self.assertEqual(rc, 1)
         context.assert_not_called()
