@@ -5,7 +5,7 @@
     "repository": "321Team/fds-msa",
     "commit": "ec69b67067decf35abbfed0a6a99f3073132787b",
     "approved_by": "이재환 (supreme33-kr)",
-    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5725640696"
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518"
   },
   "services": {
     "transaction-api": {
@@ -17,7 +17,7 @@
         "status": "NOT_APPLICABLE",
         "reason": "transaction-api는 자체 판정 로직이 없는 라우팅/영속성 계층이다 — 요청 수신, R01/R07용 context 사전 계산 후 fds-engine 호출, DB 저장만 수행한다. 실제 판정 로직(R01/R02/R04/R07)은 fds-engine에 있으며 fds-engine의 Unit test_rules.py(16개 함수)가 전담 커버한다. transaction-api 자체 동작(기동/DB 연결/metrics)은 위 Contract 테스트가 커버한다.",
         "approved_by": "이재환 (supreme33-kr)",
-        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5725640696"
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518"
       },
       "contract": {
         "cwd": "transaction-api",
