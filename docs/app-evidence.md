@@ -13,6 +13,10 @@
 | run_id | 실제 GitHub Actions Run ID, 숫자로 된 문자열 |
 | attempt | 해당 Run의 실제 시도 번호, 양의 정수 |
 | input_sha256 | 위 Workflow Commit의 `config/app-build-scan.json` 원본 바이트 SHA-256 |
+| source_repository | 조직 Private Source는 `321Team/fds-msa`를 추가로 명시. 생략하면 기존 `supreme33-kr/fds-msa`만 허용 |
+
+Private 인증 fetch의 `source-fetch.log`는 종료 코드와 raw 출력 폐기 사실만 담는다.
+이 파일의 hash 검증은 raw Git 통신 로그를 검사했다는 뜻이 아니다. [인증 경로와 제한](private-app-source.md)을 참조한다.
 
 증적 도구 자체도 검토한 CICD checkout에서 사용한다. 수신 manifest의 tool hash는 식별값이며 서명이나 사람의 승인 인증이 아니다. 이 도구는 schema2 중앙 앱 실행의 종료 영수증을 대상으로 하며 `--source-dir`의 사전 HANDOFF_CHECK 결과는 Runtime 증적이 아니다.
 

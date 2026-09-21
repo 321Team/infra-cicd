@@ -10,9 +10,9 @@
 
 ## Source 접근 결정
 
-2026-09-17 GitHub API에서 `supreme33-kr/fds-msa`의 `private=false / visibility=public`을 확인했다. 따라서 현재 구현은 고정 `https://github.com/supreme33-kr/fds-msa.git`의 **익명 HTTPS 읽기**를 사용한다. 다른 저장소·branch/tag·입력 URL로 전환하지 않으며, API 연결 권한을 실제 Runner의 Git 접근 성공으로 간주하지 않는다.
+허용 Source는 기존 `supreme33-kr/fds-msa`의 익명 HTTPS 읽기와 이관된 Private `321Team/fds-msa`의 제한된 인증 읽기 두 경로다. config의 repository가 경로를 선택한다. 두 경로 모두 고정 GitHub URL의 승인40자리 SHA만 수신하며 다른 저장소·branch/tag·입력 URL을 받지 않는다. API 연결 권한을 실제 Runner의 Git 접근 성공으로 간주하지 않는다.
 
-프로젝트 SCM의 Private 목표와 앱 저장소의 현재 공개 상태는 구분한다. 이번 작업은 앱 공개 설정의 승인 또는 변경이 아니다. 앱을 Private로 전환하면 현재 익명 fetch는 실패하며, 앱 담당과 별도 읽기 전용 접근 수단을 검토해 연결해야 한다. infra-cicd의 기본 GITHUB_TOKEN을 다른 Private 저장소 권한으로 가정하지 않는다. 이번 구현에는 앱용 PAT/SSH key 발급·저장·주입이 없다. Secrets 목록은 connector 조회 경로가 지원되지 않아 존재 여부를 확인하지 못했으며, 이 경로는 앱 Secret에 의존하지 않는다.
+현재 config는 기존 저장소/PENDING_APP_HANDOFF를 유지한다. 조직 Source 채택은 최종 앱 인계와 검토한 config 변경으로 수행한다. Private 경로의 자격증명 주입·최소 권한·실패 처리·증적 범위는 [Private Source 수신](private-app-source.md)을 따른다. infra-cicd의 기본 GITHUB_TOKEN을 다른 Private 저장소 권한으로 가정하지 않는다. Secret의 실제 등록·유효 권한·Runner 접근 성공은 아직 확인하지 않았다.
 
 근거: [actions/checkout 고정 버전의 교차 저장소 인증 설명](https://github.com/actions/checkout/blob/d23441a48e516b6c34aea4fa41551a30e30af803/README.md#checkout-multiple-repos-private), [GitHub Token 최소 권한](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token).
 
@@ -21,7 +21,7 @@
 1. `cicd-app-<Run>-<Attempt>`가 없는지 검사하고 새 경로에 CICD Workflow Commit을 checkout한다. 기존 경로가 있으면 중단한다. 고정 actions/checkout 버전, `persist-credentials:false`, `clean:false`, `set-safe-directory:false`, submodule/LFS 비활성화를 사용한다. 다른 checkout·HOME·전역 Git 설정을 정리하지 않는다.
 2. config 완결성을 확인한다. **현재 PENDING 설정은 앱 fetch 전에 중단**한다. CLI에서 실행 입력 경로나 사전 Source를 덮어쓸 수 없다.
 3. 기존 Runner HOME의 소유자·0700과 최소 여유4GiB를 확인한다. `FDS_CICD_AppWorkflow.lock`으로 이 도구의 중복 실행을 막고, 새 `FDS_CICD_AppWorkflow.*` 디렉터리를 만든다. 기존 파일/권한은 바꾸지 않는다. 이 lock과 Workflow concurrency는 다른 종류의 Job이나 수동 작업까지 예약하는 장치가 아니다. 4GiB는 시작 하한이며 실행 중 디스크 고갈 방지는 아니다.
-4. 새 bare Git 저장소에 `--depth=1 --no-tags`로 승인40자리 SHA만 fetch한다. 실제 FETCH_HEAD의 Commit을 대조하고 HEAD를 고정한다. worktree checkout·앱 import·필터·hook·submodule/LFS를 실행하지 않는다. 빈 Git template, 새 HOME, system/global Git config 비활성화, credential helper 초기화, TLS 검증, redirect 차단을 사용한다. GitHub Token·askpass·GIT_CONFIG override를 전달하지 않고 기존 proxy 경로만 보존한다. fetch 제한300초이며 인증 실패를 다른 경로로 우회하지 않는다.
+4. 새 bare Git 저장소에 `--depth=1 --no-tags`로 승인40자리 SHA만 fetch한다. 실제 FETCH_HEAD의 Commit을 대조하고 HEAD를 고정한다. worktree checkout·앱 import·필터·hook·submodule/LFS를 실행하지 않는다. 빈 Git template, 새 HOME, system/global Git config 비활성화, credential helper 초기화, TLS 검증, redirect 차단을 사용한다. 상속된 GitHub Token·askpass·GIT_CONFIG override를 버리고 기존 proxy 경로만 보존한다. Private 경로에서는 전용 읽기 Token을 고정 URL의 fetch 자식 프로세스에만 전달한다. fetch 제한300초이며 인증 실패를 다른 경로로 우회하지 않는다.
 5. Git Commit 객체에서 전체 tree의 link/submodule/잘못된 경로/기존 `.venv`를 거부한다. Dockerfile2개의 인계 후보 바이트, lock4개의 공급 hash, 기존 requirements4개의 hash, 시험 cwd를 대조한다. Source의 dirty/untracked 내용은 사용하지 않는다. Dockerfile 주석만 바꾼 경우도 현재 중앙 인계의 정확한 후보 대조에서 실패한다. 이는 이 구현이 지원하는 인계 형식이며 새 업무 AC를 뜻하지 않는다.
 6. `handoff.json`에 Source 승인 선언, 검사10파일 hash, Unit/Contract 배정·명시적 Unit 해당 없음과 config hash를 기록한다. 이 단계는 시험 실행 PASS가 아니다.
 7. 같은 디렉터리 아래 새 `build-scan/`에서 기존 schema2 실행기를 호출한다. 공급 사본 검증, rootless base import, offline venv 설치, Unit/Contract, 새 committed Build 사본, 두 이미지 Build, Trivy 최신 DB/Scan을 수행한다. `handoff.json` hash를 Run/Attempt/config hash와 함께 하위 context에 결합한다. 반환값 PASS/0, 취약점 BLOCK/10, 오류 FAIL/nonzero를 보존한다.

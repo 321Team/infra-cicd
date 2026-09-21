@@ -130,6 +130,19 @@ class FlowTests(unittest.TestCase):
                 'approved_by': 'fixture-reviewer',
                 'approval_reference': 'https://github.com/321Team/example/issues/1'}
 
+    def test_private_source_origin_passes_the_existing_build_path(self):
+        self.config['source']['repository'] = '321Team/fds-msa'
+        self.git('remote', 'set-url', 'origin', 'https://github.com/321Team/fds-msa.git')
+        rc, result = self.execute()
+        self.assertEqual((rc, result['BUILD_SCAN']), (0, 'PASS'))
+        self.assertIn('scan-pair', self.events)
+
+    def test_same_sha_from_old_origin_does_not_satisfy_private_source_input(self):
+        self.config['source']['repository'] = '321Team/fds-msa'
+        rc, result = self.execute()
+        self.assertEqual((rc, result['error_code']), (1, 'SOURCE_ORIGIN_MISMATCH'))
+        self.assertNotIn('podman-version', self.events)
+
     def test_explicit_unit_scope_runs_remaining_tests_without_fabricating_pass(self):
         scope = self.unit_scope_fixture()
         self.config['services']['transaction-api']['unit'] = scope

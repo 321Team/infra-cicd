@@ -29,6 +29,7 @@ import offline_supply as offline  # noqa: E402
 CONFIG = 'config/app-build-scan.json'
 PODMAN = '/usr/bin/podman'
 SOURCE_REPOSITORY = 'supreme33-kr/fds-msa'
+SOURCE_REPOSITORIES = (SOURCE_REPOSITORY, '321Team/fds-msa')
 DIGEST = r'sha256:[0-9a-f]{64}'
 BASE = r'[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/[a-z0-9][a-z0-9._/-]*@' + DIGEST
 
@@ -83,7 +84,7 @@ def validate_config(data):
     require(set(data) == fields, 'INPUT_FIELDS_INVALID')
     require(data.get('status') == 'APPROVED_FOR_TEST_BUILD_SCAN', 'APP_HANDOFF_PENDING')
     source = data.get('source')
-    require(isinstance(source, dict) and source.get('repository') == SOURCE_REPOSITORY,
+    require(isinstance(source, dict) and source.get('repository') in SOURCE_REPOSITORIES,
             'SOURCE_REPOSITORY_INVALID')
     require(set(source) == {'repository', 'commit', 'approved_by', 'approval_reference'},
             'SOURCE_FIELDS_INVALID')
@@ -127,7 +128,8 @@ def run_command(argv, cwd, env, output, timeout):
     Stop the command process group on timeout or parent interruption. This is
     not a sandbox for malicious code running with the same UID.
     """
-    with output.open('xb') as stream:
+    # Authenticated transport discards untrusted server output at the OS boundary.
+    with (open(os.devnull, 'wb') if output is None else output.open('xb')) as stream:
         process = subprocess.Popen(argv, cwd=cwd, env=env, stdout=stream,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         try:
@@ -259,8 +261,8 @@ def execute(config, source_dir, evidence, context, incoming_env):
         require(read_output(head) == source_sha, 'SOURCE_HEAD_MISMATCH')
         origin = command('source-origin', ['/usr/bin/git', '-C', str(source_dir),
                                             'remote', 'get-url', 'origin'])
-        require(read_output(origin) in ('https://github.com/' + SOURCE_REPOSITORY,
-                                       'https://github.com/' + SOURCE_REPOSITORY + '.git'),
+        source_origin = 'https://github.com/' + config['source']['repository']
+        require(read_output(origin) in (source_origin, source_origin + '.git'),
                 'SOURCE_ORIGIN_MISMATCH')
         tree = command('source-tree', ['/usr/bin/git', '-C', str(source_dir), 'ls-tree',
                                        '-r', '-z', source_sha])

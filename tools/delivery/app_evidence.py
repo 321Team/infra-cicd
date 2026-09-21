@@ -32,8 +32,11 @@ def digest(raw):
 
 
 def expected_input(data):
-    flow.require(isinstance(data, dict) and set(data) ==
-        {'workflow_sha', 'source_sha', 'run_id', 'attempt', 'input_sha256'}, 'EXPECTED_FIELDS_REQUIRED')
+    fields = {'workflow_sha', 'source_sha', 'run_id', 'attempt', 'input_sha256'}
+    flow.require(isinstance(data, dict) and set(data) in
+                 (fields, fields | {'source_repository'}), 'EXPECTED_FIELDS_REQUIRED')
+    flow.require(data.get('source_repository', flow.SOURCE_REPOSITORY) in flow.SOURCE_REPOSITORIES,
+                 'EXPECTED_REPOSITORY_INVALID')
     for key in ('workflow_sha', 'source_sha'):
         flow.require(isinstance(data[key], str) and re.fullmatch('[0-9a-f]{40}', data[key]), 'EXPECTED_SHA_INVALID')
     flow.require(isinstance(data['input_sha256'], str) and re.fullmatch(HEX, data['input_sha256']),
@@ -175,7 +178,7 @@ def check(provider, expected):
         handoff = provider.read('handoff.json', top['handoff_sha256'])
         source = handoff.get('source', {})
         flow.require(handoff.get('HANDOFF') == top.get('HANDOFF') == 'PASS' and
-                     source.get('repository') == flow.SOURCE_REPOSITORY and
+                     source.get('repository') == expected.get('source_repository', flow.SOURCE_REPOSITORY) and
                      source.get('commit') == expected['source_sha'], 'HANDOFF_SOURCE_MISMATCH')
         flow.require(isinstance(source.get('approved_by'), str) and source['approved_by'].strip() and
                      isinstance(source.get('approval_reference'), str) and
