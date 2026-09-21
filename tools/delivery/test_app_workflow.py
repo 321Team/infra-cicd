@@ -24,7 +24,10 @@ class WorkflowTests(unittest.TestCase):
         supply, record, identity = fixture(self.root)
         self.config = json.loads((app.flow.ROOT / app.flow.CONFIG).read_text())
         self.config['status'] = 'APPROVED_FOR_TEST_BUILD_SCAN'
-        self.config['source'].update(approved_by='fixture only',
+        # Pin the fixture's own source repository regardless of what the committed
+        # config currently holds; the private-repository path is opted into explicitly
+        # by the handful of tests that override this, not inherited from disk.
+        self.config['source'].update(repository=app.flow.SOURCE_REPOSITORY, approved_by='fixture only',
             approval_reference='https://github.com/fixture/fixture/issues/1')
         self.config['offline_supply'] = record
         self.config['services']['transaction-api']['unit'] = {
