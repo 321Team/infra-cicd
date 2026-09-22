@@ -193,6 +193,21 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(Path(command[command.index('--config') + 1]).read_text(), '{}\n')
             self.assertEqual(Path(command[command.index('--ignorefile') + 1]).read_text(), '')
 
+    def test_input_is_extracted_oci_layout_directory_not_the_tar(self):
+        # Regression: Trivy's OCI-image opener stats <input>/index.json and
+        # rejects a packed archive path with "not a directory", even though
+        # the tar itself is a valid, fully-verified OCI archive.
+        with tarfile.open(self.archive) as tar:
+            expected_index = json.loads(tar.extractfile('index.json').read())
+        self.execute()
+        self.assertEqual(len(self.calls), 2)
+        for command, _ in self.calls:
+            input_path = Path(command[command.index('--input') + 1])
+            self.assertNotEqual(input_path, self.archive)
+            self.assertTrue(input_path.is_dir(), input_path)
+            self.assertEqual(json.loads((input_path / 'index.json').read_text()), expected_index)
+            self.assertTrue((input_path / 'oci-layout').is_file())
+
     def test_high_without_fix_blocks_pair_and_stops_next_scan(self):
         self.severity = 'HIGH'
         rc, result = self.execute()
