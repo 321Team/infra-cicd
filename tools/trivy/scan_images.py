@@ -71,11 +71,18 @@ def check_db(evidence, db_result):
 
 def scan_one(directory, archive, identity, cache, env):
     directory.mkdir(mode=0o700)
+    # Trivy's OCI-image opener stats <input>/index.json, so --input must be an
+    # extracted layout directory; the packed oci-archive tar itself is rejected
+    # ("not a directory") even though it is a well-formed OCI archive.
+    layout = directory / 'layout'
+    layout.mkdir(mode=0o700)
+    with tarfile.open(archive, 'r:') as tar:
+        tar.extractall(layout, filter='data')
     config, ignore = directory / 'empty.yaml', directory / 'empty.ignore'
     config.write_text('{}\n')
     ignore.write_text('')
     report_path = directory / 'report.json'
-    command = [str(TRIVY), 'image', '--input', str(archive), '--cache-dir', str(cache),
+    command = [str(TRIVY), 'image', '--input', str(layout), '--cache-dir', str(cache),
                '--config', str(config), '--ignorefile', str(ignore), '--ignore-unfixed=false',
                '--scanners', 'vuln', '--pkg-types', 'os,library', '--list-all-pkgs',
                '--skip-db-update', '--skip-java-db-update', '--offline-scan',
