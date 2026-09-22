@@ -212,6 +212,25 @@
     "runtime_note": "APP_WORKFLOW=BLOCK, ERROR_CODE=NONE — pipeline completed Source fetch/Handoff/Build/Scan without tool error; Trivy found real HIGH/CRITICAL findings and Delivery Gate correctly blocked. Vulnerability remediation is an app-repository (fds-msa) concern, not infra-cicd.",
     "scope": "FIRST_END_TO_END_RUNTIME_EXECUTION_NOT_A_PASSING_GATE"
   },
+  "trivy_binary_policy": {
+    "status": "ADOPTED_BY_LEAD",
+    "decided_by": "이권욱",
+    "decision_date": "2026-09-22",
+    "decision_reference": "https://github.com/321Team/infra-cicd/issues/8",
+    "binary_management": "PINNED_VERSION_HASH_MANUAL_REPLACEMENT_WITH_INDEPENDENT_REVIEW",
+    "pinned_version": "0.74.0",
+    "pinned_sha256": "d89bcc6510a267f11b773398cbf1be5520ce39f9e8b6633178c4487f05b7d791",
+    "pin_enforced_at": ["tools/trivy/verify_runner.py", "tools/trivy/prepare_db.py"],
+    "no_latest_autofetch": true,
+    "no_root_self_update": true,
+    "db_preflight_policy": "PER_RUN_OFFICIAL_SOURCE_NEXTUPDATE_ENFORCED_NO_GRACE_PERIOD",
+    "db_preflight_enforced_at": "tools/trivy/prepare_db.py",
+    "delivery_block_policy": "HIGH_CRITICAL_OR_SCAN_ERROR_BLOCKS_PUSH_DEPLOY",
+    "delivery_block_enforced_at": "tools/trivy/scan_images.py",
+    "automated_binary_replacement": "NOT_ADOPTED_OUT_OF_SCOPE",
+    "external_automation_existence": "UNCONFIRMED_SEPARATE_FROM_THIS_ADOPTION",
+    "scope_note": "Records adoption of the forward-looking manual-replacement policy and its existing code enforcement. Does not confirm or rule out whether an external cron/timer/Ansible automation already exists on cicd-runner01; that forensic question in issue #8 remains open and unanswered."
+  },
   "remaining_runtime_inputs": [
     "Legacy CA fingerprint, actual consumers, trust transition and disposal evidence; new CA issuance and encrypted file/key/cert/ledger restore already evidenced",
     "App source repositories, approved SHAs, Dockerfiles and Unit/Contract test commands",
