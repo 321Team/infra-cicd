@@ -2,6 +2,21 @@
 
 이 문서는 09-15 제출 증적과 GitHub 조회 결과를 연결한다. 실시간 상태 조회나 전체 인수 승인 기록은 아니다. 실행 증거는 [baseline #16](https://github.com/321Team/fds-project-baseline/issues/16)에 기록했다.
 
+## 2026-09-22 후속 상태
+
+첫 실제 Runtime 종단 실행과 그 과정에서 발견·수정한 결함을 기록한다.
+
+| 범위 | 확인 결과 |
+|---|---|
+| 1차 시도 | [Run 35588577241](https://github.com/321Team/infra-cicd/actions/runs/35588577241): Source fetch·Handoff·Build까지 성공, Trivy Scan 단계에서 `SCANNER_EXECUTION_ERROR`로 실패 |
+| 근본 원인 | cicd-runner01에서 수동 재현(3건: 원본 tar/엔트리 재정렬 tar/압축 해제 디렉터리)으로 확정. Trivy의 OCI-image 오프너가 `--input` 경로에서 `index.json`을 stat하므로 압축된 oci-archive tar 자체는 "not a directory"로 거부됨. 이 저장소의 `inspect_archive()`(Python)는 tar를 직접 파싱해 문제없이 통과했던 것이라 그동안 코드 리뷰·로컬 테스트로는 드러나지 않았음 |
+| 수정 | [PR #26](https://github.com/321Team/infra-cicd/pull/26): `scan_one()`에서 Trivy 실행 전 이미 검증된 archive를 압축 해제해 그 디렉터리를 `--input`으로 전달. 이재환 APPROVED, main `7e939d7` 병합 |
+| 2차 시도 (수정 후) | [Run 35683010080](https://github.com/321Team/infra-cicd/actions/runs/35683010080): Source fetch → Handoff → Build(2개 이미지) → Scan까지 **`ERROR_CODE=NONE`으로 도구 오류 없이 완주**. 결과 `APP_WORKFLOW=BLOCK` — 실제 HIGH/CRITICAL 취약점 발견에 따른 정상 차단 판정(도구 결함 아님) |
+| 잔여 | 어떤 서비스·CVE가 걸렸는지 상세는 `<EVIDENCE_DIR>/build-scan/scan/result.json`에서 확인 필요(이번 갱신에서 미회수). 취약점 자체 해소는 fds-msa(앱 저장소) 과제이며 infra-cicd 범위 밖 |
+| 인수 | Runtime AC **1/10**(불변), APP_TEST_BUILD_SCAN **EXECUTED_BLOCK**(최초로 NOT_EXECUTED에서 전환), DELIVERY_GATE **NOT_VERIFIED**(불변 — BLOCK은 통과가 아님) |
+
+**AC 개수를 이번 실행으로 재해석하지 않는다.** "파이프라인이 도구 오류 없이 끝까지 실행됨"과 "10개 AC 중 몇 개를 충족하는가"는 별개 판단이며, 후자는 Lead가 각 AC 정의와 대조해 별도로 판정한다.
+
 ## 2026-09-21 후속 상태
 
 09-17 이후 남아 있던 코드 리뷰·앱 인계·Runtime 실행 선행조건을 아래와 같이 갱신한다. Runtime AC·Delivery Gate는 실제 앱 Runtime 결과로만 상향하며, 이번 갱신(코드 병합·config 승인)만으로 바꾸지 않는다.

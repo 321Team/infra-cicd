@@ -203,10 +203,14 @@
     "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518",
     "config_path": "config/app-build-scan.json",
     "config_approved_date": "2026-09-21",
-    "merged_prs": [19, 21, 24, 23],
-    "final_main_commit": "be8fd912e455dae97055c6ab7615331e858500bf",
-    "runtime_status": "NOT_EXECUTED",
-    "scope": "CONFIG_AND_CODE_ONLY_NOT_RUNTIME_EVIDENCE"
+    "merged_prs": [19, 21, 24, 23, 26],
+    "final_main_commit": "7e939d7f77c38c13fd331b38f6649580bf0d05bd",
+    "runtime_status": "EXECUTED_BLOCK",
+    "runtime_run_id": "35683010080",
+    "runtime_job_id": "106603847854",
+    "runtime_observed_date": "2026-09-22",
+    "runtime_note": "APP_WORKFLOW=BLOCK, ERROR_CODE=NONE — pipeline completed Source fetch/Handoff/Build/Scan without tool error; Trivy found real HIGH/CRITICAL findings and Delivery Gate correctly blocked. Vulnerability remediation is an app-repository (fds-msa) concern, not infra-cicd.",
+    "scope": "FIRST_END_TO_END_RUNTIME_EXECUTION_NOT_A_PASSING_GATE"
   },
   "remaining_runtime_inputs": [
     "Legacy CA fingerprint, actual consumers, trust transition and disposal evidence; new CA issuance and encrypted file/key/cert/ledger restore already evidenced",
@@ -218,7 +222,7 @@
   "observation_date": "2026-09-15",
   "observation_scope": "HISTORICAL_20260915_WITH_SEPARATE_LATEST_STATUS",
   "latest_status": {
-    "as_of": "2026-09-21",
+    "as_of": "2026-09-22",
     "canonical": "docs-v3.1.18",
     "candidate": "v3.1.19_COLLECTION_ONLY",
     "runner_db_preflight": "PASS",
@@ -227,10 +231,12 @@
     "supply_runtime": "PASS",
     "base_probe_runtime": "PASS",
     "app_handoff_config": "APPROVED_FOR_TEST_BUILD_SCAN",
-    "app_test_build_scan": "NOT_EXECUTED",
+    "app_test_build_scan": "EXECUTED_BLOCK",
+    "app_test_build_scan_run_id": "35683010080",
     "runtime_ac_pass": 1,
     "runtime_ac_total": 10,
+    "runtime_ac_note": "AC count unchanged pending Lead review of which of the 10 criteria a real end-to-end BLOCK (vs PASS) satisfies; not reinterpreted here.",
     "delivery_gate": "NOT_VERIFIED",
-    "reference": "docs/implementation-state-20260915.md#2026-09-21-후속-상태"
+    "reference": "docs/implementation-state-20260915.md#2026-09-22-후속-상태"
   }
 }
