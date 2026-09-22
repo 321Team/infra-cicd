@@ -1,5 +1,7 @@
 # infra-cicd
 
+**2026-09-22 첫 실제 Runtime 종단 실행:** 중앙 수동 Workflow(`app-test-build-scan.yml`)를 main에서 실제로 실행해 Source fetch → Handoff 검증 → Build(2개 이미지) → Trivy Scan까지 **도구 오류 없이(`ERROR_CODE=NONE`) 처음으로 끝까지 도달**했다([Run 35683010080](https://github.com/321Team/infra-cicd/actions/runs/35683010080)). 결과는 `APP_WORKFLOW=BLOCK` — 실제 HIGH/CRITICAL 취약점이 발견되어 Delivery Gate가 설계대로 정상 차단한 것이며 도구 결함이 아니다. 이 실행 전 첫 시도(Run 35588577241)는 Trivy `--input`이 압축 tar를 디렉터리로 오인해 실패했고, 근본 원인 규명 후 [PR #26](https://github.com/321Team/infra-cicd/pull/26)(이재환 APPROVED, 실제 서버 재현 3건으로 검증)으로 수정·병합했다. **Runtime AC는 1/10을 유지한다** — "실행이 처음으로 끝까지 됨"과 "10개 AC 중 몇 개를 실제로 충족하는지"는 별개 판단이며, 이번 갱신에서 AC 개수를 임의로 재해석하지 않는다. 발견된 취약점 자체의 해소는 앱 저장소(fds-msa) 쪽 과제로, infra-cicd 범위 밖이다. [상세](docs/implementation-state-20260915.md#2026-09-22-후속-상태).
+
 **2026-09-21 앱 인계 승인·코드 병합 완료:** PR [#19](https://github.com/321Team/infra-cicd/pull/19)·[#21](https://github.com/321Team/infra-cicd/pull/21)·[#24](https://github.com/321Team/infra-cicd/pull/24)·[#23](https://github.com/321Team/infra-cicd/pull/23)가 이재환 독립 승인 후 이 순서로 main에 병합됐다(최종 `be8fd91`, 실제 GitHub Actions CI success 확인). `config/app-build-scan.json`은 `PENDING_APP_HANDOFF` → `APPROVED_FOR_TEST_BUILD_SCAN`으로 전환됐고 Source는 `321Team/fds-msa@ec69b67067decf35abbfed0a6a99f3073132787b`(이재환 승인, [근거](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518))다. **코드 병합·config 승인과 실제 Runtime 실행은 별개다.** Runtime AC는 이 갱신만으로 상향하지 않으며, 중앙 수동 Workflow(`app-test-build-scan.yml`) 실행 결과로만 판정한다. [상세](docs/implementation-state-20260915.md#2026-09-21-후속-상태).
 
 **2026-09-18 승인 절차 개정:** 독립 리뷰는 코드/실행 설정을 포함한 PR 병합에 한정한다. 그 밖의 실행·증적 수용·인수·종결은 해당 Lead가 결정하며, 같은 코드에 단계마다 독립 승인을 요구하지 않는다. [공통 변경결정](https://github.com/321Team/fds-project-baseline/blob/38f682141c279807050c5b1ea1b4e2b58ee22d63/governance/REVIEW_AUTHORITY_POLICY.md)과 [운영 기준](docs/governance.md)을 따른다. 아래 날짜별 상태는 당시 이력이다.
@@ -16,8 +18,8 @@ Commit부터 배포까지 추적 가능한 Delivery Pipeline을 구축하고, �
 
 - 담당: **이권욱(Lead)** / **이하영(Support·독립 기술 리뷰)** — [역할 결정 기록](https://github.com/321Team/infra-cicd/blob/081b3dd947bbf04fbafe00f15d7cfdba25f3c0d1/docs/decisions/p1-cicd-01-roles.md)
 - 티켓: **P1-CICD-01 — In Progress**
-- Runtime AC: **1/10** / Delivery Gate: **NOT_VERIFIED** (2026-09-21 코드 병합·config 승인 시점 기준, 실제 앱 Runtime 반영 전)
-- Runner·Trivy·Build·앱 공급 소비·중앙 수동 Workflow·Private Source 인증 코드가 모두 main에 병합됐다. `config/app-build-scan.json`은 승인 상태(`APPROVED_FOR_TEST_BUILD_SCAN`)다. 코드/config 준비 완료와 실제 앱 Test→Build→Scan 실행 완료는 구분한다.
+- Runtime AC: **1/10** / Delivery Gate: **NOT_VERIFIED** — 2026-09-22 실제 Runtime 첫 종단 실행(결과 BLOCK) 반영 기준. AC 개수는 이번 실행으로 재해석하지 않음
+- Runner·Trivy·Build·앱 공급 소비·중앙 수동 Workflow·Private Source 인증 코드가 모두 main에 병합됐고, 실제 Runtime이 도구 오류 없이 Scan까지 도달했다(BLOCK 판정). 이미지 취약점 해소는 fds-msa 쪽 과제다.
 
 ## 관리 범위
 

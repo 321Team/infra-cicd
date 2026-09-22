@@ -1,6 +1,6 @@
 # 현재 관측 결과와 선행조건
 
-**2026-09-21 상태 대조:** 정본은 docs-v3.1.18, v3.1.19는 수집 후보다. Runner의 Trivy DB 사전검증과 공급·base probe는 실행 증적을 확보했으며, 앱 인계 승인·코드 병합(PR #19·#21·#24·#23)도 완료됐다. 그러나 Runtime AC는 여전히 1/10이다. 앱 Test→Build→Scan 실제 실행이 남아 전체 Delivery는 NOT_VERIFIED다. [후속 상태와 근거](implementation-state-20260915.md#2026-09-21-후속-상태)를 따른다. 09-17 시점 기록은 [이력](implementation-state-20260915.md#2026-09-17-후속-상태)으로 보존한다.
+**2026-09-22 상태 대조:** 정본은 docs-v3.1.18, v3.1.19는 수집 후보다. 앱 인계 승인·코드 병합(PR #19·#21·#24·#23·#26)이 완료됐고, 실제 Runtime이 처음으로 Source fetch→Handoff→Build→Scan을 도구 오류 없이 완주했다(결과 BLOCK — 실제 취약점 발견에 따른 정상 차단). 그러나 Runtime AC는 여전히 1/10이며, BLOCK은 통과가 아니므로 전체 Delivery는 NOT_VERIFIED다. [후속 상태와 근거](implementation-state-20260915.md#2026-09-22-후속-상태)를 따른다. 09-21·09-17 시점 기록은 각각 [이력](implementation-state-20260915.md#2026-09-21-후속-상태)으로 보존한다.
 
 **2026-09-15 관측은 [실제 구성·후속 실행 기록](implementation-state-20260915.md)을 기준으로 읽는다.** 신규 Root/Leaf 발급·백업/파일 복구·공개 인계와 Runner 로컬/Idle는 확인했다. PR #2는 승인 후 병합됐고 첫 실제 Job·Harbor 서비스 전환·Delivery는 미검증이다. 아래 표는 09-09 수신 결과로 보존하며 현재 상태로 해석하지 않는다.
 
