@@ -2,6 +2,16 @@
 
 이 문서는 09-15 제출 증적과 GitHub 조회 결과를 연결한다. 실시간 상태 조회나 전체 인수 승인 기록은 아니다. 실행 증거는 [baseline #16](https://github.com/321Team/fds-project-baseline/issues/16)에 기록했다.
 
+## 2026-09-23 재점검 — 취약점 조치와 원본 증적 회수
+
+- [PR #19](https://github.com/321Team/infra-cicd/pull/19)·[#21](https://github.com/321Team/infra-cicd/pull/21)·[#24](https://github.com/321Team/infra-cicd/pull/24)·[#23](https://github.com/321Team/infra-cicd/pull/23)·[#26](https://github.com/321Team/infra-cicd/pull/26)은 병합됐다. 앱 Source/Unit 인계와 repository 정정은 config에 반영됐다. 이전 리뷰·인계 대기를 현재 차단으로 사용하지 않는다.
+- [Run35683010080 / Job106603847854](https://github.com/321Team/infra-cicd/actions/runs/35683010080/job/106603847854) 원본 로그: 2026-09-22 12:24:04~12:25:34 KST, cicd-runner01, `APP_WORKFLOW=BLOCK`, `ERROR_CODE=NONE`, exit10, Push/Deploy 미실행. 로그와 해당 실행 코드 경로 대조로 승인 Private Source 수신·인계 검사 후 Build/Scan 경로 도달을 확인했다. Token의 현재 만료·권한 전체를 입증하는 기록은 아니다.
+- [운영자 상세 보고](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5771627965)는 transaction-api의 HIGH/CRITICAL 차단과 fds-engine **NOT_SCANNED**를 명시한다. 따라서 이전 '끝까지 완주'는 첫 이미지 보안 차단 경로 도달로 한정한다. 두 이미지 Scan PASS나 전체 Delivery 완료가 아니다. CVE별 원본 report는 이번 점검에서 미회수다.
+- 두 서비스의 FastAPI0.115.5는 [상류 의존성](https://github.com/fastapi/fastapi/blob/0.115.5/pyproject.toml)상 Starlette>=0.40.0,<0.42.0을 요구한다. Starlette lock 단독 상향 대신 앱 담당이 호환되는 FastAPI/Starlette 조합·requirements·4개 환경별 lock을 검토한다. 새 base manifest/config/layer와 OCI·wheel 공급도 함께 인계해야 한다.
+- PR #18은 09-22 Lead 결정으로 미병합 종결(Superseded)됐다. 과거 공급 생산 증적은 보존하며 기존 수집기를 재활성화하지 않는다. 새 공급물의 생산 위치·승인 경로는 개선 입력에 맞춰 별도 인계한다. PR #3은 Push/Deploy 참고 설계 Draft로 유지한다.
+- [취약점 후속·증적 회수 절차](runtime-block-followup-20260923.md)에 실제 Run 기준과 담당별 입력을 고정했다. 새 수집기는 기존 report의 허용 필드만 새 파일로 모으는 일회성 Pre-check이며 보안 게이트·무결성 판정기·Delivery 실행 경로가 아니다.
+- **Runtime AC1/10 / APP_TEST_BUILD_SCAN=EXECUTED_BLOCK / Delivery NOT_VERIFIED**. AC05의 검사 오류·취약점 차단 근거는 늘었지만 실제 Deployment 이미지 불변 증적은 확보하지 못해 AC 완료로 올리지 않는다. 증적 저장소 `evidence/P1-CICD-01/`은 조회 시점 main에 없고 편입 독립 리뷰는 별도다.
+
 ## 2026-09-22 후속 상태
 
 첫 실제 Runtime 종단 실행과 그 과정에서 발견·수정한 결함을 기록한다.
