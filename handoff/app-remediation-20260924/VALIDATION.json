@@ -1,0 +1,54 @@
+{
+  "schema": "P1-CICD-config-candidate-validation-1",
+  "recorded_at": "2026-09-24T06:37:20.732500+09:00",
+  "validator_source": "321Team/infra-cicd@de6289f995da751ccfa1b343807ec1b3beb0a50c",
+  "method": "existing pure validation functions; altered inputs are in-memory validation fixtures only",
+  "checks": [
+    {
+      "check": "unchanged current config validation control",
+      "passed": true
+    },
+    {
+      "check": "pending candidate blocked before execution",
+      "expected": "APP_HANDOFF_PENDING",
+      "actual": "APP_HANDOFF_PENDING",
+      "passed": true
+    },
+    {
+      "check": "status-only change cannot activate unresolved source",
+      "expected": "APPROVED_SOURCE_SHA_REQUIRED",
+      "actual": "APPROVED_SOURCE_SHA_REQUIRED",
+      "passed": true
+    },
+    {
+      "check": "candidate SHA does not supply approval",
+      "expected": "SOURCE_APPROVER_REQUIRED",
+      "actual": "SOURCE_APPROVER_REQUIRED",
+      "passed": true
+    },
+    {
+      "check": "unconfirmed API unit scope blocked",
+      "expected": "TEST_STEP_REQUIRED",
+      "actual": "TEST_STEP_REQUIRED",
+      "passed": true
+    },
+    {
+      "check": "unconfirmed real supply path blocked",
+      "expected": "OFFLINE_DIRECTORY_INVALID",
+      "actual": "OFFLINE_DIRECTORY_INVALID",
+      "passed": true
+    }
+  ],
+  "source_reference_git_blobs": "28/28 MATCH",
+  "candidate_app_files": "17/17 Git blob MATCH",
+  "contract_test_files": "6/6 EXIST",
+  "engine_unit_file": "1/1 EXIST",
+  "dockerfile_generator_equality": "2/2 PASS",
+  "current_operational_config": "UNCHANGED",
+  "native_candidate_validation": "REJECTED_APP_HANDOFF_PENDING_AS_EXPECTED",
+  "approved_executable_candidate": "NOT_CREATED",
+  "app_test_build_scan": "NOT_RUN",
+  "supply_consumption": "NOT_RUN",
+  "independent_review": "PENDING",
+  "delivery_gate": "NOT_VERIFIED"
+}

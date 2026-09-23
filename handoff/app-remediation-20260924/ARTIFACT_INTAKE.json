@@ -1,0 +1,25 @@
+{
+  "schema": "P1-CICD-candidate-artifact-intake-1",
+  "recorded_at": "2026-09-24T06:37:20.732500+09:00",
+  "artifact_url": "https://github.com/321Team/fds-msa/actions/runs/35921580081/artifacts/10777267517",
+  "artifact_id": 10777267517,
+  "run_id": 35921580081,
+  "attempt": 1,
+  "source": "bbe349c8815ed2ade3de87a1b312221c34f4361b",
+  "expected_archive_bytes": 278490138,
+  "github_reported_archive_sha256": "22c0952ccafa9dc5d65506f821e5c125179d9bd4b7bcbfcd193dda36d5415eb8",
+  "github_reported_api_report_sha256": "621f420c0f70cca9d8c3919e39c38abe69472bd5c735303b1ebdeddeea0b2ef1",
+  "expires_at_kst": "2026-10-01T06:18:11+09:00",
+  "transfer_result": "HTTP_403",
+  "received_bytes": 0,
+  "raw_archive": "NOT_RECEIVED",
+  "receiver_checksum_verification": "NOT_PERFORMED",
+  "cve_package_fixed_version_classification": "PENDING_RAW_REPORT",
+  "job_reported_counts": {
+    "HIGH": 44,
+    "CRITICAL": 0,
+    "unique_cves": 8
+  },
+  "prior_text_evidence": "https://github.com/321Team/fds-project-evidence/tree/43f6c402959251df1c7a04ca778f6080361aeac8/evidence/P1-CICD-01/app-remediation-followup-20260924/github-hosted-run-35921580081-1",
+  "historical_base_reports_not_substituted": true
+}

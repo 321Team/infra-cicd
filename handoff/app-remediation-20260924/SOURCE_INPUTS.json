@@ -1,0 +1,121 @@
+{
+  "schema": "P1-CICD-config-candidate-inputs-1",
+  "recorded_at": "2026-09-24T06:37:20.732500+09:00",
+  "infra_base": "de6289f995da751ccfa1b343807ec1b3beb0a50c",
+  "observed_candidate_source": "bbe349c8815ed2ade3de87a1b312221c34f4361b",
+  "source_approval": "PENDING",
+  "source_files": {
+    "transaction-api/Dockerfile": {
+      "git_blob": "c9fda3af2546e32939e06b53caba18159eed0a70",
+      "size_bytes": 565,
+      "sha256": "3db57192e84073d9824c9f22af560ef2b621ac0d6e500f30fe197d3b5cc8bb95"
+    },
+    "fds-engine/Dockerfile": {
+      "git_blob": "7ed80826ace090fc137b3cd92f9590dbfdc30bae",
+      "size_bytes": 565,
+      "sha256": "c7fc7c6aa7f14e1884b01ca6d430f31cde48a4bdcb38b03db8b77631f2811fc0"
+    },
+    "transaction-api/requirements.txt": {
+      "git_blob": "ec16502f444293dc7cbadcedf1de0ac240c48b81",
+      "size_bytes": 160,
+      "sha256": "ec338dccc5714354545f807899ebc3397914dc54146fd2f57b8c6e8d85583823"
+    },
+    "transaction-api/requirements-test.txt": {
+      "git_blob": "60e163f8a8b0c1f6004c47d09c42ebadc5e17feb",
+      "size_bytes": 34,
+      "sha256": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2"
+    },
+    "transaction-api/requirements-runtime.lock": {
+      "git_blob": "77c1c83d197e5b630d96e7ae56c5ec096bb7990b",
+      "size_bytes": 2628,
+      "sha256": "9b5a3908c2c35af01a1faf5dedfa210f96a3065302d5987f254f11509ca2d913"
+    },
+    "transaction-api/requirements-test.lock": {
+      "git_blob": "6601c6a1b48ce1256b298724cedff26820b10b48",
+      "size_bytes": 3005,
+      "sha256": "ccb967c96ea09cb7fcb4d2a7a642c51c84054e5ecd963845fb6a1a14f4b0e9c8"
+    },
+    "transaction-api/tests/test_health.py": {
+      "git_blob": "0c79df7b4bf118482795002c06d24dcfea59c53b",
+      "size_bytes": 1726,
+      "sha256": "3153a1da972cae367f39462e64f16c5db3020a99ec2b316bc76cad1455b35181"
+    },
+    "transaction-api/tests/test_metrics.py": {
+      "git_blob": "c774e10e018e6dd63ae55827f7c23b646de7d8b2",
+      "size_bytes": 1849,
+      "sha256": "ec2f9ebc65e7e2f1a02844b521f4c0cda0b8785960a98cbb2b9dc43611a6e671"
+    },
+    "transaction-api/tests/test_dependency_upgrade_contract.py": {
+      "git_blob": "a89203f2d1e0e24a7cadef1a8361eaa5262308b9",
+      "size_bytes": 4294,
+      "sha256": "a46f616b4253eea53822fbc06867d341ab044d7bfcd05a6651fd97c04a637004"
+    },
+    "fds-engine/requirements.txt": {
+      "git_blob": "788b390fa24083eb6073755c8675e98a45af2209",
+      "size_bytes": 102,
+      "sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c"
+    },
+    "fds-engine/requirements-test.txt": {
+      "git_blob": "b918a15c927212297f3c2a997701629b71bd12ad",
+      "size_bytes": 48,
+      "sha256": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78"
+    },
+    "fds-engine/requirements-runtime.lock": {
+      "git_blob": "02a6f7e21e8b46382996c0ca6f907ea5c32d4c01",
+      "size_bytes": 1951,
+      "sha256": "c4270a4dbc5fc3423cdde700053bfd55e27b464014ed5145d040c1bd99c4e665"
+    },
+    "fds-engine/requirements-test.lock": {
+      "git_blob": "3178fb277a39ee50558d584bd0652d5f449e6ae2",
+      "size_bytes": 2708,
+      "sha256": "0ac2af171d81946c116017125d8695ccb38dce85740db808fd31edba07c8b9c3"
+    },
+    "fds-engine/tests/test_health.py": {
+      "git_blob": "a6ea30a579b563ae6af9d1a58755a60f605f6232",
+      "size_bytes": 1911,
+      "sha256": "42f0586736891d228b44af43b518fd0df1398c89b2cb5b1bdf921ba4e204b069"
+    },
+    "fds-engine/tests/test_metrics.py": {
+      "git_blob": "1e926aba8042eef82e34e995d6a58f48883244f9",
+      "size_bytes": 1989,
+      "sha256": "9b29663bd2e5f2417da850eb336096db2b75f91176a2f4a61f24d431ff42813c"
+    },
+    "fds-engine/tests/test_dependency_upgrade_contract.py": {
+      "git_blob": "5f9425a43559fd42dcfa359c25069ecf2e5bd7bf",
+      "size_bytes": 1207,
+      "sha256": "b4023f72bbc45b0a596b489e3ce9fdf4dc10e570f987e883bfc6771f1dd23aee"
+    },
+    "fds-engine/tests/test_rules.py": {
+      "git_blob": "a873b461f785173a5383170186ec044a0d346721",
+      "size_bytes": 4665,
+      "sha256": "0472694be6479ade8ac849ad0d038b9cd83d7b986f10993d7e3320e268dd7bd9"
+    }
+  },
+  "derived_profiles": {
+    "transaction-api-runtime": {
+      "roots_sha256": "ec338dccc5714354545f807899ebc3397914dc54146fd2f57b8c6e8d85583823",
+      "lock_sha256": "9b5a3908c2c35af01a1faf5dedfa210f96a3065302d5987f254f11509ca2d913",
+      "method": "offline_supply.validate_source roots expansion; candidate source bytes"
+    },
+    "transaction-api-test": {
+      "roots_sha256": "1b317dbe37711433c5bb0f19d191c23d97141eaa77a21c6b238dd4f93ca9ba8e",
+      "lock_sha256": "ccb967c96ea09cb7fcb4d2a7a642c51c84054e5ecd963845fb6a1a14f4b0e9c8",
+      "method": "offline_supply.validate_source roots expansion; candidate source bytes"
+    },
+    "fds-engine-runtime": {
+      "roots_sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c",
+      "lock_sha256": "c4270a4dbc5fc3423cdde700053bfd55e27b464014ed5145d040c1bd99c4e665",
+      "method": "offline_supply.validate_source roots expansion; candidate source bytes"
+    },
+    "fds-engine-test": {
+      "roots_sha256": "ed2c667809886aba216e9953d026f15a3be4d624214ac0d48739c3d7ad192c99",
+      "lock_sha256": "0ac2af171d81946c116017125d8695ccb38dce85740db808fd31edba07c8b9c3",
+      "method": "offline_supply.validate_source roots expansion; candidate source bytes"
+    }
+  },
+  "base_identity_source": "GitHub Run35921580081 Job107386743984 base-inspect/result record and candidate Dockerfiles",
+  "local_base_oci_bytes": "NOT_RECEIVED",
+  "inventory_hashes": "PENDING_ACTUAL_SUPPLY",
+  "current_config_sha256": "ea375a00811923cfb415e6c851ceed55227b5978835953eb2227b03552ab5728",
+  "scope": "SOURCE_METADATA_AND_PENDING_CONFIG_ONLY"
+}
