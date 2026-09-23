@@ -26,6 +26,7 @@
 
 새 collect나 앱 재실행 대신 원 수집 작업 폴더 `CICD_Evidence35683010080_1.*`의 아래 기존 자료만 확인한다.
 여러 폴더가 있다면 export archive hash가 위 수신 hash와 일치하는 회차를 식별한다.
+반환을 쉽게 하기 위한 [기존 collect 기록 보완 수집 도구·실행 안내](collect-record-followup-20260924.md)를 준비했다. 원 앱/collect 재실행 없이 기존3파일만 묶으며 실제 Runner 실행은 아직 NOT RUN이다.
 
 | 항목 | 확인 목적·정상 기준 |
 |---|---|
