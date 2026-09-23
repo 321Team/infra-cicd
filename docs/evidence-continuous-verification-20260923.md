@@ -8,19 +8,20 @@
 09-23 21:23:34 KST의 취약점 요약 수집·회수·hash 대조는 완료했다.
 [수신 결과](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5794924337):
 CRITICAL3/HIGH57 기록·고유CVE24. 기존 Run35683010080/Attempt1의 transaction-api는 BLOCK, fds-engine은 NOT_SCANNED다.
-이번에는 기존 app_evidence.py collect/verify 명령에 실제 Run의 외부 대조값·경로를 대입하고 반복 검증 순서를 문서화했다.
-운영 코드·Workflow·config·보안 게이트 변경은 없다. 이 문서의 명령은 아직 서버에서 실행하지 않았다.
+2026-09-24 갱신: [수신 verify 완료](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5797608952), EVIDENCE_CHECK=PASS / BINDING=COMPLETE / SOURCE_BINDING=MATCH다. [증적 Draft PR22](https://github.com/321Team/fds-project-evidence/pull/22)의 독립 리뷰·편입은 대기다.
+서버 collect 종료화면·collect.log·started/finished-at와 원 archive의 검토자 접근은 보완 대상이다. 수신 PASS를 서버 원본 payload의 수신 측 재검사 또는 취약점 해소로 확대하지 않는다.
+**이번 Run은 재수집하지 않는다.** 아래 명령은 최초 수집 절차의 보존 기록이며, 현재 후속은 [증적 인수 delta·앱/base 후보](remediation-candidates-20260924.md)를 따른다. 운영 코드·Workflow·config·보안 게이트 변경은 없다.
 
 app_evidence.py를 포함한 실행 모듈 7개의 Git blob은 실제 Run SHA7e939d7과 위 main에서 동일하다.
 이번 준비에서 해당 고정 소스의 기존 회귀시험18개를 로컬에서 통과했다.
 시험은 합성 영수증·임시 OCI/tar 바이트를 사용한 검증이며 실서버 증적 검증이 아니다.
 기존 병합/리뷰 이력은 #19/#21/#24/#26을 따르고, 이번 문서 준비를 새 독립 코드 리뷰라고 표시하지 않는다.
 
-## 1. 이번 Run: 실서버에서 1회 수집
+## 1. 보존 기록: Run35683010080/Attempt1 최초 수집 절차
 
 대상은 cicd-runner01 / server01_cicd-runner / UID1000 / Python3.11 이상이다.
 기존 Run의 checkout 및 원본 EVIDENCE_DIR가 그대로 남아 있어야 한다.
-아래 전체 블록을 해당 서버의 Bash 터미널에서 실행한다. 파일을 추가 전송할 필요는 없다.
+아래는 최초 수집 당시의 전체 블록이다. 현재 수신 회차에 다시 실행하지 않는다. 기존 작업 폴더의 로그와 시각 파일만 보완한다.
 
 기존 도구는 원본 receipt·로그·Source archive·OCI·report·DB의 연결과 바이트를 읽는다.
 앱/Podman/Trivy/Git fetch·패키지 설치·서비스 변경은 하지 않는다.
@@ -116,7 +117,7 @@ JSON
 archive는 raw 로그·Source·OCI·report·DB를 포함하지 않지만 승인 근거·시험 명령 등 JSON 메타데이터가 있으므로 공유 전에 내용을 확인한다.
 원본 report 전체는 전달하지 않는다.
 
-## 2. 수신 후 반드시 대조할 항목
+## 2. 수신 대조 기준 — 이번 회차 완료 범위는 09-24 수신 기록 참조
 
 - 서버 collect는 실제 원본 바이트를 확인하고, 수신 verify는 전송 archive 및 제출 hash 목록을 검사한다.
   수신 결과 RAW_PAYLOAD_CHECK=NOT_INCLUDED_SERVER_RECORD_ONLY는 정상적인 범위 제한이다.

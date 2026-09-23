@@ -1,6 +1,6 @@
 # P1-CICD-01 — Runtime BLOCK 후속과 취약점 수집
 
-현재 후속: 09-23 21:23:34 KST의 요약 수집·회수·hash 대조 완료([분석 기록](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5794924337)). 아래 5절의 요약 수집을 반복할 필요는 없다. 다음은 [기존 Run의 app-evidence 회수·반복 검증 절차](evidence-continuous-verification-20260923.md)다. 앱 BLOCK·Runtime AC1/10·Delivery NOT_VERIFIED는 유지한다.
+현재 후속(2026-09-24 KST): 취약점 요약과 기존 Run의 app-evidence [수신·연결 대조가 완료](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5797608952)됐다. [Draft 증적 PR22](https://github.com/321Team/fds-project-evidence/pull/22)는 독립 리뷰·편입 대기다. 기존 수집을 반복하지 않고 collect 종료 로그/시각·원 archive 검토자 접근만 보완한다. 다음 구현 입력은 [앱 호환 조합·base·새 공급물 후보](remediation-candidates-20260924.md)다. 앱 BLOCK·fds-engine NOT_SCANNED·Runtime AC1/10·Delivery NOT_VERIFIED는 유지한다.
 
 점검일 2026-09-23 KST / Lead 이권욱. 기준 main `01d8013b589c3cf2fb996ea35c9b3b7f6fcdebcc`.
 관련: [CICD #11](https://github.com/321Team/infra-cicd/issues/11), [책임 티켓 #16](https://github.com/321Team/fds-project-baseline/issues/16).
@@ -12,9 +12,9 @@
 | 앱 인계·config | APPROVED_FOR_TEST_BUILD_SCAN, 조직 Source ec69b67067decf35abbfed0a6a99f3073132787b. #19/#21/#24/#23 병합 완료 |
 | Scanner 수정 | #26 병합. OCI layout 디렉터리 입력 수정 후 실제 Run 도구 오류 해소 |
 | 원본 Actions 로그 | [Run35683010080/Attempt1/Job106603847854](https://github.com/321Team/infra-cicd/actions/runs/35683010080/job/106603847854), 09-22 12:24:04~12:25:34 KST, cicd-runner01, BLOCK/ERROR_CODE=NONE/exit10 |
-| 서비스별 상세 | [운영자 보고](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5771627965): transaction-api HIGH/CRITICAL, fds-engine NOT_SCANNED. CVE 원본 보고서는 이번 점검에서 미회수 |
+| 서비스별 상세 | 수신 영수증·요약 결합 확인: transaction-api CRITICAL3/HIGH57·고유CVE24, fds-engine NOT_SCANNED. 원본 report 바이트는 미포함 |
 | 남은 Delivery | Push/Deploy 미실행. Workflow에 아직 Push/Deploy 어댑터가 없어 배포 이미지 유지까지 실증한 것으로 해석하지 않음 |
-| AC·증적 | Runtime AC1/10·Delivery NOT_VERIFIED. evidence main의 evidence/P1-CICD-01/ 경로는 점검 시 미편입 |
+| AC·증적 | Runtime AC1/10·Delivery NOT_VERIFIED. 증적 Draft PR22 준비, main 미편입·독립 리뷰 대기 |
 
 이전 리뷰·저장소/SHA 불일치·API Unit 미인계는 해소됐다. 새로운 차단은 취약점 개선 입력과 신규 공급물이다. 기존 BLOCK을 해소하려고 동일 입력으로 재실행하거나 보안 게이트를 완화하지 않는다.
 
@@ -22,14 +22,14 @@
 
 | 담당 | 현재 필요한 작업 | 인계·검증 |
 |---|---|---|
-| 이권욱/CICD | 기존 Run의 영수증·취약점 요약 회수, 원본 hash와 Run 결합 대조 | 아래 고정 기준과 기존 app_evidence.py 사용. 요약만으로 실행 진위나 이미지 결합을 입증하지 않음 |
+| 이권욱/CICD | 기존 수신 완료. collect 로그/시각·원 archive 접근 보완과 증적 PR22 독립 검토 인계 | 새 수집 없이 원 작업 폴더 자료로 보완. 수신 raw payload는 미포함 |
 | 이재환/앱 Lead | FastAPI·Starlette 호환 조합, requirements·환경별 lock4개, base digest 후보와 변경 영향 검토 | 앱 PR 독립 리뷰·최종 승인40자리 SHA·Unit/Contract 범위, API Unit N/A 유지 시 변경 후에도 타당한지 확인 |
 | 이권욱/CICD + 공급 담당 | 승인된 위치·전송 경로에서 새 OCI/wheel 공급물 준비·인수 | 신규 공급 폴더·archive/manifest/config·roots/lock/inventory/requirements hash. 기존 공급 폴더 덮어쓰기 금지 |
 | 이권욱/CICD | 새 앱 SHA·Dockerfile·공급물에 일치하는 config PR 작성 | 운영 입력 변경이므로 독립 리뷰 필요. 확인 전 값을 추측해 채우지 않음 |
 | 해당 Lead | 재스캔 후 미패치 항목의 개별 처리 판단 | 예외가 필요하면 CVE·해당 Image Digest·사유·만료·승인자. 일괄 ignore 또는 미패치 자동 면제 금지 |
 | 이하영/HBR·K8S 연계 | 향후 Push/Deploy에 필요한 CA·Robot·기존 Deployment·RBAC·Health/E2E 인계 | 앱 보안 차단 해소와 별도 준비. 이번 작업으로 새 계정/권한·운영 배포를 수행하지 않음 |
 
-**의존성 수정 주의:** 두 앱의 승인 requirements는 FastAPI==0.115.5다. [해당 버전의 공식 pyproject.toml](https://github.com/fastapi/fastapi/blob/0.115.5/pyproject.toml)은 Starlette>=0.40.0,<0.42.0을 요구한다. 기존 보고의 수정 버전 후보로 Starlette lock만 상향하면 이 범위를 벗어난다. 앱 담당이 FastAPI와 함께 호환 조합을 선정하고 host/test 및 image/runtime lock을 재생성·검증해야 한다. 특정 새 버전이나 base digest는 아직 선정·승인하지 않았다.
+**의존성 수정 주의:** 두 앱의 승인 requirements는 FastAPI==0.115.5다. [해당 버전의 공식 pyproject.toml](https://github.com/fastapi/fastapi/blob/0.115.5/pyproject.toml)은 Starlette>=0.40.0,<0.42.0을 요구한다. 기존 보고의 수정 버전 후보로 Starlette lock만 상향하면 이 범위를 벗어난다. 앱 담당이 FastAPI와 함께 호환 조합을 선정하고 host/test 및 image/runtime lock을 재생성·검증해야 한다. [09-24 문서](remediation-candidates-20260924.md)에 격리 시험 후보를 제시했다. 최종 앱 버전·base digest·운영 입력 승인은 미완료다.
 
 PR #18은 [09-22 Lead 종결](https://github.com/321Team/infra-cicd/pull/18#issuecomment-5772479406) 상태다. 기존 공급 생산 증적과 소비 코드를 보존하되 종결된 다운로드 경로를 자동 재활성화하지 않는다. 새 공급물 생산 위치·방식은 앱 개선 입력에 맞춰 인계한다.
 
@@ -58,9 +58,9 @@ PR #18은 [09-22 Lead 종결](https://github.com/321Team/infra-cicd/pull/18#issu
 
 [중앙 정책 §3.2](https://github.com/321Team/fds-project-baseline/blob/22f369cc0165244828e3fadebf13eaad02609d70/governance/REVIEW_AUTHORITY_POLICY.md)에 따른 **정보 수집용 Pre-check**다. 보안 게이트/무결성 검사기를 변경하거나 대체하지 않으며 기존 app_evidence.py와 scan_images.py는 그대로다. 새 단위시험은 기존 GitHub-hosted 소스 CI가 발견하도록 tools/delivery에 둔다. 운영 Workflow는 이 수집기를 호출하지 않는다.
 
-Lead 자체 코드 점검 기준: 기존 report 읽기·실행자 작업 경로의 새 요약 작성만 수행, 지속 설치 없음, 기존 Runner 계정·권한만 사용, 새 자격증명 없음, 부하/장애 주입 없음. 이 범위의 운영 서버 1회 실행은 순수 수집기로 판단한다. 실제 실행 SHA·계정·KST 시각·출력 경로는 실행 시 기록한다. **REVIEW=NOT PERFORMED (Pre-check)**이며 요약 수집은 09-23 21:23:34 KST에 COLLECTED, 수신 파일 hash 대조도 완료했다. app-evidence의 원본 연결 검증은 아직 NOT RUN이다. Delivery 경로에 편입하면 일반 독립 코드 리뷰로 돌아간다.
+Lead 자체 코드 점검 기준: 기존 report 읽기·실행자 작업 경로의 새 요약 작성만 수행, 지속 설치 없음, 기존 Runner 계정·권한만 사용, 새 자격증명 없음, 부하/장애 주입 없음. 이 범위의 운영 서버 1회 실행은 순수 수집기로 판단한다. 실제 실행 SHA·계정·KST 시각·출력 경로는 실행 시 기록한다. **REVIEW=NOT PERFORMED (Pre-check)**이며 요약 수집은 09-23 21:23:34 KST에 COLLECTED, 수신 파일 hash 대조도 완료했다. app-evidence 수신 verify·Run/Source/Image/report hash 연결 대조는 09-24 완료했으며 서버 collect 종료 로그/시각은 미수신이다. Delivery 경로에 편입하면 일반 독립 코드 리뷰로 돌아간다.
 
-## 5. 서버 실행 안내
+## 5. 보존 기록: 최초 취약점 요약 수집 안내 — 현재 회차 재실행 불필요
 
 환경: cicd-runner01, server01_cicd-runner, UID1000, Python3.11 이상. 병합된 수집기를 해당 계정 홈에 `summarize_trivy_findings_20260923.py`로 전송한다. 현재 소스 SHA256은 `b69db60bb5e87dac33cd33d50e022b01adbcf6dc468ed4f6c44182efc4139758`다. 다른 버전은 이 hash로 실행하지 않는다.
 
@@ -85,4 +85,4 @@ Lead 자체 코드 점검 기준: 기존 report 읽기·실행자 작업 경로�
 
 실패: exit1/INPUT_OR_OUTPUT_ERROR이면 중단한다. 잘못된 입력·버전·이미지·새 Run으로 임의 대체하거나 report를 수정하지 않는다. 기존 결과가 있어 실패했다면 다른 새 출력 이름을 명시한다. 정상 출력 후 원본 report의 hash는 영수증 및 app_evidence 제출 기록과 별도로 대조한다. 임시 요약은 보존해도 서비스에 영향이 없으므로 자동 삭제·복구 명령을 두지 않는다.
 
-회신: `cicd-findings-35683010080-1.json`, 그 SHA256, 실제 실행 시각. 기존 app-evidence archive와 sidecar도 수신한 뒤 원본 결합을 확인하고 `fds-project-evidence/evidence/P1-CICD-01/` 편입 PR로 이어간다. 독립 리뷰 전 편입 완료나 Runtime AC 상향을 선언하지 않는다.
+회신: `cicd-findings-35683010080-1.json`, 그 SHA256, 실제 실행 시각. 기존 app-evidence archive와 sidecar는 수신·연결 대조가 완료됐으며 편입 초안은 PR22다. 남은 collect 기록·접근 보완은 09-24 후속 문서를 따른다. 독립 리뷰 전 편입 완료나 Runtime AC 상향을 선언하지 않는다.
