@@ -1,6 +1,8 @@
 # 수집한 공급물을 실제 Test·Build·Scan에 연결
 
-후속 현황: 제출된 2026-09-17 11:41 KST probe에서 repository@digest 조회·최소 base Build는 Runtime PASS다([Issue11](https://github.com/321Team/infra-cicd/issues/11)). [중앙 수동 Workflow·고정 SHA Git 인수·최종 앱 인계 검사](app-workflow.md)를 추가 준비했다. 아래 최초 준비 시점의 미실행 설명은 이 현황과 구분하며, 실제 앱 실행은 계속 미완료다.
+현재 현황(2026-09-24 KST): 공급 probe와 실제 앱 Test/Build·첫 이미지 Scan 실행은 완료됐고 transaction-api는 취약점 BLOCK, fds-engine은 NOT_SCANNED다. app-evidence 수신 검증 완료·[증적 PR22](https://github.com/321Team/fds-project-evidence/pull/22) 독립 리뷰 대기이며 Runtime AC1/10·Delivery NOT_VERIFIED를 유지한다. [최신 후속·후보·인계 조건](remediation-candidates-20260924.md)을 따른다.
+
+이하 내용은 09-17 최초 구현 당시의 기록이다. 당시 `PENDING_APP_HANDOFF`, Source/Unit null, 실제 앱 미실행·리뷰 대기 설명을 현재 상태로 사용하지 않는다. 현재 config는 승인 Source `ec69b67067decf35abbfed0a6a99f3073132787b`다. PR18 다운로드 경로는 09-22 종결됐고 기존 공급물 소비 코드는 유지된다.
 
 2026-09-17 사용자 “권장안으로 착수”를 반영한다. 공급 Runtime은 [Issue11](https://github.com/321Team/infra-cicd/issues/11)에 제출된 증적 기준 PASS다. 이번 변경은 소비 실행기와 독립된 base 조회·빌드 시험을 추가한다. 실제 앱 Test→Build→Scan은 미실행이며 최종 앱 SHA/승인과 독립 코드 리뷰가 남아 있다.
 
