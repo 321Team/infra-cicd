@@ -4,7 +4,7 @@
 
 ## 현재 준비와 실행 조건
 
-`.github/workflows/app-test-build-scan.yml`과 `tools/delivery/app_workflow.py`를 준비했다. **기본 config는 여전히 PENDING_APP_HANDOFF**이며, 승인 Source·승인자·근거·API Unit 범위를 임의로 채우지 않았다. PR 작성/수정으로 내부 Runner의 이 Workflow를 실행하지 않는다. 독립 리뷰와 main 병합, 최종 앱 인계가 끝난 뒤 main의 수동 실행을 사용한다.
+**2026-09-23 현재:** 중앙 Workflow·인증·오프라인 소비와 최종 인계 config는 독립 리뷰 후 main에 병합됐다. config는 `APPROVED_FOR_TEST_BUILD_SCAN`, Source는 `321Team/fds-msa@ec69b67067decf35abbfed0a6a99f3073132787b`다. transaction-api Unit은 앱 Lead가 사유와 근거를 남긴 `NOT_APPLICABLE`이다. [09-22 실제 Run](https://github.com/321Team/infra-cicd/actions/runs/35683010080)은 BLOCK이며 후속은 [취약점 조치·증적 회수](runtime-block-followup-20260923.md)다. PR 작성/수정으로 내부 Runner의 앱 Workflow를 자동 실행하지 않는다.
 
 중앙 Workflow는 dispatch 입력으로 Source나 명령을 받지 않는다. 실행 시점 main Commit에 있는 config만 읽으며, Repository/main/workflow_dispatch/Runner host·user·UID/checkout HEAD를 기존 실행기 기준으로 확인한다. `GITHUB_WORKFLOW_REF`도 이 Workflow의 main 경로여야 하고 `GITHUB_WORKFLOW_SHA`와 `GITHUB_SHA`가 같아야 한다. config 원본 바이트를 해당 Commit의 Git 객체와 대조한다. 이 검사는 **사람의 독립 리뷰나 승인 진위를 자동 인증하지 않는다**. 최종 config 변경도 포함한 최신 HEAD의 검토가 필요하다.
 
@@ -12,14 +12,14 @@
 
 허용 Source는 기존 `supreme33-kr/fds-msa`의 익명 HTTPS 읽기와 이관된 Private `321Team/fds-msa`의 제한된 인증 읽기 두 경로다. config의 repository가 경로를 선택한다. 두 경로 모두 고정 GitHub URL의 승인40자리 SHA만 수신하며 다른 저장소·branch/tag·입력 URL을 받지 않는다. API 연결 권한을 실제 Runner의 Git 접근 성공으로 간주하지 않는다.
 
-현재 config는 기존 저장소/PENDING_APP_HANDOFF를 유지한다. 조직 Source 채택은 최종 앱 인계와 검토한 config 변경으로 수행한다. Private 경로의 자격증명 주입·최소 권한·실패 처리·증적 범위는 [Private Source 수신](private-app-source.md)을 따른다. infra-cicd의 기본 GITHUB_TOKEN을 다른 Private 저장소 권한으로 가정하지 않는다. Secret의 실제 등록·유효 권한·Runner 접근 성공은 아직 확인하지 않았다.
+현재 config는 앱 Lead의 [저장소 정정·승인](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518)을 반영한 조직 Source를 사용한다. Private 경로의 자격증명 주입·최소 권한·실패 처리·증적 범위는 [Private Source 수신](private-app-source.md)을 따른다. infra-cicd의 기본 GITHUB_TOKEN을 다른 Private 저장소 권한으로 가정하지 않는다. Secret 등록은 09-18 확인했고, 09-22 실행 로그와 코드 경로에서 Private 수신 후 Build/Scan 진입을 확인했다. 현재 권한·만료 전체나 다음 실행의 성공을 이 기록으로 보장하지 않는다.
 
 근거: [actions/checkout 고정 버전의 교차 저장소 인증 설명](https://github.com/actions/checkout/blob/d23441a48e516b6c34aea4fa41551a30e30af803/README.md#checkout-multiple-repos-private), [GitHub Token 최소 권한](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token).
 
 ## 실행 순서와 보존
 
 1. `cicd-app-<Run>-<Attempt>`가 없는지 검사하고 새 경로에 CICD Workflow Commit을 checkout한다. 기존 경로가 있으면 중단한다. 고정 actions/checkout 버전, `persist-credentials:false`, `clean:false`, `set-safe-directory:false`, submodule/LFS 비활성화를 사용한다. 다른 checkout·HOME·전역 Git 설정을 정리하지 않는다.
-2. config 완결성을 확인한다. **현재 PENDING 설정은 앱 fetch 전에 중단**한다. CLI에서 실행 입력 경로나 사전 Source를 덮어쓸 수 없다.
+2. config 완결성을 확인한다. PENDING 또는 불완전한 설정은 앱 fetch 전에 중단한다. 현재 승인 config의 변경에는 새 인계·검토가 필요하다. CLI에서 실행 입력 경로나 사전 Source를 덮어쓸 수 없다.
 3. 기존 Runner HOME의 소유자·0700과 최소 여유4GiB를 확인한다. `FDS_CICD_AppWorkflow.lock`으로 이 도구의 중복 실행을 막고, 새 `FDS_CICD_AppWorkflow.*` 디렉터리를 만든다. 기존 파일/권한은 바꾸지 않는다. 이 lock과 Workflow concurrency는 다른 종류의 Job이나 수동 작업까지 예약하는 장치가 아니다. 4GiB는 시작 하한이며 실행 중 디스크 고갈 방지는 아니다.
 4. 새 bare Git 저장소에 `--depth=1 --no-tags`로 승인40자리 SHA만 fetch한다. 실제 FETCH_HEAD의 Commit을 대조하고 HEAD를 고정한다. worktree checkout·앱 import·필터·hook·submodule/LFS를 실행하지 않는다. 빈 Git template, 새 HOME, system/global Git config 비활성화, credential helper 초기화, TLS 검증, redirect 차단을 사용한다. 상속된 GitHub Token·askpass·GIT_CONFIG override를 버리고 기존 proxy 경로만 보존한다. Private 경로에서는 전용 읽기 Token을 고정 URL의 fetch 자식 프로세스에만 전달한다. fetch 제한300초이며 인증 실패를 다른 경로로 우회하지 않는다.
 5. Git Commit 객체에서 전체 tree의 link/submodule/잘못된 경로/기존 `.venv`를 거부한다. Dockerfile2개의 인계 후보 바이트, lock4개의 공급 hash, 기존 requirements4개의 hash, 시험 cwd를 대조한다. Source의 dirty/untracked 내용은 사용하지 않는다. Dockerfile 주석만 바꾼 경우도 현재 중앙 인계의 정확한 후보 대조에서 실패한다. 이는 이 구현이 지원하는 인계 형식이며 새 업무 AC를 뜻하지 않는다.
