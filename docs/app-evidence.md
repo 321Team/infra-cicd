@@ -66,3 +66,9 @@ python3 -B tools/delivery/app_evidence.py verify \
 ## 검증 범위
 
 합성 실행 영수증과 실제 임시 파일/OCI/tar 바이트로 회수·수신 왕복, 정상/첫 번째·두 번째 BLOCK/초기 FAIL, 외부 기준 불일치, 하위 hash·Source·로그·이미지·DB·보고서 변조, symlink·경로 이탈, Unit 누락, 기존 출력 보존, 원래 DB 만료시각, 연결되지 않은 archive 내용을 시험한다. 이 시험은 실제 앱 Runtime 또는 원본 없는 수신 archive의 실행 진위를 보장하지 않는다.
+
+## 고정 Run 실행과 반복 검증
+
+[Run35683010080/Attempt1의 실제 경로·외부 기준·실행 명령 및 이후 반복 절차](evidence-continuous-verification-20260923.md)를 사용한다.
+취약점 요약 회수는 완료됐지만 app-evidence 원본 연결 검증은 별도다.
+GitHub 변경 조회는 읽기 전용으로 수행하고, 서버 collect는 새 Run 또는 진단상 필요한 경우 1회 실행한다.
