@@ -1,5 +1,7 @@
 # P1-CICD-01 — Runtime BLOCK 후속과 취약점 수집
 
+현재 후속: 09-23 21:23:34 KST의 요약 수집·회수·hash 대조 완료([분석 기록](https://github.com/321Team/infra-cicd/issues/11#issuecomment-5794924337)). 아래 5절의 요약 수집을 반복할 필요는 없다. 다음은 [기존 Run의 app-evidence 회수·반복 검증 절차](evidence-continuous-verification-20260923.md)다. 앱 BLOCK·Runtime AC1/10·Delivery NOT_VERIFIED는 유지한다.
+
 점검일 2026-09-23 KST / Lead 이권욱. 기준 main `01d8013b589c3cf2fb996ea35c9b3b7f6fcdebcc`.
 관련: [CICD #11](https://github.com/321Team/infra-cicd/issues/11), [책임 티켓 #16](https://github.com/321Team/fds-project-baseline/issues/16).
 
@@ -56,7 +58,7 @@ PR #18은 [09-22 Lead 종결](https://github.com/321Team/infra-cicd/pull/18#issu
 
 [중앙 정책 §3.2](https://github.com/321Team/fds-project-baseline/blob/22f369cc0165244828e3fadebf13eaad02609d70/governance/REVIEW_AUTHORITY_POLICY.md)에 따른 **정보 수집용 Pre-check**다. 보안 게이트/무결성 검사기를 변경하거나 대체하지 않으며 기존 app_evidence.py와 scan_images.py는 그대로다. 새 단위시험은 기존 GitHub-hosted 소스 CI가 발견하도록 tools/delivery에 둔다. 운영 Workflow는 이 수집기를 호출하지 않는다.
 
-Lead 자체 코드 점검 기준: 기존 report 읽기·실행자 작업 경로의 새 요약 작성만 수행, 지속 설치 없음, 기존 Runner 계정·권한만 사용, 새 자격증명 없음, 부하/장애 주입 없음. 이 범위의 운영 서버 1회 실행은 순수 수집기로 판단한다. 실제 실행 SHA·계정·KST 시각·출력 경로는 실행 시 기록한다. **REVIEW=NOT PERFORMED (Pre-check)**이며 실제 서버 수집은 아직 NOT RUN이다. Delivery 경로에 편입하면 일반 독립 코드 리뷰로 돌아간다.
+Lead 자체 코드 점검 기준: 기존 report 읽기·실행자 작업 경로의 새 요약 작성만 수행, 지속 설치 없음, 기존 Runner 계정·권한만 사용, 새 자격증명 없음, 부하/장애 주입 없음. 이 범위의 운영 서버 1회 실행은 순수 수집기로 판단한다. 실제 실행 SHA·계정·KST 시각·출력 경로는 실행 시 기록한다. **REVIEW=NOT PERFORMED (Pre-check)**이며 요약 수집은 09-23 21:23:34 KST에 COLLECTED, 수신 파일 hash 대조도 완료했다. app-evidence의 원본 연결 검증은 아직 NOT RUN이다. Delivery 경로에 편입하면 일반 독립 코드 리뷰로 돌아간다.
 
 ## 5. 서버 실행 안내
 
