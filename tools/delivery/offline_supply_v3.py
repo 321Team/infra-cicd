@@ -1,13 +1,16 @@
 """Fail-closed offline supply for DEC-P1-IMG-01 Wolfi/apko two-stage builds.
 
-Schema v3 keeps builder/runtime OCI archives distinct and never downloads or
-rewrites application inputs. Archive hashes bind bytes; manifest/config/diff
-IDs bind each loaded local image. None of these identities proves Harbor Push
+Schema v3 keeps builder/runtime apko Docker-loadable archives distinct and never
+downloads or rewrites application inputs. Archive/config/layer identities bind
+each loaded local image. None of these identities proves Harbor Push
 or Kubernetes deployment.
 """
+import gzip
+import hashlib
 import json
 from pathlib import Path
 import re
+import tarfile
 
 import offline_supply as legacy
 
@@ -24,8 +27,140 @@ HEX = legacy.HEX
 LIMIT = legacy.LIMIT
 require = legacy.require
 sha256 = legacy.sha256
-inspect_archive = legacy.inspect_archive
 unique_object = legacy.unique_object
+IDENTITY_FIELDS = (
+    'format', 'archive_sha256', 'manifest_json_sha256', 'index_json_sha256',
+    'config_digest', 'diff_ids', 'layer_count', 'repo_tag', 'platform',
+)
+
+
+def _hash_stream(stream):
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+def inspect_supply_archive(path):
+    """Validate the Docker save/load archive emitted by pinned apko v1.4.4.
+
+    The archive is not an OCI image-layout tar. It contains manifest.json,
+    index.json, a config object named by digest, and compressed layer members.
+    """
+    legacy.plain_path(path)
+    before = sha256(path)
+    with tarfile.open(path, 'r:*') as archive:
+        entries = {}
+        total = 0
+        for item in archive:
+            name = item.name.rstrip('/') if item.isdir() else item.name
+            require(len(entries) < 4096 and name not in entries,
+                    'DOCKER_ARCHIVE_DUPLICATE_OR_TOO_MANY_MEMBERS')
+            require(item.isfile(), 'DOCKER_ARCHIVE_LINK_DIRECTORY_OR_SPECIAL_FILE')
+            require(name in ('manifest.json', 'index.json')
+                    or re.fullmatch(r'sha256:[0-9a-f]{64}', name)
+                    or re.fullmatch(r'[0-9a-f]{64}\.tar(?:\.gz)?', name),
+                    'DOCKER_ARCHIVE_MEMBER_INVALID')
+            total += item.size
+            require(total <= LIMIT, 'DOCKER_ARCHIVE_TOO_LARGE')
+            entries[name] = item
+
+        def raw(name, maximum=4 * 1024 * 1024):
+            member = entries.get(name)
+            require(member is not None and member.size <= maximum,
+                    'DOCKER_ARCHIVE_MEMBER_MISSING_OR_TOO_LARGE')
+            with archive.extractfile(member) as stream:
+                require(stream is not None, 'DOCKER_ARCHIVE_MEMBER_READ_FAILED')
+                return stream.read()
+
+        manifest_raw = raw('manifest.json')
+        manifest = json.loads(manifest_raw, object_pairs_hook=unique_object)
+        require(isinstance(manifest, list) and len(manifest) == 1
+                and isinstance(manifest[0], dict), 'DOCKER_ARCHIVE_SINGLE_IMAGE_REQUIRED')
+        row = manifest[0]
+        require(set(row) == {'Config', 'RepoTags', 'Layers'}, 'DOCKER_ARCHIVE_MANIFEST_FIELDS')
+        config_name, repo_tags, layers = row['Config'], row['RepoTags'], row['Layers']
+        require(isinstance(config_name, str) and config_name in entries,
+                'DOCKER_ARCHIVE_CONFIG_MISSING')
+        require(isinstance(repo_tags, list) and len(repo_tags) == 1
+                and isinstance(repo_tags[0], str) and repo_tags[0]
+                and len(repo_tags[0]) <= 512 and not any(ord(ch) < 32 for ch in repo_tags[0]),
+                'DOCKER_ARCHIVE_REPOTAG_INVALID')
+        require(isinstance(layers, list) and 0 < len(layers) <= 128
+                and all(isinstance(name, str)
+                        and re.fullmatch(r'[0-9a-f]{64}\.tar(?:\.gz)?', name)
+                        and name in entries for name in layers),
+                'DOCKER_ARCHIVE_LAYERS_INVALID')
+
+        config_raw = raw(config_name)
+        config_digest = 'sha256:' + hashlib.sha256(config_raw).hexdigest()
+        require(config_name in (config_digest, config_digest[7:] + '.json'),
+                'DOCKER_ARCHIVE_CONFIG_DIGEST_MISMATCH')
+        config = json.loads(config_raw, object_pairs_hook=unique_object)
+        require(isinstance(config, dict) and config.get('os') == 'linux'
+                and config.get('architecture') == 'amd64',
+                'DOCKER_ARCHIVE_PLATFORM_UNSUPPORTED')
+        rootfs = config.get('rootfs', {})
+        diff_ids = rootfs.get('diff_ids') if isinstance(rootfs, dict) else None
+        require(rootfs.get('type') == 'layers' and isinstance(diff_ids, list)
+                and len(diff_ids) == len(layers)
+                and all(isinstance(value, str)
+                        and re.fullmatch(r'sha256:[0-9a-f]{64}', value) for value in diff_ids),
+                'DOCKER_ARCHIVE_DIFF_IDS_INVALID')
+
+        for name, diff_id in zip(layers, diff_ids):
+            member = entries[name]
+            require(member.size <= LIMIT, 'DOCKER_ARCHIVE_LAYER_TOO_LARGE')
+            with archive.extractfile(member) as stream:
+                require(stream is not None, 'DOCKER_ARCHIVE_LAYER_READ_FAILED')
+                if name.endswith('.gz'):
+                    with gzip.GzipFile(fileobj=stream, mode='rb') as unpacked:
+                        actual = _hash_stream(unpacked)
+                else:
+                    actual = _hash_stream(stream)
+            require('sha256:' + actual == diff_id, 'DOCKER_ARCHIVE_DIFF_ID_MISMATCH')
+
+        index_raw = raw('index.json')
+        index = json.loads(index_raw, object_pairs_hook=unique_object)
+        require(isinstance(index, dict), 'DOCKER_ARCHIVE_INDEX_INVALID')
+
+    require(sha256(path) == before, 'DOCKER_ARCHIVE_CHANGED')
+    return {
+        'format': 'docker-archive',
+        'archive_sha256': before,
+        'manifest_json_sha256': hashlib.sha256(manifest_raw).hexdigest(),
+        'index_json_sha256': hashlib.sha256(index_raw).hexdigest(),
+        'config_digest': config_digest,
+        'diff_ids': diff_ids,
+        'layer_count': len(layers),
+        'repo_tag': repo_tags[0],
+        'platform': 'linux/amd64',
+    }
+
+
+def _validate_identity(image):
+    require(isinstance(image, dict) and set(image) == set(IDENTITY_FIELDS),
+            'OFFLINE_V3_IMAGE_FIELDS')
+    require(image.get('format') == 'docker-archive'
+            and isinstance(image.get('archive_sha256'), str)
+            and re.fullmatch(HEX, image['archive_sha256'])
+            and isinstance(image.get('manifest_json_sha256'), str)
+            and re.fullmatch(HEX, image['manifest_json_sha256'])
+            and isinstance(image.get('index_json_sha256'), str)
+            and re.fullmatch(HEX, image['index_json_sha256'])
+            and isinstance(image.get('config_digest'), str)
+            and re.fullmatch('sha256:' + HEX, image['config_digest'])
+            and isinstance(image.get('diff_ids'), list)
+            and 0 < len(image['diff_ids']) <= 128
+            and all(isinstance(value, str)
+                    and re.fullmatch('sha256:' + HEX, value) for value in image['diff_ids'])
+            and type(image.get('layer_count')) is int
+            and image['layer_count'] == len(image['diff_ids'])
+            and isinstance(image.get('repo_tag'), str) and image['repo_tag']
+            and len(image['repo_tag']) <= 512
+            and not any(ord(ch) < 32 for ch in image['repo_tag'])
+            and image.get('platform') == 'linux/amd64',
+            'OFFLINE_IDENTITY_REQUIRED')
 
 
 def validate_record(record):
@@ -39,13 +174,7 @@ def validate_record(record):
     images = record['images']
     require(isinstance(images, dict) and set(images) == set(ROLES), 'OFFLINE_V3_EXACT_TWO_IMAGES')
     for image in images.values():
-        require(isinstance(image, dict) and set(image) == {
-            'archive_sha256', 'manifest_digest', 'config_digest'}, 'OFFLINE_V3_IMAGE_FIELDS')
-        require(isinstance(image['archive_sha256'], str) and re.fullmatch(HEX, image['archive_sha256']),
-                'OFFLINE_IDENTITY_REQUIRED')
-        for key in ('manifest_digest', 'config_digest'):
-            require(isinstance(image[key], str) and re.fullmatch('sha256:' + HEX, image[key]),
-                    'OFFLINE_IDENTITY_REQUIRED')
+        _validate_identity(image)
     require(isinstance(record['profiles'], dict) and set(record['profiles']) == set(PROFILES),
             'OFFLINE_EXACT_FOUR_PROFILES')
     for profile in record['profiles'].values():
@@ -66,9 +195,7 @@ def validate_record(record):
 
 
 def _identity_matches(actual, expected):
-    return (actual['archive_sha256'] == expected['archive_sha256']
-            and actual['manifest_digest'] == expected['manifest_digest']
-            and actual['config_digest'] == expected['config_digest'])
+    return actual == expected
 
 
 def stage(record, target):
@@ -84,7 +211,7 @@ def stage(record, target):
         total += legacy.copy_checked(source / filename, target / filename,
                                      expected['archive_sha256'], LIMIT)
         require(total <= LIMIT, 'SUPPLY_TOTAL_SIZE_LIMIT')
-        identity = inspect_archive(target / filename)
+        identity = inspect_supply_archive(target / filename)
         require(_identity_matches(identity, expected), 'SUPPLY_IMAGE_IDENTITY_MISMATCH:' + role)
         identities[role] = identity
     for name in PROFILES:
@@ -114,7 +241,7 @@ def verify_staged(target, record):
         path = target / (role + '.oci.tar')
         legacy.plain_path(path)
         require(sha256(path) == expected['archive_sha256'], 'STAGED_IMAGE_CHANGED:' + role)
-        require(_identity_matches(inspect_archive(path), expected),
+        require(_identity_matches(inspect_supply_archive(path), expected),
                 'STAGED_IMAGE_IDENTITY_CHANGED:' + role)
     for name in PROFILES:
         folder = target / name
@@ -183,7 +310,7 @@ def validate_source(root, config, staged):
 
 
 def _local_reference(role, identity):
-    return 'localhost/fds-apko-' + role + ':cicd-offline-' + identity['manifest_digest'][7:23]
+    return 'localhost/fds-apko-' + role + ':cicd-offline-' + identity['config_digest'][7:23]
 
 
 def import_images(command, podman, record, staged):
@@ -191,7 +318,7 @@ def import_images(command, podman, record, staged):
     for role in ROLES:
         expected = record['images'][role]
         archive = staged / (role + '.oci.tar')
-        identity = inspect_archive(archive)
+        identity = inspect_supply_archive(archive)
         require(_identity_matches(identity, expected), 'STAGED_IMAGE_CHANGED:' + role)
         command('offline-' + role + '-load',
                 podman + ['load', '--input', str(archive)], timeout=600)
