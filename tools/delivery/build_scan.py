@@ -25,6 +25,7 @@ from prepare_db import (PreflightError, require, runtime_context,  # noqa: E402
 from scan_images import SERVICES, scan_pair  # noqa: E402
 from verify_runner import sha256  # noqa: E402
 import offline_supply as offline  # noqa: E402
+import offline_supply_v3 as offline_v3  # noqa: E402
 
 CONFIG = 'config/app-build-scan.json'
 PODMAN = '/usr/bin/podman'
@@ -77,9 +78,10 @@ def validate_unit(value):
 
 def validate_config(data):
     require(isinstance(data, dict) and data.get('schema') in
-            ('P1-CICD-app-build-scan-1', 'P1-CICD-app-build-scan-2'),
-            'INPUT_SCHEMA_INVALID')
-    supplied = data['schema'] == 'P1-CICD-app-build-scan-2'
+            ('P1-CICD-app-build-scan-1', 'P1-CICD-app-build-scan-2',
+             'P1-CICD-app-build-scan-3'), 'INPUT_SCHEMA_INVALID')
+    schema = data['schema']
+    supplied = schema in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3')
     fields = {'schema', 'status', 'source', 'services'} | ({'offline_supply'} if supplied else set())
     require(set(data) == fields, 'INPUT_FIELDS_INVALID')
     require(data.get('status') == 'APPROVED_FOR_TEST_BUILD_SCAN', 'APP_HANDOFF_PENDING')
@@ -96,16 +98,20 @@ def validate_config(data):
     require(isinstance(reference, str) and re.fullmatch(r'https://github\.com/[^\s]+', reference),
             'SOURCE_APPROVAL_REFERENCE_REQUIRED')
     services = data.get('services')
-    require(isinstance(services, dict) and set(services) == set(SERVICES), 'EXACT_TWO_SERVICES_REQUIRED')
+    require(isinstance(services, dict) and set(services) == set(SERVICES),
+            'EXACT_TWO_SERVICES_REQUIRED')
     for name in SERVICES:
         service = services[name]
-        require(isinstance(service, dict) and set(service) ==
-                {'context', 'dockerfile', 'base_image', 'setup', 'unit', 'contract'},
+        service_fields = ({'context', 'dockerfile', 'setup', 'unit', 'contract'}
+                          if schema == 'P1-CICD-app-build-scan-3' else
+                          {'context', 'dockerfile', 'base_image', 'setup', 'unit', 'contract'})
+        require(isinstance(service, dict) and set(service) == service_fields,
                 'SERVICE_INPUT_INVALID')
         relative(service['context'])
         relative(service['dockerfile'])
-        require(isinstance(service['base_image'], str) and re.fullmatch(BASE, service['base_image']),
-                'BASE_IMAGE_DIGEST_REQUIRED')
+        if schema != 'P1-CICD-app-build-scan-3':
+            require(isinstance(service['base_image'], str) and re.fullmatch(BASE, service['base_image']),
+                    'BASE_IMAGE_DIGEST_REQUIRED')
         require(isinstance(service['setup'], list) and len(service['setup']) <= 20,
                 'SETUP_STEPS_INVALID')
         validate_unit(service['unit'])
@@ -113,14 +119,29 @@ def validate_config(data):
             test_step(step)
     require(any(not unit_not_applicable(services[name]['unit']) for name in SERVICES),
             'UNIT_PHASE_REQUIRED')
-    if supplied:
+    if schema == 'P1-CICD-app-build-scan-2':
         offline.validate_record(data['offline_supply'])
         bases = {service['base_image'] for service in services.values()}
-        require(len(bases) == 1 and next(iter(bases)).endswith('@' + data['offline_supply']['manifest_digest']),
+        require(len(bases) == 1
+                and next(iter(bases)).endswith('@' + data['offline_supply']['manifest_digest']),
                 'OFFLINE_BASE_BINDING')
-        require(all(service['setup'] == [] for service in services.values()), 'OFFLINE_SETUP_MUST_BE_GENERATED')
+        require(all(service['setup'] == [] for service in services.values()),
+                'OFFLINE_SETUP_MUST_BE_GENERATED')
+    elif schema == 'P1-CICD-app-build-scan-3':
+        offline_v3.validate_record(data['offline_supply'])
+        require(all(service['setup'] == [] for service in services.values()),
+                'OFFLINE_SETUP_MUST_BE_GENERATED')
     return data
 
+
+def offline_module(config):
+    return offline_v3 if config['schema'] == 'P1-CICD-app-build-scan-3' else offline
+
+
+def offline_dockerfile(config, name):
+    if config['schema'] == 'P1-CICD-app-build-scan-3':
+        return offline_v3.dockerfile(name)
+    return offline.dockerfile(name, config['services'][name]['base_image'])
 
 def run_command(argv, cwd, env, output, timeout):
     """No shell interpolation; raw output stays in a private file.
@@ -172,23 +193,26 @@ def unpack_source(archive_path, target):
 
 
 def validate_source_files(root, config):
-    for service in config['services'].values():
+    for name, service in config['services'].items():
         require((root / service['context']).is_dir(), 'BUILD_CONTEXT_MISSING')
         dockerfile = root / service['dockerfile']
         require(dockerfile.is_file() and dockerfile.stat().st_size <= 1024 * 1024,
                 'DOCKERFILE_MISSING_OR_TOO_LARGE')
-        # Supported profile: one literal, pinned FROM. No silent Dockerfile rewrite.
-        lines = [line.strip() for line in dockerfile.read_text().splitlines()]
-        from_lines = [line for line in lines if re.match(r'(?i)^FROM(?:\s|$)', line)]
-        require(len(from_lines) == 1 and
-                re.fullmatch(r'(?i:FROM)\s+' + re.escape(service['base_image']), from_lines[0]),
-                'DOCKERFILE_BASE_NOT_PINNED_OR_UNSUPPORTED')
+        if config['schema'] == 'P1-CICD-app-build-scan-3':
+            require(dockerfile.read_bytes() == offline_v3.dockerfile(name).encode(),
+                    'DOCKERFILE_TWO_STAGE_PROFILE_REQUIRED')
+        else:
+            # Supported legacy profile: one literal, pinned FROM. No silent Dockerfile rewrite.
+            lines = [line.strip() for line in dockerfile.read_text().splitlines()]
+            from_lines = [line for line in lines if re.match(r'(?i)^FROM(?:\s|$)', line)]
+            require(len(from_lines) == 1 and
+                    re.fullmatch(r'(?i:FROM)\s+' + re.escape(service['base_image']), from_lines[0]),
+                    'DOCKERFILE_BASE_NOT_PINNED_OR_UNSUPPORTED')
         steps = [*service['setup'], service['contract']]
         if not unit_not_applicable(service['unit']):
             steps.append(service['unit'])
         for step in steps:
             require((root / step['cwd']).is_dir(), 'TEST_CWD_MISSING')
-
 
 def validate_scan_receipt(scan_rc, scan, context, source_sha, built, archives):
     """Bind PASS and fail-fast BLOCK receipts to the actual build and run."""
@@ -234,7 +258,10 @@ def execute(config, source_dir, evidence, context, incoming_env):
     rc = 1
     try:
         validate_config(config)  # No source command/network before input completion.
-        supplied = config['schema'] == 'P1-CICD-app-build-scan-2'
+        schema = config['schema']
+        supplied = schema in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3')
+        supply_v3 = schema == 'P1-CICD-app-build-scan-3'
+        v3_images = None
         source_sha = config['source']['commit']
         result['source'] = config['source']
         home, runtime = evidence / 'home', evidence / 'runtime'
@@ -278,9 +305,17 @@ def execute(config, source_dir, evidence, context, incoming_env):
         validate_source_files(tests_root, config)
         staged = evidence / 'offline-supply'
         if supplied:
-            result['offline_supply'] = {'SUPPLY_COPY': 'FAIL', 'REPOSITORY_DIGEST_RESOLUTION': 'NOT_EXECUTED'}
-            result['offline_supply'].update(offline.stage(config['offline_supply'], staged), SUPPLY_COPY='PASS')
-            offline.validate_source(tests_root, config, staged)
+            if supply_v3:
+                result['offline_supply'] = {'SUPPLY_COPY': 'FAIL', 'IMAGE_IMPORT': 'NOT_EXECUTED'}
+                identities = offline_v3.stage(config['offline_supply'], staged)
+                result['offline_supply'].update(SUPPLY_COPY='PASS', images=identities)
+                offline_v3.validate_source(tests_root, config, staged)
+            else:
+                result['offline_supply'] = {'SUPPLY_COPY': 'FAIL',
+                                            'REPOSITORY_DIGEST_RESOLUTION': 'NOT_EXECUTED'}
+                result['offline_supply'].update(
+                    offline.stage(config['offline_supply'], staged), SUPPLY_COPY='PASS')
+                offline.validate_source(tests_root, config, staged)
         # Tests use a separate copy; generated/ignored files do not enter Build.
         podman = [PODMAN, '--remote=false', '--root', str(evidence / 'storage'),
                   '--runroot', str(evidence / 'runroot')]
@@ -292,10 +327,19 @@ def execute(config, source_dir, evidence, context, incoming_env):
         rootless = command('podman-rootless', podman + ['info', '--format', '{{.Host.Security.Rootless}}'])
         require(read_output(rootless) == 'true', 'ROOTLESS_REQUIRED')
         if supplied:
-            base = config['services'][SERVICES[0]]['base_image']
-            result['offline_supply']['REPOSITORY_DIGEST_RESOLUTION'] = 'FAIL'
-            result['offline_supply'].update(offline.import_base(command, podman, config['offline_supply'], staged, base))
-            offline.install_tests(command, tests_root, staged)
+            if supply_v3:
+                result['offline_supply']['IMAGE_IMPORT'] = 'FAIL'
+                v3_images = offline_v3.import_images(
+                    command, podman, config['offline_supply'], staged)
+                result['offline_supply'].update(IMAGE_IMPORT='PASS', imports=v3_images)
+                offline_v3.install_tests(
+                    command, podman, tests_root, staged, v3_images['builder']['reference'])
+            else:
+                base = config['services'][SERVICES[0]]['base_image']
+                result['offline_supply']['REPOSITORY_DIGEST_RESOLUTION'] = 'FAIL'
+                result['offline_supply'].update(
+                    offline.import_base(command, podman, config['offline_supply'], staged, base))
+                offline.install_tests(command, tests_root, staged)
         for phase in ('setup', 'unit', 'contract'):
             for name in SERVICES:
                 value = config['services'][name][phase]
@@ -304,14 +348,22 @@ def execute(config, source_dir, evidence, context, incoming_env):
                     continue  # No command, log, exit code or fabricated PASS.
                 steps = value if phase == 'setup' else [value]
                 for index, step in enumerate(steps):
-                    command(f'{name}-{phase}-{index}', step['argv'],
-                            tests_root / step['cwd'], step['timeout_seconds'])
+                    if supply_v3:
+                        command(f'{name}-{phase}-{index}',
+                                offline_v3.test_argv(
+                                    podman, tests_root, staged,
+                                    v3_images['builder']['reference'], step),
+                                timeout=step['timeout_seconds'])
+                    else:
+                        command(f'{name}-{phase}-{index}', step['argv'],
+                                tests_root / step['cwd'], step['timeout_seconds'])
         require(sha256(snapshot) == result['source_archive_sha256'], 'SOURCE_ARCHIVE_CHANGED')
         unpack_source(snapshot, build_root)
         validate_source_files(build_root, config)
         if supplied:
-            offline.verify_staged(staged, config['offline_supply'])
-            offline.validate_source(build_root, config, staged)
+            supply = offline_v3 if supply_v3 else offline
+            supply.verify_staged(staged, config['offline_supply'])
+            supply.validate_source(build_root, config, staged)
         auth = evidence / 'empty-auth.json'
         auth.write_text('{"auths":{}}\n')
         archives = {}
@@ -319,10 +371,15 @@ def execute(config, source_dir, evidence, context, incoming_env):
             service = config['services'][name]
             if supplied:
                 # Recheck immediately before each consumer; tests never supply build artifacts.
-                offline.verify_staged(staged, config['offline_supply'])
+                supply = offline_v3 if supply_v3 else offline
+                supply.verify_staged(staged, config['offline_supply'])
                 build_options = ['--network=none', '--http-proxy=false', '--no-cache',
                     '--security-opt=label=disable', '--build-context',
                     'python-wheels=' + str(staged / (name + '-runtime') / 'wheels')]
+                if supply_v3:
+                    build_options += [
+                        '--build-arg', 'BUILDER_IMAGE=' + v3_images['builder']['reference'],
+                        '--build-arg', 'RUNTIME_IMAGE=' + v3_images['runtime']['reference']]
             else:
                 command(name + '-base-pull', podman + ['pull', '--platform', 'linux/amd64',
                         '--tls-verify=true', '--authfile', str(auth), service['base_image']], timeout=600)
