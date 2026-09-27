@@ -106,7 +106,7 @@ def execute(record, base, folder):
         if v3:
             result['IMAGE_IMPORT'] = 'FAIL'
             images = supply_v3.import_images(command, podman, record, staged)
-            result.update(IMAGE_IMPORT='PASS', images=staged_identity)
+            result.update(IMAGE_IMPORT='PASS', images=staged_identity, imports=images)
             context = folder / 'probe-context'
             context.mkdir(mode=0o700)
             (context / 'Dockerfile').write_text(

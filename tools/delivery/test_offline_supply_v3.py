@@ -148,6 +148,7 @@ class FlowV3Tests(unittest.TestCase):
         for label in ('transaction-api-unit-0', 'fds-engine-contract-0'):
             argv = self.argv[label]
             self.assertIn('run', argv)
+            self.assertIn('--pull=never', argv)
             self.assertIn('--network=none', argv)
             self.assertTrue(any('fds-apko-builder:cicd-offline-' in a for a in argv))
         for name in flow.SERVICES:
@@ -166,6 +167,7 @@ class FlowV3Tests(unittest.TestCase):
         result = app.validate_handoff(
             self.h.config, self.h.repo, app.command_runner(folder, {}, []))
         self.assertEqual(result['HANDOFF'], 'PASS')
+        self.assertEqual(result['schema'], 'P1-CICD-app-build-scan-3')
         self.assertTrue(set(supply.SOURCE_INPUTS) <= set(result['files']))
 
         apko_path = self.h.repo / supply.SOURCE_INPUTS[0]
@@ -238,6 +240,10 @@ class ProbeV3Tests(unittest.TestCase):
         self.assertEqual((rc, result['OFFLINE_PROBE'], result['IMAGE_IMPORT']),
                          (0, 'PASS', 'PASS'), result)
         self.assertEqual(result['REPOSITORY_DIGEST_RESOLUTION'], 'NOT_APPLICABLE')
+        self.assertEqual(set(result['imports']), set(supply.ROLES))
+        for role in supply.ROLES:
+            self.assertTrue(result['imports'][role]['reference'].startswith(
+                'localhost/fds-apko-' + role + ':cicd-offline-'))
         self.assertFalse(any('pull' in argv for argv in self.argv.values()))
         build = self.argv['offline-base-build']
         self.assertIn('--pull=never', build)

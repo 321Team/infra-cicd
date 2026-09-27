@@ -219,7 +219,7 @@ def _container_prefix(podman, tests_root, staged, builder, cwd):
             and not cwd.startswith('/') and all(p not in ('', '.', '..') for p in cwd.split('/')),
             'TEST_CWD_INVALID')
     return podman + [
-        'run', '--rm', '--network=none', '--security-opt=label=disable',
+        'run', '--rm', '--pull=never', '--network=none', '--security-opt=label=disable',
         '--env', 'HOME=/tmp', '--env', 'PIP_CONFIG_FILE=/dev/null',
         '--volume', str(tests_root) + ':/src:rw',
         '--volume', str(staged) + ':/supply:ro',

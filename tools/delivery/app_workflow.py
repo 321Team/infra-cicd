@@ -135,7 +135,8 @@ def validate_handoff(config, source, command):
         tests = [service['contract']] + ([] if flow.unit_not_applicable(service['unit']) else [service['unit']])
         for step in tests:
             flow.require(any(p.startswith(step['cwd'] + '/') for p in entries), 'TEST_CWD_MISSING')
-    return {'HANDOFF': 'PASS', 'source': config['source'], 'files': checks,
+    return {'HANDOFF': 'PASS', 'schema': config['schema'],
+            'source': config['source'], 'files': checks,
             'test_scope': {name: {'unit': item['unit'], 'contract': item['contract']}
                            for name, item in config['services'].items()},
             'SOURCE_APPROVAL': 'DECLARED_NOT_INDEPENDENTLY_VERIFIED',

@@ -174,6 +174,7 @@ def check(provider, expected):
         flow.require({'source-init', 'source-origin-set', 'source-fetch', 'source-fetched', 'source-head-set',
                       'handoff-head', 'handoff-origin', 'handoff-tree'} <= top_steps, 'SOURCE_STEPS_MISSING')
     handoff = None
+    handoff_schema = None
     if 'handoff_sha256' in top:
         handoff = provider.read('handoff.json', top['handoff_sha256'])
         source = handoff.get('source', {})
@@ -183,11 +184,17 @@ def check(provider, expected):
         flow.require(isinstance(source.get('approved_by'), str) and source['approved_by'].strip() and
                      isinstance(source.get('approval_reference'), str) and
                      source['approval_reference'].startswith('https://github.com/'), 'SOURCE_DECLARATION_MISSING')
+        handoff_schema = handoff.get('schema', 'P1-CICD-app-build-scan-2')
+        flow.require(handoff_schema in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3'),
+                     'HANDOFF_SCHEMA_INVALID')
         files = handoff['files']
         wanted = {n + '/' + f for n in flow.SERVICES for f in
                   ('Dockerfile', 'requirements.txt', 'requirements-test.txt', 'requirements-runtime.lock',
                    'requirements-test.lock')}
-        flow.require(set(files) == wanted and set(handoff['test_scope']) == set(flow.SERVICES), 'HANDOFF_SCOPE_INVALID')
+        if handoff_schema == 'P1-CICD-app-build-scan-3':
+            wanted.update(flow.offline_v3.SOURCE_INPUTS)
+        flow.require(set(files) == wanted and set(handoff['test_scope']) == set(flow.SERVICES),
+                     'HANDOFF_SCOPE_INVALID')
         for path, item in files.items():
             label = 'handoff-' + path.replace('/', '-')
             flow.require(label in top_steps, 'HANDOFF_BLOB_STEP_MISSING')
@@ -213,8 +220,14 @@ def check(provider, expected):
         elif complete:
             raise flow.PreflightError('SOURCE_ARCHIVE_HASH_MISSING')
         if complete:
-            required = {'source-head', 'source-origin', 'source-tree', 'source-archive', 'podman-version',
-                        'podman-rootless', 'offline-base-load', 'offline-base-tag', 'offline-base-resolve'}
+            required = {'source-head', 'source-origin', 'source-tree', 'source-archive',
+                        'podman-version', 'podman-rootless'}
+            if handoff_schema == 'P1-CICD-app-build-scan-3':
+                for role in flow.offline_v3.ROLES:
+                    required.update({'offline-' + role + '-load', 'offline-' + role + '-tag',
+                                     'offline-' + role + '-resolve'})
+            else:
+                required.update({'offline-base-load', 'offline-base-tag', 'offline-base-resolve'})
             na = []
             for name, scope in handoff['test_scope'].items():
                 required.update(name + '-' + suffix for suffix in
@@ -226,8 +239,27 @@ def check(provider, expected):
             flow.require(required <= build_steps and built.get('not_applicable_tests') == na,
                          'TEST_BUILD_SCOPE_MISMATCH')
             supply = built.get('offline_supply', {})
-            flow.require(supply.get('SUPPLY_COPY') == supply.get('REPOSITORY_DIGEST_RESOLUTION') == 'PASS',
-                         'OFFLINE_SUPPLY_NOT_VERIFIED')
+            if handoff_schema == 'P1-CICD-app-build-scan-3':
+                flow.require(supply.get('SUPPLY_COPY') == supply.get('IMAGE_IMPORT') == 'PASS',
+                             'OFFLINE_SUPPLY_NOT_VERIFIED')
+                staged, imported = supply.get('images'), supply.get('imports')
+                flow.require(isinstance(staged, dict) and isinstance(imported, dict)
+                             and set(staged) == set(imported) == set(flow.offline_v3.ROLES),
+                             'OFFLINE_SUPPLY_IMAGE_SCOPE_INVALID')
+                for role in flow.offline_v3.ROLES:
+                    identity_shape(staged[role])
+                    identity_shape(imported[role])
+                    flow.require(all(imported[role].get(key) == staged[role].get(key) for key in
+                                     ('archive_sha256', 'manifest_digest', 'config_digest', 'diff_ids')),
+                                 'OFFLINE_SUPPLY_IMPORT_IDENTITY_MISMATCH')
+                    expected_ref = ('localhost/fds-apko-' + role + ':cicd-offline-' +
+                                    staged[role]['manifest_digest'][7:23])
+                    flow.require(imported[role].get('reference') == expected_ref,
+                                 'OFFLINE_SUPPLY_IMPORT_REFERENCE_MISMATCH')
+            else:
+                flow.require(supply.get('SUPPLY_COPY') ==
+                             supply.get('REPOSITORY_DIGEST_RESOLUTION') == 'PASS',
+                             'OFFLINE_SUPPLY_NOT_VERIFIED')
         images = built.get('images', {})
         flow.require(isinstance(images, dict) and set(images) <= set(flow.SERVICES), 'BUILD_IMAGES_INVALID')
         if complete:
