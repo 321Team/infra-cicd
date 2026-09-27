@@ -26,7 +26,8 @@ def read_config(path):
     flow.require(path.stat().st_size <= 64 * 1024, 'INPUT_TOO_LARGE')
     raw = path.read_bytes()
     config = flow.validate_config(flow.json_object(raw))
-    flow.require(config['schema'] == 'P1-CICD-app-build-scan-2', 'OFFLINE_SCHEMA_REQUIRED')
+    flow.require(config['schema'] in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3'),
+                 'OFFLINE_SCHEMA_REQUIRED')
     return raw, config
 
 
@@ -78,7 +79,8 @@ def fetch_source(config, target, command, private_fetch=None):
 def validate_handoff(config, source, command):
     """Read committed objects only; no import, checkout, pip, tests or containers."""
     flow.validate_config(config)
-    flow.require(config['schema'] == 'P1-CICD-app-build-scan-2', 'OFFLINE_SCHEMA_REQUIRED')
+    flow.require(config['schema'] in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3'),
+                 'OFFLINE_SCHEMA_REQUIRED')
     flow.offline.plain_path(source)
     sha = config['source']['commit']
     head = command('handoff-head', GIT + ['-C', str(source), 'rev-parse', 'HEAD'])
@@ -113,6 +115,10 @@ def validate_handoff(config, source, command):
         checks[path] = {'sha256': hashlib.sha256(raw).hexdigest(), 'mode': entries[path]}
         return raw
 
+    if config['schema'] == 'P1-CICD-app-build-scan-3':
+        for path, digest in config['offline_supply']['source_inputs'].items():
+            flow.require(hashlib.sha256(blob(path)).hexdigest() == digest,
+                         'SOURCE_APKO_INPUT_CHANGED:' + path)
     for path, digest in config['offline_supply']['requirements'].items():
         flow.require(hashlib.sha256(blob(path)).hexdigest() == digest, 'SOURCE_REQUIREMENTS_CHANGED')
     for name, service in config['services'].items():
@@ -120,7 +126,7 @@ def validate_handoff(config, source, command):
                      'OFFLINE_SOURCE_LAYOUT_UNSUPPORTED')
         actual = blob(service['dockerfile'])
         # Exact candidate bytes make the six-file handoff auditable before any app execution.
-        flow.require(actual == flow.offline.dockerfile(name, service['base_image']).encode(),
+        flow.require(actual == flow.offline_dockerfile(config, name).encode(),
                      'HANDOFF_DOCKERFILE_MISMATCH')
         for profile in ('runtime', 'test'):
             path = name + '/requirements-' + profile + '.lock'
@@ -129,7 +135,8 @@ def validate_handoff(config, source, command):
         tests = [service['contract']] + ([] if flow.unit_not_applicable(service['unit']) else [service['unit']])
         for step in tests:
             flow.require(any(p.startswith(step['cwd'] + '/') for p in entries), 'TEST_CWD_MISSING')
-    return {'HANDOFF': 'PASS', 'source': config['source'], 'files': checks,
+    return {'HANDOFF': 'PASS', 'schema': config['schema'],
+            'source': config['source'], 'files': checks,
             'test_scope': {name: {'unit': item['unit'], 'contract': item['contract']}
                            for name, item in config['services'].items()},
             'SOURCE_APPROVAL': 'DECLARED_NOT_INDEPENDENTLY_VERIFIED',
@@ -151,7 +158,8 @@ def run(config, folder, context, incoming, source=None, execute=False):
     rc = 1
     try:
         flow.validate_config(config)
-        flow.require(config['schema'] == 'P1-CICD-app-build-scan-2', 'OFFLINE_SCHEMA_REQUIRED')
+        flow.require(config['schema'] in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3'),
+                 'OFFLINE_SCHEMA_REQUIRED')
         if execute and config['source']['repository'] == auth.PRIVATE_REPOSITORY:
             auth.validate_token(token)
         command = command_runner(folder, incoming, result['steps'])

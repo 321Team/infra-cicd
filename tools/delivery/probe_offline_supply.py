@@ -18,6 +18,7 @@ import tarfile
 import tempfile
 
 import offline_supply as supply
+import offline_supply_v3 as supply_v3
 from build_scan import read_output, run_command
 from prepare_db import PreflightError, require, utcnow
 
@@ -56,23 +57,31 @@ def read_bundle_input():
 
 
 def execute(record, base, folder):
-    result = {'schema': 'P1-CICD-offline-probe-1', 'OFFLINE_PROBE': 'FAIL',
-              'SUPPLY_COPY': 'NOT_EXECUTED', 'REPOSITORY_DIGEST_RESOLUTION': 'NOT_EXECUTED',
+    v3 = isinstance(record, dict) and 'images' in record
+    result = {'schema': 'P1-CICD-offline-probe-2' if v3 else 'P1-CICD-offline-probe-1',
+              'OFFLINE_PROBE': 'FAIL', 'SUPPLY_COPY': 'NOT_EXECUTED',
+              'REPOSITORY_DIGEST_RESOLUTION': 'NOT_APPLICABLE' if v3 else 'NOT_EXECUTED',
+              'IMAGE_IMPORT': 'NOT_EXECUTED' if v3 else 'NOT_APPLICABLE',
               'BASE_DIGEST_BUILD': 'NOT_EXECUTED', 'APP_TEST_BUILD_SCAN': 'NOT_EXECUTED',
               'DELIVERY_GATE': 'NOT_VERIFIED', 'NETWORK_REQUESTS': 'NONE_BY_THIS_TOOL',
               'started_at': utcnow().isoformat(), 'steps': []}
     rc = 1
+    active = supply_v3 if v3 else supply
     try:
-        supply.validate_record(record)
-        require(base == 'docker.io/library/python@' + record['manifest_digest'], 'PROBE_BASE_BINDING')
+        active.validate_record(record)
+        if not v3:
+            require(base == 'docker.io/library/python@' + record['manifest_digest'],
+                    'PROBE_BASE_BINDING')
         (folder / 'home').mkdir(mode=0o700)
         env = {'HOME': str(folder / 'home'), 'PATH': '/usr/local/bin:/usr/bin:/bin',
-               'LANG': 'C.UTF-8', 'XDG_RUNTIME_DIR': '/run/user/1000', 'PIP_CONFIG_FILE': os.devnull}
+               'LANG': 'C.UTF-8', 'XDG_RUNTIME_DIR': '/run/user/1000',
+               'PIP_CONFIG_FILE': os.devnull}
 
         def command(label, argv, cwd=folder, timeout=300):
-            idle()  # Observation only; not a GitHub scheduler reservation.
+            idle()
             output = folder / (label + '.log')
-            step = {'name': label, 'argv': argv, 'status': 'STARTED', 'started_at': utcnow().isoformat()}
+            step = {'name': label, 'argv': argv, 'status': 'STARTED',
+                    'started_at': utcnow().isoformat()}
             result['steps'].append(step)
             code = run_command(argv, cwd, env, output, timeout)
             step.update(exit_code=code, status='PASS' if code == 0 else 'FAIL',
@@ -83,30 +92,56 @@ def execute(record, base, folder):
 
         staged = folder / 'offline-supply'
         result['SUPPLY_COPY'] = 'FAIL'
-        result.update(supply.stage(record, staged), SUPPLY_COPY='PASS')
+        staged_identity = active.stage(record, staged)
+        result.update(SUPPLY_COPY='PASS')
         podman = ['/usr/bin/podman', '--remote=false', '--root', str(folder / 'storage'),
                   '--runroot', str(folder / 'runroot'), '--storage-driver', 'vfs',
                   '--tmpdir', str(folder / 'podman-tmp'), '--events-backend', 'none']
         require(read_output(command('podman-version', podman + ['--version'])) == 'podman version 6.1.0',
                 'PODMAN_VERSION_MISMATCH')
-        require(read_output(command('podman-rootless', podman + ['info', '--format', '{{.Host.Security.Rootless}}'])) == 'true',
-                'ROOTLESS_REQUIRED')
-        result['REPOSITORY_DIGEST_RESOLUTION'] = 'FAIL'
-        result.update(supply.import_base(command, podman, record, staged, base))
-        context = folder / 'probe-context'
-        context.mkdir(mode=0o700)
-        (context / 'Dockerfile').write_text('FROM ' + base + '\nRUN ["/usr/local/bin/python", "-I", "-B", "-c", "print(123)"]\n')
+        require(read_output(command(
+            'podman-rootless', podman + ['info', '--format', '{{.Host.Security.Rootless}}'])) == 'true',
+            'ROOTLESS_REQUIRED')
+
+        if v3:
+            result['IMAGE_IMPORT'] = 'FAIL'
+            images = supply_v3.import_images(command, podman, record, staged)
+            result.update(IMAGE_IMPORT='PASS', images=staged_identity, imports=images)
+            context = folder / 'probe-context'
+            context.mkdir(mode=0o700)
+            (context / 'Dockerfile').write_text(
+                'ARG BUILDER_IMAGE\nARG RUNTIME_IMAGE\n'
+                'FROM ' + '$' + '{BUILDER_IMAGE} AS build\n'
+                'RUN ["python3.13", "-I", "-B", "-c", "print(123)"]\n'
+                'FROM ' + '$' + '{RUNTIME_IMAGE}\n'
+                'ENTRYPOINT ["python3.13"]\n'
+                'CMD ["-I", "-B", "-c", "print(456)"]\n')
+            build_args = [
+                '--build-arg', 'BUILDER_IMAGE=' + images['builder']['reference'],
+                '--build-arg', 'RUNTIME_IMAGE=' + images['runtime']['reference']]
+        else:
+            result['REPOSITORY_DIGEST_RESOLUTION'] = 'FAIL'
+            result.update(supply.import_base(command, podman, record, staged, base))
+            context = folder / 'probe-context'
+            context.mkdir(mode=0o700)
+            (context / 'Dockerfile').write_text(
+                'FROM ' + base +
+                '\nRUN ["/usr/local/bin/python", "-I", "-B", "-c", "print(123)"]\n')
+            build_args = []
+
         auth = folder / 'empty-auth.json'
         auth.write_text('{"auths":{}}\n')
         iid = folder / 'probe.iid'
         result['BASE_DIGEST_BUILD'] = 'FAIL'
-        command('offline-base-build', podman + ['build', '--format', 'oci', '--platform', 'linux/amd64',
+        command('offline-base-build', podman + [
+                'build', '--format', 'oci', '--platform', 'linux/amd64',
                 '--pull=never', '--network=none', '--http-proxy=false', '--no-cache',
                 '--security-opt=label=disable', '--tls-verify=true', '--authfile', str(auth),
-                '--iidfile', str(iid), '--file', str(context / 'Dockerfile'), str(context)], timeout=600)
+                '--iidfile', str(iid), *build_args,
+                '--file', str(context / 'Dockerfile'), str(context)], timeout=600)
         image_id = read_output(iid)
         require(re.fullmatch(r'sha256:[0-9a-f]{64}', image_id), 'PROBE_IMAGE_ID_INVALID')
-        supply.verify_staged(staged, record)
+        active.verify_staged(staged, record)
         result.update(BASE_DIGEST_BUILD='PASS', probe_image_id=image_id, OFFLINE_PROBE='PASS')
         rc = 0
     except PreflightError as exc:
@@ -116,7 +151,6 @@ def execute(record, base, folder):
         result['error_code'] = 'PROBE_INPUT_COMMAND_OR_EVIDENCE_ERROR'
     result['finished_at'] = utcnow().isoformat()
     return rc, result
-
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
@@ -146,7 +180,9 @@ def main(argv=None):
                 signal.signal(sig, interrupted)
             signal.alarm(900)
             phase = 'execute'
-            rc, result = execute(record, 'docker.io/library/python@' + record['manifest_digest'], folder)
+            base = (None if 'images' in record
+                    else 'docker.io/library/python@' + record['manifest_digest'])
+            rc, result = execute(record, base, folder)
             signal.alarm(0)
             phase = 'export'
             result['input_sha256'] = hashlib.sha256(raw).hexdigest()

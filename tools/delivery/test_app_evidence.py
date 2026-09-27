@@ -1,5 +1,6 @@
 """Synthetic receipts and real tar/OCI bytes; no network, app, Podman or Trivy execution."""
 import copy
+import hashlib
 import io
 import json
 import os
@@ -128,6 +129,68 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(checked['RAW_PAYLOAD_CHECK'], 'NOT_INCLUDED_SERVER_RECORD_ONLY')
         self.assertEqual(checked['DELIVERY_GATE'], 'NOT_VERIFIED')
         self.assertEqual(before, {str(p.relative_to(self.run)): p.read_bytes() for p in self.run.rglob('*') if p.is_file()})
+
+    def convert_to_v3(self):
+        self.handoff['schema'] = 'P1-CICD-app-build-scan-3'
+        for path in evidence.flow.offline_v3.SOURCE_INPUTS:
+            label = 'handoff-' + path.replace('/', '-')
+            self.step(self.top, '', label)
+            self.handoff['files'][path] = {'sha256': self.hash(label + '.log'), 'mode': '100644'}
+        handoff_sha = self.write_json('handoff.json', self.handoff)
+        self.top['handoff_sha256'] = handoff_sha
+        child_context = {**self.context, 'handoff_sha256': handoff_sha}
+        self.built['context'] = child_context
+        self.scan['context'] = child_context
+        self.db['context'] = child_context
+        self.scan['db_result_sha256'] = self.write_json('build-scan/scan/db/result.json', self.db)
+
+        legacy = {'offline-base-load', 'offline-base-tag', 'offline-base-resolve'}
+        self.built['steps'] = [item for item in self.built['steps'] if item['name'] not in legacy]
+        for role in evidence.flow.offline_v3.ROLES:
+            for suffix in ('load', 'tag', 'resolve'):
+                self.step(self.built, 'build-scan/', 'offline-' + role + '-' + suffix)
+
+        identity = next(iter(self.built['images'].values()))
+        staged = {}
+        for role in evidence.flow.offline_v3.ROLES:
+            staged[role] = {
+                'format': 'docker-archive',
+                'archive_sha256': identity['archive_sha256'],
+                'manifest_json_sha256': hashlib.sha256(('manifest:' + role).encode()).hexdigest(),
+                'index_json_sha256': hashlib.sha256(('index:' + role).encode()).hexdigest(),
+                'config_digest': identity['config_digest'],
+                'diff_ids': identity['diff_ids'],
+                'layer_count': len(identity['diff_ids']),
+                'repo_tag': 'fds-apko-wolfi-' + role + ':fixture',
+                'platform': 'linux/amd64',
+            }
+        imports = {}
+        for role, item in staged.items():
+            imports[role] = {**item, 'reference':
+                'localhost/fds-apko-' + role + ':cicd-offline-' + item['config_digest'][7:23]}
+        self.built['offline_supply'] = {
+            'SUPPLY_COPY': 'PASS', 'IMAGE_IMPORT': 'PASS',
+            'images': staged, 'imports': imports}
+        self.flush()
+
+    def test_schema_v3_complete_evidence_is_accepted(self):
+        self.convert_to_v3()
+        checked = self.check()
+        self.assertEqual((checked['EVIDENCE_CHECK'], checked['BINDING']), ('PASS', 'COMPLETE'))
+
+    def test_schema_v3_import_identity_or_reference_mismatch_is_rejected(self):
+        self.convert_to_v3()
+        for key, value in (
+            ('reference', 'localhost/fds-apko-builder:cicd-offline-' + '0' * 16),
+            ('config_digest', 'sha256:' + '0' * 64),
+        ):
+            original = copy.deepcopy(self.built['offline_supply']['imports']['builder'])
+            self.built['offline_supply']['imports']['builder'][key] = value
+            self.flush()
+            with self.subTest(key=key), self.assertRaises(evidence.flow.PreflightError):
+                self.check()
+            self.built['offline_supply']['imports']['builder'] = original
+        self.flush()
 
     def test_private_evidence_requires_explicit_expected_repository(self):
         self.handoff['source']['repository'] = '321Team/fds-msa'
