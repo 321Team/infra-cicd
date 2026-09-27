@@ -1,0 +1,56 @@
+{
+  "schema": "P1-CICD-test-scope-proposal-1",
+  "status": "PENDING_APP_LEAD_CONFIRMATION",
+  "source_commit": "1c7f3651504097096c3a3fe4a86ac1973e169688",
+  "approval": {
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "services": {
+    "transaction-api": {
+      "unit": {
+        "status": "NOT_APPLICABLE",
+        "reason": "transaction-api는 순수 판정 로직 unit 대상이 없고 요청/DB/engine 연계 동작은 mock 기반 contract 및 현장 Runtime으로 검증한다. 새 Source에 대한 NOT_APPLICABLE 재확인이 필요하다."
+      },
+      "contract": {
+        "cwd": "transaction-api",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "timeout_seconds": 300
+      }
+    },
+    "fds-engine": {
+      "unit": {
+        "cwd": "fds-engine",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_rules.py"
+        ],
+        "timeout_seconds": 300
+      },
+      "contract": {
+        "cwd": "fds-engine",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "timeout_seconds": 300
+      }
+    }
+  }
+}

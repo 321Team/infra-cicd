@@ -1,0 +1,30 @@
+{
+  "schema": "P1-CICD-apko-supply-handoff-1",
+  "artifact": {
+    "id": 10930034690,
+    "name": "apko-offline-supply-1c7f3651504097096c3a3fe4a86ac1973e169688-1",
+    "size_bytes": 115101199,
+    "archive_sha256": "8ba5e7f7a0cf62f149aae8821582dd3330c7d26c1b407a55a6107d464c872a12",
+    "manifest_sha256": "c0e395c78e539136f493ec313c5ffa6aa8b896c7bafc258942e28dfd7d97268f",
+    "workflow_run_id": 36315748125,
+    "expires_on": "2026-10-04"
+  },
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": "1c7f3651504097096c3a3fe4a86ac1973e169688",
+    "approved_by": "이재환 (supreme33-kr)",
+    "approval_reference": "https://github.com/321Team/fds-msa/pull/9#pullrequestreview-5329362582"
+  },
+  "supply_tool": {
+    "repository": "321Team/fds-msa",
+    "commit": "252858fc838cede5de7c7c20da72082e647d5dd3",
+    "approved_by": "이하영 (hayeounglee)",
+    "approval_reference": "https://github.com/321Team/fds-msa/pull/11#pullrequestreview-5330507278"
+  },
+  "policy": {
+    "purpose": "ON_PREM_TEST_BUILD_SCAN_SUPPLY_ONLY",
+    "delivery_authorization": false,
+    "harbor_push": "NOT_EXECUTED",
+    "kubernetes_deploy": "NOT_EXECUTED"
+  }
+}
