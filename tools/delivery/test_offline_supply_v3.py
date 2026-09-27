@@ -70,6 +70,10 @@ def write_apko_docker_archive(path, role):
 def fixture(root):
     source, old, _ = legacy_fixture(root)
     (source / 'base.oci.tar').unlink()
+    profiles = source / 'profiles'
+    profiles.mkdir()
+    for name in supply.PROFILES:
+        (source / name).rename(profiles / name)
     identities = {
         role: write_apko_docker_archive(source / (role + '.oci.tar'), role)
         for role in supply.ROLES
