@@ -1,5 +1,6 @@
 """Schema v3 regression tests for approved Wolfi/apko two-stage offline delivery."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -11,6 +12,19 @@ import build_scan as flow
 import offline_supply_v3 as supply
 import test_build_scan as legacy
 from test_offline_supply import fixture as legacy_fixture
+
+
+SOURCE_INPUT_BYTES = {
+    path: ('fixture:' + path + '\n').encode()
+    for path in supply.SOURCE_INPUTS
+}
+
+
+def write_source_inputs(root):
+    for path, raw in SOURCE_INPUT_BYTES.items():
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
 
 
 def fixture(root):
@@ -28,6 +42,10 @@ def fixture(root):
         },
         'profiles': copy.deepcopy(old['profiles']),
         'requirements': copy.deepcopy(old['requirements']),
+        'source_inputs': {
+            path: hashlib.sha256(raw).hexdigest()
+            for path, raw in SOURCE_INPUT_BYTES.items()
+        },
     }
     return source, record, identity
 
@@ -62,6 +80,7 @@ class OfflineSupplyV3Tests(unittest.TestCase):
     def test_exact_operating_dockerfiles_and_source_locks(self):
         app_root = self.root / 'app-source'
         app_root.mkdir()
+        write_source_inputs(app_root)
         for name in supply.SERVICES:
             folder = app_root / name
             folder.mkdir()
@@ -89,6 +108,7 @@ class FlowV3Tests(unittest.TestCase):
         self.addCleanup(self.h.doCleanups)
         h = self.h
         self.source, self.record, self.identity = fixture(h.root)
+        write_source_inputs(h.repo)
         h.config['schema'] = 'P1-CICD-app-build-scan-3'
         h.config['offline_supply'] = self.record
         for name, service in h.config['services'].items():
