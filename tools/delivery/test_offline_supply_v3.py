@@ -166,6 +166,20 @@ class FlowV3Tests(unittest.TestCase):
         result = app.validate_handoff(
             self.h.config, self.h.repo, app.command_runner(folder, {}, []))
         self.assertEqual(result['HANDOFF'], 'PASS')
+        self.assertTrue(set(supply.SOURCE_INPUTS) <= set(result['files']))
+
+        apko_path = self.h.repo / supply.SOURCE_INPUTS[0]
+        original_apko = apko_path.read_bytes()
+        apko_path.write_bytes(original_apko + b'# changed\n')
+        self.h.commit()
+        changed = self.h.root / 'handoff-v3-apko-changed'
+        changed.mkdir()
+        with self.assertRaisesRegex(flow.PreflightError, 'SOURCE_APKO_INPUT_CHANGED'):
+            app.validate_handoff(
+                self.h.config, self.h.repo, app.command_runner(changed, {}, []))
+        apko_path.write_bytes(original_apko)
+        self.h.commit()
+
         docker = self.h.repo / 'transaction-api/Dockerfile'
         docker.write_text(docker.read_text().replace('USER 10001:999', 'USER 65532:65532'))
         self.h.commit()
