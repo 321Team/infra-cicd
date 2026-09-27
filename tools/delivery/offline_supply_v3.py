@@ -35,8 +35,10 @@ IDENTITY_FIELDS = (
 
 
 def _hash_stream(stream):
-    digest = hashlib.sha256()
+    digest, total = hashlib.sha256(), 0
     for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+        total += len(chunk)
+        require(total <= LIMIT, 'DOCKER_ARCHIVE_UNCOMPRESSED_LAYER_TOO_LARGE')
         digest.update(chunk)
     return digest.hexdigest()
 
@@ -101,7 +103,8 @@ def inspect_supply_archive(path):
                 and config.get('architecture') == 'amd64',
                 'DOCKER_ARCHIVE_PLATFORM_UNSUPPORTED')
         rootfs = config.get('rootfs', {})
-        diff_ids = rootfs.get('diff_ids') if isinstance(rootfs, dict) else None
+        require(isinstance(rootfs, dict), 'DOCKER_ARCHIVE_ROOTFS_INVALID')
+        diff_ids = rootfs.get('diff_ids')
         require(rootfs.get('type') == 'layers' and isinstance(diff_ids, list)
                 and len(diff_ids) == len(layers)
                 and all(isinstance(value, str)
