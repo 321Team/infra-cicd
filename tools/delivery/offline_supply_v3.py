@@ -138,7 +138,7 @@ def inspect_supply_archive(path):
     }
 
 
-def _validate_identity(image):
+def validate_identity(image):
     require(isinstance(image, dict) and set(image) == set(IDENTITY_FIELDS),
             'OFFLINE_V3_IMAGE_FIELDS')
     require(image.get('format') == 'docker-archive'
@@ -174,7 +174,7 @@ def validate_record(record):
     images = record['images']
     require(isinstance(images, dict) and set(images) == set(ROLES), 'OFFLINE_V3_EXACT_TWO_IMAGES')
     for image in images.values():
-        _validate_identity(image)
+        validate_identity(image)
     require(isinstance(record['profiles'], dict) and set(record['profiles']) == set(PROFILES),
             'OFFLINE_EXACT_FOUR_PROFILES')
     for profile in record['profiles'].values():
