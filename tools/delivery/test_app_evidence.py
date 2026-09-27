@@ -1,5 +1,6 @@
 """Synthetic receipts and real tar/OCI bytes; no network, app, Podman or Trivy execution."""
 import copy
+import hashlib
 import io
 import json
 import os
@@ -150,13 +151,23 @@ class EvidenceTests(unittest.TestCase):
                 self.step(self.built, 'build-scan/', 'offline-' + role + '-' + suffix)
 
         identity = next(iter(self.built['images'].values()))
-        keys = ('archive_sha256', 'manifest_digest', 'config_digest', 'diff_ids', 'platform')
-        staged = {role: {key: identity[key] for key in keys}
-                  for role in evidence.flow.offline_v3.ROLES}
+        staged = {}
+        for role in evidence.flow.offline_v3.ROLES:
+            staged[role] = {
+                'format': 'docker-archive',
+                'archive_sha256': identity['archive_sha256'],
+                'manifest_json_sha256': hashlib.sha256(('manifest:' + role).encode()).hexdigest(),
+                'index_json_sha256': hashlib.sha256(('index:' + role).encode()).hexdigest(),
+                'config_digest': identity['config_digest'],
+                'diff_ids': identity['diff_ids'],
+                'layer_count': len(identity['diff_ids']),
+                'repo_tag': 'fds-apko-wolfi-' + role + ':fixture',
+                'platform': 'linux/amd64',
+            }
         imports = {}
         for role, item in staged.items():
             imports[role] = {**item, 'reference':
-                'localhost/fds-apko-' + role + ':cicd-offline-' + item['manifest_digest'][7:23]}
+                'localhost/fds-apko-' + role + ':cicd-offline-' + item['config_digest'][7:23]}
         self.built['offline_supply'] = {
             'SUPPLY_COPY': 'PASS', 'IMAGE_IMPORT': 'PASS',
             'images': staged, 'imports': imports}
