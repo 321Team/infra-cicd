@@ -6,10 +6,12 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import app_workflow as app
 import build_scan as flow
 import offline_supply_v3 as supply
+import probe_offline_supply as probe
 import test_build_scan as legacy
 from test_offline_supply import fixture as legacy_fixture
 
@@ -180,6 +182,56 @@ class FlowV3Tests(unittest.TestCase):
         rc, data = self.h.execute()
         self.assertEqual((rc, data['error_code']), (1, 'DOCKERFILE_TWO_STAGE_PROFILE_REQUIRED'))
         self.assertNotIn('podman-version', self.argv)
+
+
+class ProbeV3Tests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.source, self.record, self.identity = fixture(self.root)
+        self.folder = self.root / 'probe'
+        self.folder.mkdir()
+        self.argv = {}
+
+    def command(self, argv, cwd, env, output, timeout):
+        label = output.stem
+        self.argv[label] = list(argv)
+        if label == 'podman-version':
+            output.write_text('podman version 6.1.0\n')
+        elif label == 'podman-rootless':
+            output.write_text('true\n')
+        elif label in ('offline-builder-resolve', 'offline-runtime-resolve'):
+            role = label.split('-')[1]
+            image = self.record['images'][role]
+            output.write_text(json.dumps([{
+                'Id': image['config_digest'],
+                'Os': 'linux',
+                'Architecture': 'amd64',
+                'RootFS': {'Layers': self.identity['diff_ids']},
+            }]))
+        elif label == 'offline-base-build':
+            Path(argv[argv.index('--iidfile') + 1]).write_text('sha256:' + '1' * 64 + '\n')
+            output.write_text('probe build\n')
+        else:
+            output.write_text('fixture\n')
+        return 0
+
+    def test_v3_probe_imports_both_images_and_builds_without_network_pull(self):
+        with patch.object(probe, 'run_command', side_effect=self.command), \
+                patch.object(probe, 'idle'):
+            rc, result = probe.execute(self.record, None, self.folder)
+        self.assertEqual((rc, result['OFFLINE_PROBE'], result['IMAGE_IMPORT']),
+                         (0, 'PASS', 'PASS'), result)
+        self.assertEqual(result['REPOSITORY_DIGEST_RESOLUTION'], 'NOT_APPLICABLE')
+        self.assertFalse(any('pull' in argv for argv in self.argv.values()))
+        build = self.argv['offline-base-build']
+        self.assertIn('--pull=never', build)
+        self.assertIn('--network=none', build)
+        self.assertTrue(any(
+            a.startswith('BUILDER_IMAGE=localhost/fds-apko-builder:') for a in build))
+        self.assertTrue(any(
+            a.startswith('RUNTIME_IMAGE=localhost/fds-apko-runtime:') for a in build))
 
 
 if __name__ == '__main__':
