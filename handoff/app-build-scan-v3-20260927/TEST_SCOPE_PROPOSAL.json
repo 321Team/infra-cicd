@@ -1,16 +1,16 @@
 {
   "schema": "P1-CICD-test-scope-proposal-1",
-  "status": "PENDING_APP_LEAD_CONFIRMATION",
+  "status": "APPROVED",
   "source_commit": "1c7f3651504097096c3a3fe4a86ac1973e169688",
   "approval": {
-    "approved_by": null,
-    "approval_reference": null
+    "approved_by": "이재환 (supreme33-kr)",
+    "approval_reference": "https://github.com/321Team/infra-cicd/pull/39#issuecomment-5856699655"
   },
   "services": {
     "transaction-api": {
       "unit": {
         "status": "NOT_APPLICABLE",
-        "reason": "transaction-api는 순수 판정 로직 unit 대상이 없고 요청/DB/engine 연계 동작은 mock 기반 contract 및 현장 Runtime으로 검증한다. 새 Source에 대한 NOT_APPLICABLE 재확인이 필요하다."
+        "reason": "새 Source 1c7f3651504097096c3a3fe4a86ac1973e169688 기준 APP Lead 이재환(supreme33-kr)이 소스 tree를 직접 대조해 transaction-api/tests/에 별도 unit 테스트 파일이 없음을 확인하고 NOT_APPLICABLE 범위를 승인했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다."
       },
       "contract": {
         "cwd": "transaction-api",
