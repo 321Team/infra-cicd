@@ -1,9 +1,12 @@
 """Schema v3 regression tests for approved Wolfi/apko two-stage offline delivery."""
 import copy
+import gzip
+import io
 import hashlib
 import json
 from pathlib import Path
 import shutil
+import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -29,19 +32,51 @@ def write_source_inputs(root):
         target.write_bytes(raw)
 
 
+def write_apko_docker_archive(path, role):
+    layer_plain = ('fixture-layer:' + role + '\n').encode()
+    layer_raw = gzip.compress(layer_plain, mtime=0)
+    diff_id = 'sha256:' + hashlib.sha256(layer_plain).hexdigest()
+    config = {
+        'architecture': 'amd64',
+        'os': 'linux',
+        'rootfs': {'type': 'layers', 'diff_ids': [diff_id]},
+        'config': {'User': '10001' if role == 'runtime' else ''},
+    }
+    config_raw = json.dumps(config, sort_keys=True, separators=(',', ':')).encode()
+    config_digest = 'sha256:' + hashlib.sha256(config_raw).hexdigest()
+    layer_name = hashlib.sha256(layer_raw).hexdigest() + '.tar.gz'
+    manifest_raw = json.dumps([{
+        'Config': config_digest,
+        'RepoTags': ['fds-apko-wolfi-' + role + ':fixture'],
+        'Layers': [layer_name],
+    }], sort_keys=True, separators=(',', ':')).encode()
+    index_raw = json.dumps({'manifests': []}, sort_keys=True, separators=(',', ':')).encode()
+    extra_raw = b'{}'
+    extra_name = 'sha256:' + hashlib.sha256(extra_raw).hexdigest()
+    with tarfile.open(path, 'w') as archive:
+        for name, raw in (
+            (config_digest, config_raw),
+            (layer_name, layer_raw),
+            ('manifest.json', manifest_raw),
+            (extra_name, extra_raw),
+            ('index.json', index_raw),
+        ):
+            item = tarfile.TarInfo(name)
+            item.size = len(raw)
+            archive.addfile(item, io.BytesIO(raw))
+    return supply.inspect_supply_archive(path)
+
+
 def fixture(root):
-    source, old, identity = legacy_fixture(root)
-    base = source / 'base.oci.tar'
-    for role in supply.ROLES:
-        shutil.copy2(base, source / (role + '.oci.tar'))
-    base.unlink()
+    source, old, _ = legacy_fixture(root)
+    (source / 'base.oci.tar').unlink()
+    identities = {
+        role: write_apko_docker_archive(source / (role + '.oci.tar'), role)
+        for role in supply.ROLES
+    }
     record = {
         'directory': str(source),
-        'images': {
-            role: {key: identity[key] for key in
-                   ('archive_sha256', 'manifest_digest', 'config_digest')}
-            for role in supply.ROLES
-        },
+        'images': copy.deepcopy(identities),
         'profiles': copy.deepcopy(old['profiles']),
         'requirements': copy.deepcopy(old['requirements']),
         'source_inputs': {
@@ -49,7 +84,7 @@ def fixture(root):
             for path, raw in SOURCE_INPUT_BYTES.items()
         },
     }
-    return source, record, identity
+    return source, record, identities
 
 
 class OfflineSupplyV3Tests(unittest.TestCase):
@@ -57,12 +92,13 @@ class OfflineSupplyV3Tests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.source, self.record, self.identity = fixture(self.root)
+        self.source, self.record, self.identities = fixture(self.root)
         self.target = self.root / 'staged'
 
     def test_two_images_profiles_and_wheels_stage_fail_closed(self):
         identities = supply.stage(self.record, self.target)
         self.assertEqual(set(identities), set(supply.ROLES))
+        self.assertTrue(all(item['format'] == 'docker-archive' for item in identities.values()))
         supply.verify_staged(self.target, self.record)
         (self.target / 'builder.oci.tar').write_bytes(b'changed')
         with self.assertRaises(flow.PreflightError):
@@ -73,6 +109,7 @@ class OfflineSupplyV3Tests(unittest.TestCase):
             lambda r: r['images'].pop('builder'),
             lambda r: r['images'].update(extra=copy.deepcopy(r['images']['runtime'])),
             lambda r: r['images']['runtime'].pop('config_digest'),
+            lambda r: r['images']['runtime'].__setitem__('manifest_json_sha256', '0' * 64),
         ):
             record = copy.deepcopy(self.record)
             mutate(record)
@@ -109,7 +146,7 @@ class FlowV3Tests(unittest.TestCase):
         self.h.setUp()
         self.addCleanup(self.h.doCleanups)
         h = self.h
-        self.source, self.record, self.identity = fixture(h.root)
+        self.source, self.record, self.identities = fixture(h.root)
         write_source_inputs(h.repo)
         h.config['schema'] = 'P1-CICD-app-build-scan-3'
         h.config['offline_supply'] = self.record
@@ -136,7 +173,7 @@ class FlowV3Tests(unittest.TestCase):
                 'Id': image['config_digest'],
                 'Os': 'linux',
                 'Architecture': 'amd64',
-                'RootFS': {'Layers': self.identity['diff_ids']},
+                'RootFS': {'Layers': self.identities[role]['diff_ids']},
             }]))
         return rc
 
@@ -205,7 +242,7 @@ class ProbeV3Tests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.source, self.record, self.identity = fixture(self.root)
+        self.source, self.record, self.identities = fixture(self.root)
         self.folder = self.root / 'probe'
         self.folder.mkdir()
         self.argv = {}
@@ -224,7 +261,7 @@ class ProbeV3Tests(unittest.TestCase):
                 'Id': image['config_digest'],
                 'Os': 'linux',
                 'Architecture': 'amd64',
-                'RootFS': {'Layers': self.identity['diff_ids']},
+                'RootFS': {'Layers': self.identities[role]['diff_ids']},
             }]))
         elif label == 'offline-base-build':
             Path(argv[argv.index('--iidfile') + 1]).write_text('sha256:' + '1' * 64 + '\n')
