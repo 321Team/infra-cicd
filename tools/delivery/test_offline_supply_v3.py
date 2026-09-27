@@ -109,7 +109,7 @@ class OfflineSupplyV3Tests(unittest.TestCase):
             lambda r: r['images'].pop('builder'),
             lambda r: r['images'].update(extra=copy.deepcopy(r['images']['runtime'])),
             lambda r: r['images']['runtime'].pop('config_digest'),
-            lambda r: r['images']['runtime'].__setitem__('manifest_json_sha256', '0' * 64),
+            lambda r: r['images']['runtime'].__setitem__('manifest_json_sha256', 'not-a-hash'),
         ):
             record = copy.deepcopy(self.record)
             mutate(record)
