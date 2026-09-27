@@ -152,6 +152,17 @@ def identity_shape(image):
                  'IMAGE_IDENTITY_INVALID')
 
 
+def supply_identity_shape(image, imported=False):
+    fields = set(flow.offline_v3.IDENTITY_FIELDS)
+    expected = fields | ({'reference'} if imported else set())
+    flow.require(isinstance(image, dict) and set(image) == expected,
+                 'OFFLINE_SUPPLY_IMAGE_IDENTITY_INVALID')
+    flow.offline_v3.validate_identity({key: image[key] for key in flow.offline_v3.IDENTITY_FIELDS})
+    if imported:
+        flow.require(isinstance(image['reference'], str) and image['reference'],
+                     'OFFLINE_SUPPLY_IMPORT_REFERENCE_INVALID')
+
+
 def check(provider, expected):
     expected_input(expected)
     top = provider.read('result.json')
@@ -247,13 +258,13 @@ def check(provider, expected):
                              and set(staged) == set(imported) == set(flow.offline_v3.ROLES),
                              'OFFLINE_SUPPLY_IMAGE_SCOPE_INVALID')
                 for role in flow.offline_v3.ROLES:
-                    identity_shape(staged[role])
-                    identity_shape(imported[role])
+                    supply_identity_shape(staged[role])
+                    supply_identity_shape(imported[role], imported=True)
                     flow.require(all(imported[role].get(key) == staged[role].get(key) for key in
-                                     ('archive_sha256', 'manifest_digest', 'config_digest', 'diff_ids')),
+                                     flow.offline_v3.IDENTITY_FIELDS),
                                  'OFFLINE_SUPPLY_IMPORT_IDENTITY_MISMATCH')
                     expected_ref = ('localhost/fds-apko-' + role + ':cicd-offline-' +
-                                    staged[role]['manifest_digest'][7:23])
+                                    staged[role]['config_digest'][7:23])
                     flow.require(imported[role].get('reference') == expected_ref,
                                  'OFFLINE_SUPPLY_IMPORT_REFERENCE_MISMATCH')
             else:
