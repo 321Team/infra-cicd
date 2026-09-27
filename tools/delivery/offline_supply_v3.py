@@ -218,14 +218,16 @@ def stage(record, target):
         require(_identity_matches(identity, expected), 'SUPPLY_IMAGE_IDENTITY_MISMATCH:' + role)
         identities[role] = identity
     for name in PROFILES:
+        supplied = source / 'profiles' / name
+        legacy.plain_path(supplied)
         folder = target / name
         folder.mkdir(mode=0o700)
         for filename, key in (('roots.txt', 'roots_sha256'), ('requirements.lock', 'lock_sha256'),
                               ('inventory.json', 'inventory_sha256')):
-            legacy.copy_checked(source / name / filename, folder / filename,
+            legacy.copy_checked(supplied / filename, folder / filename,
                                 record['profiles'][name][key], 1024**2)
         inventory = legacy.inventory_and_lock(folder)
-        wheels = source / name / 'wheels'
+        wheels = supplied / 'wheels'
         legacy.plain_path(wheels)
         require({p.name for p in wheels.iterdir()} == {r['file'] for r in inventory},
                 'WHEELHOUSE_INVENTORY_MISMATCH')
