@@ -132,7 +132,7 @@ class OfflineSupplyV3Tests(unittest.TestCase):
             (folder / 'requirements-test.txt').write_text('-r requirements.txt\n')
             for mode in ('runtime', 'test'):
                 (folder / ('requirements-' + mode + '.lock')).write_bytes(
-                    (self.source / (name + '-' + mode) / 'requirements.lock').read_bytes())
+                    (self.source / 'profiles' / (name + '-' + mode) / 'requirements.lock').read_bytes())
         supply.stage(self.record, self.target)
         config = {'offline_supply': self.record, 'services': {
             name: {'context': name, 'dockerfile': name + '/Dockerfile'}
@@ -161,7 +161,7 @@ class FlowV3Tests(unittest.TestCase):
             (h.repo / name / 'requirements-test.txt').write_text('-r requirements.txt\n')
             for mode in ('runtime', 'test'):
                 (h.repo / name / ('requirements-' + mode + '.lock')).write_bytes(
-                    (self.source / (name + '-' + mode) / 'requirements.lock').read_bytes())
+                    (self.source / 'profiles' / (name + '-' + mode) / 'requirements.lock').read_bytes())
         h.commit()
         self.argv = {}
         h.commands.side_effect = self.command
