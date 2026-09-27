@@ -115,6 +115,10 @@ def validate_handoff(config, source, command):
         checks[path] = {'sha256': hashlib.sha256(raw).hexdigest(), 'mode': entries[path]}
         return raw
 
+    if config['schema'] == 'P1-CICD-app-build-scan-3':
+        for path, digest in config['offline_supply']['source_inputs'].items():
+            flow.require(hashlib.sha256(blob(path)).hexdigest() == digest,
+                         'SOURCE_APKO_INPUT_CHANGED:' + path)
     for path, digest in config['offline_supply']['requirements'].items():
         flow.require(hashlib.sha256(blob(path)).hexdigest() == digest, 'SOURCE_REQUIREMENTS_CHANGED')
     for name, service in config['services'].items():
