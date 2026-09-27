@@ -14,6 +14,12 @@ import offline_supply as legacy
 SERVICES = legacy.SERVICES
 PROFILES = legacy.PROFILES
 ROLES = ('builder', 'runtime')
+SOURCE_INPUTS = (
+    'ci/apko/wolfi-python313-builder.apko.yaml',
+    'ci/apko/wolfi-python313-builder.apko.lock.json',
+    'ci/apko/wolfi-python313-runtime.apko.yaml',
+    'ci/apko/wolfi-python313-runtime.apko.lock.json',
+)
 HEX = legacy.HEX
 LIMIT = legacy.LIMIT
 require = legacy.require
@@ -24,7 +30,8 @@ unique_object = legacy.unique_object
 
 def validate_record(record):
     require(isinstance(record, dict) and set(record) == {
-        'directory', 'images', 'profiles', 'requirements'}, 'OFFLINE_V3_RECORD_FIELDS')
+        'directory', 'images', 'profiles', 'requirements', 'source_inputs'},
+            'OFFLINE_V3_RECORD_FIELDS')
     directory = record['directory']
     require(isinstance(directory, str) and re.fullmatch(r'/[A-Za-z0-9_./-]+', directory)
             and all(p not in ('', '.', '..') for p in directory.split('/')[1:]),
@@ -50,6 +57,11 @@ def validate_record(record):
     require(isinstance(record['requirements'], dict) and set(record['requirements']) == paths
             and all(isinstance(v, str) and re.fullmatch(HEX, v)
                     for v in record['requirements'].values()), 'OFFLINE_REQUIREMENTS_HASH_REQUIRED')
+    require(isinstance(record['source_inputs'], dict)
+            and set(record['source_inputs']) == set(SOURCE_INPUTS)
+            and all(isinstance(v, str) and re.fullmatch(HEX, v)
+                    for v in record['source_inputs'].values()),
+            'OFFLINE_SOURCE_INPUT_HASH_REQUIRED')
     return record
 
 
@@ -147,6 +159,8 @@ def dockerfile(name):
 
 def validate_source(root, config, staged):
     record = config['offline_supply']
+    for path, digest in record['source_inputs'].items():
+        require(sha256(root / path) == digest, 'SOURCE_APKO_INPUT_CHANGED:' + path)
     for path, digest in record['requirements'].items():
         require(sha256(root / path) == digest, 'SOURCE_REQUIREMENTS_CHANGED')
     for name in SERVICES:
