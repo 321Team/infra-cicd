@@ -1,12 +1,15 @@
 name: P1 Source validation
 
 on:
+  # Stack bases ci/offline-supply-consumption-20260917 and ci/private-app-source-20260918
+  # were removed on 2026-09-28: no open PR targets them. Docs-only changes skip the
+  # hosted run because these checks do not read Markdown or docs/.
   pull_request:
-    # Validate the private-source follow-up while PR #19 is still the stack base,
-    # and the app-handoff config/test PRs stacked on PR #21 in turn.
-    branches: [main, ci/offline-supply-consumption-20260917, ci/private-app-source-20260918]
+    branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']
   push:
     branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
 permissions:
