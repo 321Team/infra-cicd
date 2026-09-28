@@ -22,18 +22,18 @@
 
 새 Source에는 두 서비스 모두 `tests/test_dependency_upgrade_contract.py`가 존재한다.
 과거 P1-CICD-01 기록에는 새 Source에 transaction-api Unit NOT_APPLICABLE을 자동 승계하지
-않는다고 명시되어 있으므로 `TEST_SCOPE_PROPOSAL.json`은
-`PENDING_APP_LEAD_CONFIRMATION`으로 둔다.
+않는다고 명시되어 있으므로 `TEST_SCOPE_PROPOSAL.json`은 App Lead 이재환(`supreme33-kr`)의 Source tree 대조 승인에 따라
+`APPROVED`로 고정했다.
 
 제안 범위:
 
-- transaction-api Unit: NOT_APPLICABLE 재확인 필요
+- transaction-api Unit: NOT_APPLICABLE — App Lead 재확인 완료
 - transaction-api Contract: dependency upgrade + health + metrics
 - fds-engine Unit: `tests/test_rules.py`
 - fds-engine Contract: dependency upgrade + health + metrics
 
-App Lead가 승인하면 proposal의 `status`를 `APPROVED`로 바꾸고
-`approval.approved_by`, `approval.approval_reference`를 실제 승인 근거로 채운다.
+승인 근거는 `infra-cicd#39`의 App Lead test-scope 확인 코멘트이며,
+`approval.approved_by`와 `approval.approval_reference`에 기계 판독 가능하게 고정했다.
 
 ## materializer
 
@@ -53,12 +53,13 @@ Harbor Push, Deploy 또는 Delivery PASS가 아니다.
 
 ## 후속 순서
 
-1. App Lead test scope 승인
-2. 본 tooling PR 독립 리뷰/병합
-3. artifact를 `cicd-runner01/server01_cicd-runner`에 전달
-4. materializer로 신규 supply directory + v3 config 생성
-5. 생성 config SHA/원본 supply hash 수신 검증
-6. active config 전환 PR 독립 리뷰
-7. on-prem DB preflight + Test→Build→Scan
+1. App Lead test scope 승인 — 완료
+2. tooling PR #39 독립 리뷰/병합 — 완료
+3. 승인값 동기화 후속 PR 리뷰/병합
+4. artifact를 `cicd-runner01/server01_cicd-runner`에 전달
+5. materializer로 신규 supply directory + v3 config 생성
+6. 생성 config SHA/원본 supply hash 수신 검증
+7. active config 전환 PR 독립 리뷰
+8. on-prem DB preflight + Test→Build→Scan
 
 실패 시 기존 v2 active config와 기존 runner supply는 변경하지 않는다.
