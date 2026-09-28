@@ -1,44 +1,89 @@
 {
-  "schema": "P1-CICD-app-build-scan-2",
-  "status": "APPROVED_FOR_TEST_BUILD_SCAN",
-  "source": {
-    "repository": "321Team/fds-msa",
-    "commit": "ec69b67067decf35abbfed0a6a99f3073132787b",
-    "approved_by": "이재환 (supreme33-kr)",
-    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518"
-  },
-  "services": {
-    "transaction-api": {
-      "context": "transaction-api",
-      "dockerfile": "transaction-api/Dockerfile",
-      "base_image": "docker.io/library/python@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
-      "setup": [],
-      "unit": {
-        "status": "NOT_APPLICABLE",
-        "reason": "transaction-api는 자체 판정 로직이 없는 라우팅/영속성 계층이다 — 요청 수신, R01/R07용 context 사전 계산 후 fds-engine 호출, DB 저장만 수행한다. 실제 판정 로직(R01/R02/R04/R07)은 fds-engine에 있으며 fds-engine의 Unit test_rules.py(16개 함수)가 전담 커버한다. transaction-api 자체 동작(기동/DB 연결/metrics)은 위 Contract 테스트가 커버한다.",
-        "approved_by": "이재환 (supreme33-kr)",
-        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5757298518"
+  "offline_supply": {
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.1c7f36515040.c0e395c78e53",
+    "images": {
+      "builder": {
+        "archive_sha256": "974e0ac31de7a4da2348c116a7954aac648f1d9a5330ed56af63f6f23eef7dd2",
+        "config_digest": "sha256:ad5a142a8ee110d5fca77471fa5a9474b66605b1697627f4f8622dacd664f7c3",
+        "diff_ids": [
+          "sha256:50dff28c9c203213c507fe0932a931111617bc598de53fc081ad6ff52e47e2d5"
+        ],
+        "format": "docker-archive",
+        "index_json_sha256": "b79ff238b6ffc6fb50f24517aa4836f5c42f48e3a80f31976064db6ea2fa377c",
+        "layer_count": 1,
+        "manifest_json_sha256": "cc3e42bdf808920a07bc9a6d058c5ab7cd7503f68aa250117ed77d277956ef18",
+        "platform": "linux/amd64",
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:1c7f3651504097096c3a3fe4a86ac1973e169688-amd64"
       },
+      "runtime": {
+        "archive_sha256": "98105fdec1a0f0f140005be9a7a50124f55bf96d71e04720aa166b2c74e37592",
+        "config_digest": "sha256:34bb173ec648d3bedb2b8c17e4335e4e171210d1ec284daaf175b45240c48279",
+        "diff_ids": [
+          "sha256:90237ce13e8427bb536754beccaebce271758929d0ab4b8041e7578a6daf6ff0"
+        ],
+        "format": "docker-archive",
+        "index_json_sha256": "578c5254621f56f8a049339ba478379f4742446049fe3167a619f69c5cf3c679",
+        "layer_count": 1,
+        "manifest_json_sha256": "657c347cd1c1a1a894193856d7615a3f06a5de9c19b980112d15a7a6be699e48",
+        "platform": "linux/amd64",
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:1c7f3651504097096c3a3fe4a86ac1973e169688-amd64"
+      }
+    },
+    "profiles": {
+      "fds-engine-runtime": {
+        "inventory_sha256": "f202a2cc3c3cc6785facafc7e9aa4a126c387281fc0b8c8e7d2ebbdcd0229eeb",
+        "lock_sha256": "88e45719485bdeb8c3ea2c70f8f3303127c7136fe465e1330f45775a9e163fc8",
+        "roots_sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c"
+      },
+      "fds-engine-test": {
+        "inventory_sha256": "675e625721fe8ef0edb69f15359467151f5d7c9dbd485fdfe5665e5abd7f7ac8",
+        "lock_sha256": "6568bb9c1cf014c229c66579b89c589eb74fdac4749625861e50f1d56bc3f560",
+        "roots_sha256": "ed2c667809886aba216e9953d026f15a3be4d624214ac0d48739c3d7ad192c99"
+      },
+      "transaction-api-runtime": {
+        "inventory_sha256": "2f6bc210cd47a6f8de6bc87b93aef6440676a1c8957d5e25cd127cf868b12177",
+        "lock_sha256": "1b6c12a68a3bdbe4f2d56f0d9ce31054937d17fb46708566d795041c4a153187",
+        "roots_sha256": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
+      },
+      "transaction-api-test": {
+        "inventory_sha256": "56914c6a5c5e53dca23a04f8858054fda1a13abdf0ed6f1bde87f60e8c030f7b",
+        "lock_sha256": "9a047257be36385144d698d81889f707a032a11142c63409189cf944e0fbfc88",
+        "roots_sha256": "bb82768573d677bf8d4a6cb592f9a82950c0d85b25f9c927e28a3b955880ed03"
+      }
+    },
+    "requirements": {
+      "fds-engine/requirements-test.txt": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78",
+      "fds-engine/requirements.txt": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c",
+      "transaction-api/requirements-test.txt": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2",
+      "transaction-api/requirements.txt": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
+    },
+    "source_inputs": {
+      "ci/apko/wolfi-python313-builder.apko.lock.json": "544b4a4aeba2b9a3d138f358780e1b7c2a2ff711ffc55101628a6bfaa977fbf6",
+      "ci/apko/wolfi-python313-builder.apko.yaml": "6b194cf183d18170ff64dbb3ce59042b76960d2be09920e64b1472dbd13e429e",
+      "ci/apko/wolfi-python313-runtime.apko.lock.json": "fbbbdd2231c510b763be4562e8a2fa2a1d2a7fc8f608c3759443cdbb291a65f0",
+      "ci/apko/wolfi-python313-runtime.apko.yaml": "dc32de753d5b78501fc4654f79f17a285a0d523aaf6f28e6cfcad9ab2cc8c070"
+    }
+  },
+  "schema": "P1-CICD-app-build-scan-3",
+  "services": {
+    "fds-engine": {
+      "context": "fds-engine",
       "contract": {
-        "cwd": "transaction-api",
         "argv": [
           ".venv/bin/python",
           "-m",
           "pytest",
           "-q",
+          "tests/test_dependency_upgrade_contract.py",
           "tests/test_health.py",
           "tests/test_metrics.py"
         ],
+        "cwd": "fds-engine",
         "timeout_seconds": 300
-      }
-    },
-    "fds-engine": {
-      "context": "fds-engine",
+      },
       "dockerfile": "fds-engine/Dockerfile",
-      "base_image": "docker.io/library/python@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
       "setup": [],
       "unit": {
-        "cwd": "fds-engine",
         "argv": [
           ".venv/bin/python",
           "-m",
@@ -46,54 +91,40 @@
           "-q",
           "tests/test_rules.py"
         ],
-        "timeout_seconds": 300
-      },
-      "contract": {
         "cwd": "fds-engine",
+        "timeout_seconds": 300
+      }
+    },
+    "transaction-api": {
+      "context": "transaction-api",
+      "contract": {
         "argv": [
           ".venv/bin/python",
           "-m",
           "pytest",
           "-q",
+          "tests/test_dependency_upgrade_contract.py",
           "tests/test_health.py",
           "tests/test_metrics.py"
         ],
+        "cwd": "transaction-api",
         "timeout_seconds": 300
+      },
+      "dockerfile": "transaction-api/Dockerfile",
+      "setup": [],
+      "unit": {
+        "approval_reference": "https://github.com/321Team/infra-cicd/pull/39#issuecomment-5856699655",
+        "approved_by": "이재환 (supreme33-kr)",
+        "reason": "새 Source 1c7f3651504097096c3a3fe4a86ac1973e169688 기준 APP Lead 이재환(supreme33-kr)이 소스 tree를 직접 대조해 transaction-api/tests/에 별도 unit 테스트 파일이 없음을 확인하고 NOT_APPLICABLE 범위를 승인했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다.",
+        "status": "NOT_APPLICABLE"
       }
     }
   },
-  "offline_supply": {
-    "directory": "/home/server01_cicd-runner/FDS_CICD_Supply.20260917T010757Z.974fb972",
-    "archive_sha256": "c8fa45563815bd6a3de3a8b115103cbb3c838229bcda68ca255b70a9f2202d8c",
-    "manifest_digest": "sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
-    "config_digest": "sha256:ec7d6c95cd3692a2e2d228a8b1ca74e4025b54121fcc4c5da6f09cfa473315ad",
-    "profiles": {
-      "transaction-api-runtime": {
-        "roots_sha256": "0b8f3430a64f4b81429277bf651b2e1b62a68084f8d79b36a63d09d065b76947",
-        "lock_sha256": "3a71d0d227415f3f818642b5370920f02a23a9bcb28f4dd31aac1d59d96c756e",
-        "inventory_sha256": "b5ddd2595efad3a48dc6d09bb963515ab5cb8bfcd38604116ea2329d819640a4"
-      },
-      "transaction-api-test": {
-        "roots_sha256": "dc9cf9fa2bfb10708504fc283835f8f7e138d115f83de8b94eededa9ef6eceb0",
-        "lock_sha256": "72137816616e16e2b88f86630c507800414c3b37c14c7f624b9042fd66a8ef85",
-        "inventory_sha256": "acf41ad32fc8aed812f545b5b3e60d74250d5c37b88c30530c95bb0d410d26e9"
-      },
-      "fds-engine-runtime": {
-        "roots_sha256": "11b1f940e83bded8fa8e901005f0467c4652bfac332657b11c118ee8f9b80ca3",
-        "lock_sha256": "c9d6138da341b431f0b7fdaf4aee78d59f9207e9d3f2bf4636b0505681c1f80b",
-        "inventory_sha256": "6bf41b600e46f61d8c7e1a7886c411938da44fdd9dc65ea5d25127e7df2b80a5"
-      },
-      "fds-engine-test": {
-        "roots_sha256": "3f6aee59d8afee889d56f97bfef08830ce94d630d05097fb2dfa3e8b9bf2d16c",
-        "lock_sha256": "3a51dbbb6dd56d09658f0d2343e4b4847394f006f1f2aa082886bc468e797b65",
-        "inventory_sha256": "56ec48ee8d9827d90b9e2281ddae125be2f3b8760656404e5f9daa5490f60acb"
-      }
-    },
-    "requirements": {
-      "transaction-api/requirements.txt": "0b8f3430a64f4b81429277bf651b2e1b62a68084f8d79b36a63d09d065b76947",
-      "transaction-api/requirements-test.txt": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2",
-      "fds-engine/requirements.txt": "11b1f940e83bded8fa8e901005f0467c4652bfac332657b11c118ee8f9b80ca3",
-      "fds-engine/requirements-test.txt": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78"
-    }
-  }
+  "source": {
+    "approval_reference": "https://github.com/321Team/fds-msa/pull/9#pullrequestreview-5329362582",
+    "approved_by": "이재환 (supreme33-kr)",
+    "commit": "1c7f3651504097096c3a3fe4a86ac1973e169688",
+    "repository": "321Team/fds-msa"
+  },
+  "status": "APPROVED_FOR_TEST_BUILD_SCAN"
 }
