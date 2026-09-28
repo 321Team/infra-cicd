@@ -12,6 +12,7 @@ from unittest.mock import patch
 import zipfile
 
 import offline_supply as supply
+import offline_supply_v3 as supply_v3
 import build_scan as flow
 import test_build_scan as legacy
 import probe_offline_supply as probe
@@ -319,7 +320,7 @@ class ProbeTests(unittest.TestCase):
         self.assertIn('--prepare', result.stdout)
         with zipfile.ZipFile(a) as z:
             record = json.loads(z.read('offline-probe-input.json'))
-        supply.validate_record(record)
+        (supply_v3 if 'images' in record else supply).validate_record(record)
 
     def test_bundle_reads_actual_input_via_dot_relative_and_absolute_paths(self):
         archive = self.root / 'probe.pyz'

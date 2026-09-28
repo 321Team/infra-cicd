@@ -23,6 +23,9 @@ class WorkflowTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         supply, record, identity = fixture(self.root)
         self.config = json.loads((app.flow.ROOT / app.flow.CONFIG).read_text())
+        # This fixture exercises the legacy v2 handoff path. Keep it independent
+        # from whichever schema the committed active config currently uses.
+        self.config['schema'] = 'P1-CICD-app-build-scan-2'
         self.config['status'] = 'APPROVED_FOR_TEST_BUILD_SCAN'
         # Pin the fixture's own source repository regardless of what the committed
         # config currently holds; the private-repository path is opted into explicitly
