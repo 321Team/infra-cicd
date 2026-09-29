@@ -6,12 +6,12 @@
         "archive_sha256": "2ecd4edf1c7f98bbba421aff9cecc20ae78762f87f69790f5fa62786a3b1dc53",
         "config_digest": "sha256:d6b6281d9e6a17e04279476128d6b797a85ccb75fe83078e99592a8226c4f90e",
         "diff_ids": [
-          "sha256:84c77edbd22638ea405999f8749d786146379b8130d27a0d3a64fe5545f294e9"
+          "sha256:3c139ba200eee44ac5f41af3af633f3e03a54b42f07af259b3de056ce85e981d"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "7cbfb27b51610eb72423a37db07a90678bc22df71204ad04b9be957f87019615",
+        "index_json_sha256": "38cabd02d9a3091bf0c8355a0c9a4437db685f97adfd36d706370d59ad1481af",
         "layer_count": 1,
-        "manifest_json_sha256": "c9bc0f1928fccad8247c7fb7aad97c4900c77877de67162862614b26cdfd8d08",
+        "manifest_json_sha256": "5d0efe4afa407dfd0683e9b36af90819e0732528ac9a5ff49d1f9808a8a5e636",
         "platform": "linux/amd64",
         "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:368786c1e36b2bfb5424c4da472c1cc319c5c8c3-amd64"
       },
@@ -22,9 +22,9 @@
           "sha256:90237ce13e8427bb536754beccaebce271758929d0ab4b8041e7578a6daf6ff0"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "00febfaf6c656cb59714a8cb6d44da4dffdb2a4a6d00e44e0db1a0458929b8cc",
+        "index_json_sha256": "6937abc5571dbcbfb7f2d80d05228c3391b89a89315520099572ed953417077a",
         "layer_count": 1,
-        "manifest_json_sha256": "19e19d604a71193b8b5f450a896601a0b7d6dd57a4899d4b70fd93f2083d1dd6",
+        "manifest_json_sha256": "a54deb5b744ec324b48e3d3719a0f897a96a943ebb32b78631e8101063de9560",
         "platform": "linux/amd64",
         "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:368786c1e36b2bfb5424c4da472c1cc319c5c8c3-amd64"
       }
@@ -58,8 +58,8 @@
       "transaction-api/requirements.txt": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
     },
     "source_inputs": {
-      "ci/apko/wolfi-python313-builder.apko.lock.json": "5e7144e0d06329aa644c81f0248cc0ccdeee4479c0e089bd02f75f9f02db8e81",
-      "ci/apko/wolfi-python313-builder.apko.yaml": "1993ef8a2db4a5d70f685be22936b1916ab15d8b3d8429c43b86a967e2cb23aa",
+      "ci/apko/wolfi-python313-builder.apko.lock.json": "e949feaedacbc580392cfb1bf8a6833a7d5010935d73a393bbb2d2b3be487b11",
+      "ci/apko/wolfi-python313-builder.apko.yaml": "c2c0d81ec4a20fb06417b66c5a1d1a1c04a068f1c0c76d37a35f2c12bab264b2",
       "ci/apko/wolfi-python313-runtime.apko.lock.json": "fbbbdd2231c510b763be4562e8a2fa2a1d2a7fc8f608c3759443cdbb291a65f0",
       "ci/apko/wolfi-python313-runtime.apko.yaml": "dc32de753d5b78501fc4654f79f17a285a0d523aaf6f28e6cfcad9ab2cc8c070"
     }
