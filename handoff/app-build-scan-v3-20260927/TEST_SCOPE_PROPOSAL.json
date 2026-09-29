@@ -1,16 +1,16 @@
 {
   "schema": "P1-CICD-test-scope-proposal-1",
   "status": "APPROVED",
-  "source_commit": "1c7f3651504097096c3a3fe4a86ac1973e169688",
+  "source_commit": "368786c1e36b2bfb5424c4da472c1cc319c5c8c3",
   "approval": {
     "approved_by": "이재환 (supreme33-kr)",
-    "approval_reference": "https://github.com/321Team/infra-cicd/pull/39#issuecomment-5856699655"
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5882412875"
   },
   "services": {
     "transaction-api": {
       "unit": {
         "status": "NOT_APPLICABLE",
-        "reason": "새 Source 1c7f3651504097096c3a3fe4a86ac1973e169688 기준 APP Lead 이재환(supreme33-kr)이 소스 tree를 직접 대조해 transaction-api/tests/에 별도 unit 테스트 파일이 없음을 확인하고 NOT_APPLICABLE 범위를 승인했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다."
+        "reason": "새 Source 368786c1e36b2bfb5424c4da472c1cc319c5c8c3 기준 APP Lead 이재환(supreme33-kr)이 1c7f365...368786c compare를 직접 대조해 transaction-api/·fds-engine/ 하위 application code, tests, requirements 변경이 0건임을 확인하고 기존 transaction-api Unit NOT_APPLICABLE 및 test scope 유지에 재동의했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다."
       },
       "contract": {
         "cwd": "transaction-api",
