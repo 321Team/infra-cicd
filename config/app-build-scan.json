@@ -1,32 +1,32 @@
 {
   "offline_supply": {
-    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.1c7f36515040.c0e395c78e53",
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.368786c1e36b.24ee3192ecff",
     "images": {
       "builder": {
-        "archive_sha256": "974e0ac31de7a4da2348c116a7954aac648f1d9a5330ed56af63f6f23eef7dd2",
-        "config_digest": "sha256:ad5a142a8ee110d5fca77471fa5a9474b66605b1697627f4f8622dacd664f7c3",
+        "archive_sha256": "2ecd4edf1c7f98bbba421aff9cecc20ae78762f87f69790f5fa62786a3b1dc53",
+        "config_digest": "sha256:d6b6281d9e6a17e04279476128d6b797a85ccb75fe83078e99592a8226c4f90e",
         "diff_ids": [
-          "sha256:50dff28c9c203213c507fe0932a931111617bc598de53fc081ad6ff52e47e2d5"
+          "sha256:84c77edbd22638ea405999f8749d786146379b8130d27a0d3a64fe5545f294e9"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "b79ff238b6ffc6fb50f24517aa4836f5c42f48e3a80f31976064db6ea2fa377c",
+        "index_json_sha256": "7cbfb27b51610eb72423a37db07a90678bc22df71204ad04b9be957f87019615",
         "layer_count": 1,
-        "manifest_json_sha256": "cc3e42bdf808920a07bc9a6d058c5ab7cd7503f68aa250117ed77d277956ef18",
+        "manifest_json_sha256": "c9bc0f1928fccad8247c7fb7aad97c4900c77877de67162862614b26cdfd8d08",
         "platform": "linux/amd64",
-        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:1c7f3651504097096c3a3fe4a86ac1973e169688-amd64"
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:368786c1e36b2bfb5424c4da472c1cc319c5c8c3-amd64"
       },
       "runtime": {
-        "archive_sha256": "98105fdec1a0f0f140005be9a7a50124f55bf96d71e04720aa166b2c74e37592",
+        "archive_sha256": "062a21c23490b8b30ecea0678b7c09e7aa4e58b0601c58dc14c81a4757d75147",
         "config_digest": "sha256:34bb173ec648d3bedb2b8c17e4335e4e171210d1ec284daaf175b45240c48279",
         "diff_ids": [
           "sha256:90237ce13e8427bb536754beccaebce271758929d0ab4b8041e7578a6daf6ff0"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "578c5254621f56f8a049339ba478379f4742446049fe3167a619f69c5cf3c679",
+        "index_json_sha256": "00febfaf6c656cb59714a8cb6d44da4dffdb2a4a6d00e44e0db1a0458929b8cc",
         "layer_count": 1,
-        "manifest_json_sha256": "657c347cd1c1a1a894193856d7615a3f06a5de9c19b980112d15a7a6be699e48",
+        "manifest_json_sha256": "19e19d604a71193b8b5f450a896601a0b7d6dd57a4899d4b70fd93f2083d1dd6",
         "platform": "linux/amd64",
-        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:1c7f3651504097096c3a3fe4a86ac1973e169688-amd64"
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:368786c1e36b2bfb5424c4da472c1cc319c5c8c3-amd64"
       }
     },
     "profiles": {
@@ -58,8 +58,8 @@
       "transaction-api/requirements.txt": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
     },
     "source_inputs": {
-      "ci/apko/wolfi-python313-builder.apko.lock.json": "544b4a4aeba2b9a3d138f358780e1b7c2a2ff711ffc55101628a6bfaa977fbf6",
-      "ci/apko/wolfi-python313-builder.apko.yaml": "6b194cf183d18170ff64dbb3ce59042b76960d2be09920e64b1472dbd13e429e",
+      "ci/apko/wolfi-python313-builder.apko.lock.json": "5e7144e0d06329aa644c81f0248cc0ccdeee4479c0e089bd02f75f9f02db8e81",
+      "ci/apko/wolfi-python313-builder.apko.yaml": "1993ef8a2db4a5d70f685be22936b1916ab15d8b3d8429c43b86a967e2cb23aa",
       "ci/apko/wolfi-python313-runtime.apko.lock.json": "fbbbdd2231c510b763be4562e8a2fa2a1d2a7fc8f608c3759443cdbb291a65f0",
       "ci/apko/wolfi-python313-runtime.apko.yaml": "dc32de753d5b78501fc4654f79f17a285a0d523aaf6f28e6cfcad9ab2cc8c070"
     }
@@ -113,17 +113,17 @@
       "dockerfile": "transaction-api/Dockerfile",
       "setup": [],
       "unit": {
-        "approval_reference": "https://github.com/321Team/infra-cicd/pull/39#issuecomment-5856699655",
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5882412875",
         "approved_by": "이재환 (supreme33-kr)",
-        "reason": "새 Source 1c7f3651504097096c3a3fe4a86ac1973e169688 기준 APP Lead 이재환(supreme33-kr)이 소스 tree를 직접 대조해 transaction-api/tests/에 별도 unit 테스트 파일이 없음을 확인하고 NOT_APPLICABLE 범위를 승인했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다.",
+        "reason": "새 Source 368786c1e36b2bfb5424c4da472c1cc319c5c8c3 기준 APP Lead 이재환(supreme33-kr)이 1c7f365...368786c compare를 직접 대조해 transaction-api/·fds-engine/ 하위 application code, tests, requirements 변경이 0건임을 확인하고 기존 transaction-api Unit NOT_APPLICABLE 및 test scope 유지에 재동의했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다.",
         "status": "NOT_APPLICABLE"
       }
     }
   },
   "source": {
-    "approval_reference": "https://github.com/321Team/fds-msa/pull/9#pullrequestreview-5329362582",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5882412875",
     "approved_by": "이재환 (supreme33-kr)",
-    "commit": "1c7f3651504097096c3a3fe4a86ac1973e169688",
+    "commit": "368786c1e36b2bfb5424c4da472c1cc319c5c8c3",
     "repository": "321Team/fds-msa"
   },
   "status": "APPROVED_FOR_TEST_BUILD_SCAN"
