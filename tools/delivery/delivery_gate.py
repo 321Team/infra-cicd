@@ -105,11 +105,13 @@ def evaluate(record, phase):
         manifest = image.get('manifest_digest')
         check(_match(manifest, DIGEST), 'MANIFEST_DIGEST_INVALID')
         check(_match(image.get('config_digest'), DIGEST), 'CONFIG_DIGEST_INVALID')
-        check(scanned.get('result') == 'PASS', 'SCAN_NOT_PASS')
+        check(scanned.get('scan') == 'PASS', 'SCAN_NOT_PASS')
         check(scanned.get('exit_code') == 0, 'SCAN_EXIT_CODE_NOT_ZERO')
-        check(type(scanned.get('high_count')) is int and scanned.get('high_count') == 0,
+        counts = _obj(scanned.get('counts'))
+        check(set(counts) == {'HIGH', 'CRITICAL'}, 'SCAN_COUNTS_INVALID')
+        check(type(counts.get('HIGH')) is int and counts.get('HIGH') == 0,
               'HIGH_FINDINGS_OR_INVALID_COUNT')
-        check(type(scanned.get('critical_count')) is int and scanned.get('critical_count') == 0,
+        check(type(counts.get('CRITICAL')) is int and counts.get('CRITICAL') == 0,
               'CRITICAL_FINDINGS_OR_INVALID_COUNT')
         check(scanned.get('manifest_digest') == manifest, 'SCAN_MANIFEST_MISMATCH')
         check(_match(scanned.get('report_sha256'), SHA256), 'SCAN_REPORT_HASH_INVALID')
@@ -149,7 +151,9 @@ def evaluate(record, phase):
         need(kubernetes.get('worker_pull') == 'PASS', 'WORKER_PULL_NOT_PASS')
         need(kubernetes.get('deployment_lock') == 'PASS', 'DEPLOYMENT_LOCK_NOT_PASS')
         ttl = kubernetes.get('token_ttl_seconds')
-        need(type(ttl) is int and 1 <= ttl <= 3600, 'TOKEN_TTL_INVALID')
+        need(_positive_int(ttl), 'TOKEN_TTL_INVALID')
+        need(_match(kubernetes.get('token_policy_reference'), REFERENCE),
+             'TOKEN_POLICY_REFERENCE_INVALID')
         approval = _obj(record.get('deployment_approval'))
         need(_text(approval.get('approved_by'), 200), 'DEPLOY_APPROVER_INVALID')
         need(_match(approval.get('reference'), REFERENCE), 'DEPLOY_APPROVAL_REFERENCE_INVALID')
