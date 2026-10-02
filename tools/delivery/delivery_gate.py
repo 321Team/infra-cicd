@@ -151,7 +151,8 @@ def evaluate(record, phase):
         need(kubernetes.get('worker_pull') == 'PASS', 'WORKER_PULL_NOT_PASS')
         need(kubernetes.get('deployment_lock') == 'PASS', 'DEPLOYMENT_LOCK_NOT_PASS')
         ttl = kubernetes.get('token_ttl_seconds')
-        need(_positive_int(ttl), 'TOKEN_TTL_INVALID')
+        need(type(ttl) is int and ttl == 3600, 'TOKEN_TTL_POLICY_MISMATCH')
+        need(_text(kubernetes.get('token_audience'), 500), 'TOKEN_AUDIENCE_REQUIRED')
         need(_match(kubernetes.get('token_policy_reference'), REFERENCE),
              'TOKEN_POLICY_REFERENCE_INVALID')
         approval = _obj(record.get('deployment_approval'))
