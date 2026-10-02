@@ -47,7 +47,7 @@ pre_push 조건에 추가하여:
 - 배포 직전 실제 이전 digest를 rollback input으로 요구
 - API `https://10.1.93.109:6443`, SA `ci-cd/cicd-runner-sa`
 - RBAC scope/Worker Pull/deployment lock PASS
-- Token TTL은 양의 값이어야 하고, 적용한 TokenRequest 정책의 GitHub reference를 함께 요구한다. 현재 `infra-kubernetes@7329bf2` helper의 기본값은 1h이나 이 PR에서 3600초를 정본 상한으로 새로 확정하지 않는다.
+- P1-SEC-01 승인 정책의 `--duration=1h`를 그대로 소비해 Token TTL=3600초를 요구하고, 실제 API audience 및 적용 정책 GitHub reference를 함께 기록한다. 3600초는 이 PR의 신규 결정이 아니라 P1-SEC 인계값이다.
 - 배포 승인 기록을 동일 Workflow SHA/Run/Attempt에 결합
 
 ## 의도적으로 남긴 미구현 범위
