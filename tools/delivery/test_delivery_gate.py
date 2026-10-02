@@ -48,11 +48,11 @@ def fixture():
             },
             'scan': {
                 'transaction-api': {
-                    'result': 'PASS', 'exit_code': 0, 'high_count': 0, 'critical_count': 0,
+                    'scan': 'PASS', 'exit_code': 0, 'counts': {'HIGH': 0, 'CRITICAL': 0},
                     'manifest_digest': digest_a, 'report_sha256': '9' * 64,
                 },
                 'fds-engine': {
-                    'result': 'PASS', 'exit_code': 0, 'high_count': 0, 'critical_count': 0,
+                    'scan': 'PASS', 'exit_code': 0, 'counts': {'HIGH': 0, 'CRITICAL': 0},
                     'manifest_digest': digest_b, 'report_sha256': '0' * 64,
                 },
             },
@@ -95,6 +95,7 @@ def fixture():
             'worker_pull': 'PASS',
             'deployment_lock': 'PASS',
             'token_ttl_seconds': 3600,
+            'token_policy_reference': 'https://github.com/321Team/infra-kubernetes/blob/7329bf2eb988b552483af48ff660d6a3f1f1d4f5/scripts/create-secrets-safe.sh',
         },
         'deployment_approval': {
             'approved_by': 'fixture reviewer',
@@ -116,20 +117,20 @@ class DeliveryGateTests(unittest.TestCase):
         self.assertEqual(result['delivery_gate'], 'NOT_VERIFIED')
 
     def test_high_or_critical_finding_blocks_push(self):
-        for field in ('high_count', 'critical_count'):
+        for field in ('HIGH', 'CRITICAL'):
             record = fixture()
-            record['build_scan']['scan']['transaction-api'][field] = 1
+            record['build_scan']['scan']['transaction-api']['counts'][field] = 1
             with self.subTest(field=field):
                 result = gate.evaluate(record, 'pre_push')
                 self.assertEqual(result['decision'], 'BLOCK')
-                self.assertIn('transaction-api:' + field.replace('_count', '').upper() +
-                              '_FINDINGS_OR_INVALID_COUNT', result['reasons'])
+                self.assertIn('transaction-api:' + field + '_FINDINGS_OR_INVALID_COUNT',
+                              result['reasons'])
                 self.assertIsNone(result['plan'])
 
     def test_scanner_or_build_failure_blocks_before_push(self):
         for mutate, reason in (
             (lambda r: r['build_scan'].update(result='FAIL'), 'BUILD_SCAN_NOT_PASS'),
-            (lambda r: r['build_scan']['scan']['fds-engine'].update(result='FAIL', exit_code=1),
+            (lambda r: r['build_scan']['scan']['fds-engine'].update(scan='FAIL', exit_code=1),
              'fds-engine:SCAN_NOT_PASS'),
             (lambda r: r['harbor'].update(runner_tls_trust='FAIL'), 'RUNNER_TLS_TRUST_NOT_PASS'),
             (lambda r: r['harbor'].update(if09_ac02='PENDING'), 'HARBOR_IF09_AC02_NOT_PASS'),
@@ -150,7 +151,9 @@ class DeliveryGateTests(unittest.TestCase):
             (lambda r: r['push']['transaction-api'].update(manifest_digest='sha256:' + 'f' * 64),
              'transaction-api:PUSH_MANIFEST_MISMATCH'),
             (lambda r: r['kubernetes'].update(rbac_scope='FAIL'), 'KUBERNETES_RBAC_SCOPE_NOT_PASS'),
-            (lambda r: r['kubernetes'].update(token_ttl_seconds=7200), 'TOKEN_TTL_INVALID'),
+            (lambda r: r['kubernetes'].update(token_ttl_seconds=0), 'TOKEN_TTL_INVALID'),
+            (lambda r: r['kubernetes'].update(token_policy_reference=None),
+             'TOKEN_POLICY_REFERENCE_INVALID'),
             (lambda r: r['targets']['fds-engine'].update(container='other'),
              'fds-engine:TARGET_CONTAINER_INVALID'),
         )
