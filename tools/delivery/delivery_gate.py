@@ -24,7 +24,7 @@ TOKEN_POLICY_REFERENCE = (
 SHA = re.compile(r'[0-9a-f]{40}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
-REFERENCE = re.compile(r'https://github\\.com/321Team/[^\\s]+')
+REFERENCE = re.compile(r'https://github\.com/321Team/[^\s]+')
 CREDENTIAL_REFERENCE = re.compile(
     r'(?:actions-secret|runner-reference|handoff-reference):[A-Za-z0-9_.:/-]{1,200}')
 
