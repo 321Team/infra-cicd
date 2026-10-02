@@ -17,11 +17,14 @@ REGISTRY_PREFIX = '10.1.93.54/fds/'
 KUBERNETES_API = 'https://10.1.93.109:6443'
 NAMESPACE = 'fds-app'
 SERVICE_ACCOUNT = 'ci-cd/cicd-runner-sa'
+TOKEN_POLICY_REFERENCE = (
+    'https://github.com/321Team/infra-kubernetes/blob/'
+    '7329bf2eb988b552483af48ff660d6a3f1f1d4f5/scripts/create-secrets-safe.sh')
 
 SHA = re.compile(r'[0-9a-f]{40}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
-REFERENCE = re.compile(r'https://github\.com/[^\s]+')
+REFERENCE = re.compile(r'https://github\\.com/321Team/[^\\s]+')
 CREDENTIAL_REFERENCE = re.compile(
     r'(?:actions-secret|runner-reference|handoff-reference):[A-Za-z0-9_.:/-]{1,200}')
 
@@ -73,6 +76,8 @@ def evaluate(record, phase):
     need(build.get('result') == 'PASS', 'BUILD_SCAN_NOT_PASS')
     need(build.get('source_commit') == source.get('commit'), 'BUILD_SOURCE_BINDING_MISMATCH')
     need(build.get('workflow_commit') == workflow.get('commit'), 'BUILD_WORKFLOW_BINDING_MISMATCH')
+    need(_positive_int(build.get('run_id')), 'BUILD_RUN_ID_INVALID')
+    need(_positive_int(build.get('run_attempt')), 'BUILD_RUN_ATTEMPT_INVALID')
     need(build.get('run_id') == workflow.get('run_id'), 'BUILD_RUN_BINDING_MISMATCH')
     need(build.get('run_attempt') == workflow.get('run_attempt'), 'BUILD_ATTEMPT_BINDING_MISMATCH')
     need(_match(build.get('input_sha256'), SHA256), 'BUILD_INPUT_HASH_INVALID')
@@ -92,6 +97,7 @@ def evaluate(record, phase):
          'HARBOR_CREDENTIAL_REFERENCE_INVALID')
 
     plans = []
+    manifest_digests = []
     pushed = _obj(record.get('push'))
     targets = _obj(record.get('targets'))
     for name in SERVICES:
@@ -103,10 +109,12 @@ def evaluate(record, phase):
 
         check(_match(image.get('archive_sha256'), SHA256), 'ARCHIVE_HASH_INVALID')
         manifest = image.get('manifest_digest')
+        manifest_digests.append(manifest)
         check(_match(manifest, DIGEST), 'MANIFEST_DIGEST_INVALID')
         check(_match(image.get('config_digest'), DIGEST), 'CONFIG_DIGEST_INVALID')
         check(scanned.get('scan') == 'PASS', 'SCAN_NOT_PASS')
-        check(scanned.get('exit_code') == 0, 'SCAN_EXIT_CODE_NOT_ZERO')
+        check(type(scanned.get('exit_code')) is int and scanned.get('exit_code') == 0,
+              'SCAN_EXIT_CODE_NOT_ZERO')
         counts = _obj(scanned.get('counts'))
         check(set(counts) == {'HIGH', 'CRITICAL'}, 'SCAN_COUNTS_INVALID')
         check(type(counts.get('HIGH')) is int and counts.get('HIGH') == 0,
@@ -137,9 +145,14 @@ def evaluate(record, phase):
         check(target.get('container') == name, 'TARGET_CONTAINER_INVALID')
         previous = target.get('previous_manifest_digest')
         check(_match(previous, DIGEST), 'ROLLBACK_DIGEST_INVALID')
+        check(previous != manifest, 'ROLLBACK_DIGEST_EQUALS_NEW_DIGEST')
         plans.append({'service': name, 'namespace': NAMESPACE, 'deployment': name,
                       'container': name, 'image': registry + '@' + str(manifest),
                       'previous_manifest_digest': previous})
+
+    need(len(manifest_digests) == len(SERVICES) and
+         len(set(manifest_digests)) == len(SERVICES),
+         'BUILD_MANIFEST_DIGESTS_NOT_DISTINCT')
 
     if phase == 'pre_deploy':
         need(set(pushed) == set(SERVICES), 'EXACT_TWO_PUSH_RESULTS_REQUIRED')
@@ -153,11 +166,13 @@ def evaluate(record, phase):
         ttl = kubernetes.get('token_ttl_seconds')
         need(type(ttl) is int and ttl == 3600, 'TOKEN_TTL_POLICY_MISMATCH')
         need(_text(kubernetes.get('token_audience'), 500), 'TOKEN_AUDIENCE_REQUIRED')
-        need(_match(kubernetes.get('token_policy_reference'), REFERENCE),
+        need(kubernetes.get('token_policy_reference') == TOKEN_POLICY_REFERENCE,
              'TOKEN_POLICY_REFERENCE_INVALID')
         approval = _obj(record.get('deployment_approval'))
         need(_text(approval.get('approved_by'), 200), 'DEPLOY_APPROVER_INVALID')
         need(_match(approval.get('reference'), REFERENCE), 'DEPLOY_APPROVAL_REFERENCE_INVALID')
+        need(_positive_int(approval.get('run_id')), 'DEPLOY_APPROVAL_RUN_ID_INVALID')
+        need(_positive_int(approval.get('run_attempt')), 'DEPLOY_APPROVAL_ATTEMPT_INVALID')
         need(approval.get('workflow_commit') == workflow.get('commit'),
              'DEPLOY_APPROVAL_WORKFLOW_MISMATCH')
         need(approval.get('run_id') == workflow.get('run_id'), 'DEPLOY_APPROVAL_RUN_MISMATCH')
@@ -171,4 +186,5 @@ def evaluate(record, phase):
         'basis': 'DECLARED_REVIEWED_INPUTS_ONLY',
         'runtime_enforcement': 'NOT_INTEGRATED',
         'delivery_gate': 'NOT_VERIFIED',
+        'token_audience_validation': 'PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE',
     }
