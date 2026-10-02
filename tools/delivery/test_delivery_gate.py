@@ -205,6 +205,94 @@ class DeliveryGateTests(unittest.TestCase):
         self.assertEqual(result['decision'], 'BLOCK')
         self.assertIn('EXACT_TWO_BUILD_IMAGES_REQUIRED', result['reasons'])
 
+    def test_rollback_digest_must_be_present_valid_and_different(self):
+        for mutate, reason in (
+            (lambda r: r['targets']['transaction-api'].pop('previous_manifest_digest'),
+             'transaction-api:ROLLBACK_DIGEST_INVALID'),
+            (lambda r: r['targets']['transaction-api'].update(previous_manifest_digest='bad'),
+             'transaction-api:ROLLBACK_DIGEST_INVALID'),
+            (lambda r: r['targets']['transaction-api'].update(
+                previous_manifest_digest=r['build_scan']['images']['transaction-api']['manifest_digest']),
+             'transaction-api:ROLLBACK_DIGEST_EQUALS_NEW_DIGEST'),
+        ):
+            record = fixture()
+            mutate(record)
+            with self.subTest(reason=reason):
+                result = gate.evaluate(record, 'pre_deploy')
+                self.assertEqual(result['decision'], 'BLOCK')
+                self.assertIn(reason, result['reasons'])
+
+    def test_github_references_are_limited_to_321team_and_token_policy_is_pinned(self):
+        faults = (
+            (lambda r: r['source'].update(approval_reference='https://github.com/other-org/repo/issues/1'),
+             'SOURCE_APPROVAL_REFERENCE_INVALID'),
+            (lambda r: r['harbor'].update(handoff_reference='https://github.com/other-org/repo/issues/1'),
+             'HARBOR_HANDOFF_REFERENCE_INVALID'),
+            (lambda r: r['deployment_approval'].update(reference='https://github.com/other-org/repo/issues/1'),
+             'DEPLOY_APPROVAL_REFERENCE_INVALID'),
+            (lambda r: r['kubernetes'].update(token_policy_reference='https://github.com/321Team/infra-kubernetes/blob/main/scripts/create-secrets-safe.sh'),
+             'TOKEN_POLICY_REFERENCE_INVALID'),
+        )
+        for mutate, reason in faults:
+            record = fixture()
+            mutate(record)
+            with self.subTest(reason=reason):
+                result = gate.evaluate(record, 'pre_deploy')
+                self.assertEqual(result['decision'], 'BLOCK')
+                self.assertIn(reason, result['reasons'])
+
+    def test_token_audience_limitation_is_machine_visible(self):
+        record = fixture()
+        record['kubernetes']['token_audience'] = 'custom-reviewed-audience'
+        result = gate.evaluate(record, 'pre_deploy')
+        self.assertEqual(result['decision'], 'CONDITIONS_MATCH')
+        self.assertEqual(result['token_audience_validation'],
+                         'PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE')
+
+    def test_boolean_values_do_not_satisfy_integer_runtime_fields(self):
+        faults = (
+            (lambda r: r['build_scan'].update(run_id=True), 'BUILD_RUN_ID_INVALID'),
+            (lambda r: r['build_scan']['scan']['transaction-api'].update(exit_code=False),
+             'transaction-api:SCAN_EXIT_CODE_NOT_ZERO'),
+            (lambda r: r['deployment_approval'].update(run_attempt=True),
+             'DEPLOY_APPROVAL_ATTEMPT_INVALID'),
+        )
+        for mutate, reason in faults:
+            record = fixture()
+            mutate(record)
+            with self.subTest(reason=reason):
+                result = gate.evaluate(record, 'pre_deploy')
+                self.assertEqual(result['decision'], 'BLOCK')
+                self.assertIn(reason, result['reasons'])
+
+    def test_manifest_digests_must_be_distinct_between_services(self):
+        record = fixture()
+        duplicate = record['build_scan']['images']['transaction-api']['manifest_digest']
+        record['build_scan']['images']['fds-engine']['manifest_digest'] = duplicate
+        record['build_scan']['scan']['fds-engine']['manifest_digest'] = duplicate
+        record['push']['fds-engine']['manifest_digest'] = duplicate
+        result = gate.evaluate(record, 'pre_deploy')
+        self.assertEqual(result['decision'], 'BLOCK')
+        self.assertIn('BUILD_MANIFEST_DIGESTS_NOT_DISTINCT', result['reasons'])
+
+    def test_fixed_workflow_api_and_service_account_cannot_drift(self):
+        faults = (
+            (lambda r: r['workflow'].update(ref='refs/heads/feature'), 'WORKFLOW_MAIN_ONLY'),
+            (lambda r: r['kubernetes'].update(api_server='https://10.1.93.102:6443'),
+             'KUBERNETES_API_INVALID'),
+            (lambda r: r['kubernetes'].update(service_account='default'),
+             'KUBERNETES_SERVICE_ACCOUNT_INVALID'),
+            (lambda r: r['deployment_approval'].update(workflow_commit='f' * 40),
+             'DEPLOY_APPROVAL_WORKFLOW_MISMATCH'),
+        )
+        for mutate, reason in faults:
+            record = fixture()
+            mutate(record)
+            with self.subTest(reason=reason):
+                result = gate.evaluate(record, 'pre_deploy')
+                self.assertEqual(result['decision'], 'BLOCK')
+                self.assertIn(reason, result['reasons'])
+
 
 if __name__ == '__main__':
     unittest.main()
