@@ -32,7 +32,7 @@ Podman/Harbor/kubectl 명령, 자격증명 발급, Deployment 갱신, rollback�
 
 - 승인된 `321Team/fds-msa` Source SHA와 infra-cicd main Workflow SHA/Run/Attempt 결합
 - Build/Scan PASS와 두 이미지 archive/config/manifest identity
-- 두 이미지 모두 HIGH=0, CRITICAL=0, Scan exit 0
+- 현행 `tools/trivy/scan_images.py` receipt 형식(`scan`, `exit_code`, `counts.HIGH/CRITICAL`) 그대로 두 이미지 모두 HIGH=0, CRITICAL=0, Scan exit 0
 - Scan manifest digest와 Build manifest digest 일치
 - Harbor endpoint/repository 고정
 - Runner TLS trust PASS와 HBR IF-09 AC-02 PASS
@@ -47,7 +47,7 @@ pre_push 조건에 추가하여:
 - 배포 직전 실제 이전 digest를 rollback input으로 요구
 - API `https://10.1.93.109:6443`, SA `ci-cd/cicd-runner-sa`
 - RBAC scope/Worker Pull/deployment lock PASS
-- Token TTL 1~3600초
+- Token TTL은 양의 값이어야 하고, 적용한 TokenRequest 정책의 GitHub reference를 함께 요구한다. 현재 `infra-kubernetes@7329bf2` helper의 기본값은 1h이나 이 PR에서 3600초를 정본 상한으로 새로 확정하지 않는다.
 - 배포 승인 기록을 동일 Workflow SHA/Run/Attempt에 결합
 
 ## 의도적으로 남긴 미구현 범위
