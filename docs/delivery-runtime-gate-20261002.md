@@ -44,10 +44,12 @@ pre_push 조건에 추가하여:
 
 - Harbor Push receipt PASS 및 registry manifest digest 일치
 - 대상 namespace/Deployment/container를 `fds-app/{transaction-api,fds-engine}`으로 고정
-- 배포 직전 실제 이전 digest를 rollback input으로 요구
+- 배포 직전 실제 이전 digest를 rollback input으로 요구하며 **새 manifest digest와 동일한 값은 차단**
 - API `https://10.1.93.109:6443`, SA `ci-cd/cicd-runner-sa`
 - RBAC scope/Worker Pull/deployment lock PASS
-- P1-SEC-01 승인 정책의 `--duration=1h`를 그대로 소비해 Token TTL=3600초를 요구하고, 실제 API audience 및 적용 정책 GitHub reference를 함께 기록한다. 3600초는 이 PR의 신규 결정이 아니라 P1-SEC 인계값이다.
+- P1-SEC-01 승인 정책의 `--duration=1h`를 그대로 소비해 Token TTL=3600초를 요구한다. 정책 reference는 `infra-kubernetes@7329bf2.../scripts/create-secrets-safe.sh`의 **고정 SHA blob URL만** 허용한다. 3600초는 이 PR의 신규 결정이 아니라 P1-SEC 인계값이다.
+- GitHub approval/handoff reference는 `https://github.com/321Team/...` 범위만 허용한다.
+- **Token audience 한계:** 승인된 `create-secrets-safe.sh`는 `--audience`를 호출 인자로 요구하지만 특정 기대 audience 값을 정본으로 고정하지 않는다. 따라서 현재 Gate는 non-empty 실제 audience의 기록 여부만 검사하며 반환값에 `PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE`를 명시한다. 이 상태를 audience 검증 PASS로 해석하지 않으며, 운영 adapter가 Token을 실제 사용하기 전에는 승인된 기대 audience를 별도 고정해 비교하거나 동등한 Runtime 검증 근거를 추가해야 한다.
 - 배포 승인 기록을 동일 Workflow SHA/Run/Attempt에 결합
 
 ## 의도적으로 남긴 미구현 범위
@@ -71,3 +73,15 @@ pre_push 조건에 추가하여:
 ## 판정
 
 `STATIC_SOURCE_PREP=STARTED / RUNTIME=NOT_RUN / REVIEW=PENDING / MERGE=PENDING / DELIVERY_GATE=NOT_VERIFIED`
+
+## PR #45 독립 리뷰 후속 Hardening — 2026-10-03
+
+병합된 PR #45의 독립 리뷰에서 운영 adapter 연결 전 필수 후속으로 남긴 항목을 Source 단계에서 보강한다.
+
+1. rollback `previous_manifest_digest`가 신규 manifest와 같으면 fail-closed 차단하고 누락/형식 오류/동일값 negative test를 추가한다.
+2. Token audience는 승인 정본에 기대값이 고정되지 않았음을 명시하고, 현재 검증 수준을 machine-visible한 `PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE`로 반환한다. 이 한계가 해소되기 전 audience 검증 PASS를 주장하지 않는다.
+3. GitHub reference를 `321Team` org로 제한하고, `token_policy_reference`는 승인된 infra-kubernetes 고정 SHA blob URL과 exact match해야 한다.
+
+추가 방어로 bool이 integer 필드를 통과하지 못하게 하고, 두 서비스 manifest digest 재사용을 차단하며 workflow ref/API/SA/approval drift 테스트를 추가한다.
+
+이 변경도 Runtime adapter 자체를 구현하지 않으며 Push/Deploy/rollback은 계속 `NOT_EXECUTED`다.
