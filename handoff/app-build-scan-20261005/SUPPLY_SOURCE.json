@@ -1,0 +1,37 @@
+{
+  "schema": "P1-CICD-apko-supply-handoff-1",
+  "status": "PENDING_TEST_SCOPE_AND_CONFIG_REVIEW",
+  "artifact": {
+    "id": 11348745659,
+    "name": "apko-offline-supply-9658255ce9e39167cc8876a38b98aeb1f0311694-1",
+    "size_bytes": 109787684,
+    "archive_sha256": "909d67e5db4db6dd3f82b7aef8974161bbe6e40633ca93fe4a1d6976c2279b2b",
+    "manifest_sha256": "3c792ed983e785980a0fa3fc8cb45d08b54bdef57ccbe45288a9adbc169a46ee",
+    "workflow_run_id": 37317542246,
+    "expires_on": "2026-10-12T13:32:05Z"
+  },
+  "source": {
+    "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+    "repository": "321Team/fds-msa"
+  },
+  "supply_tool": {
+    "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+    "repository": "321Team/fds-msa"
+  },
+  "policy": {
+    "delivery_authorization": false,
+    "harbor_push": "NOT_EXECUTED",
+    "high_critical_exception": false,
+    "kubernetes_deploy": "NOT_EXECUTED",
+    "purpose": "ON_PREM_TEST_BUILD_SCAN_SUPPLY_ONLY"
+  },
+  "verification": {
+    "file_sha256sums_count": 125,
+    "file_sha256sums": "PASS_LOCAL_WINDOWS",
+    "manifest_sha256": "PASS_LOCAL_WINDOWS",
+    "archive_sha256": "GITHUB_API_AND_UPLOAD_LOG_ONLY_NOT_LOCALLY_VERIFIED",
+    "runner_staging": "NOT_EXECUTED",
+    "test_scope": "PENDING_APP_OWNER",
+    "reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995562351"
+  }
+}
