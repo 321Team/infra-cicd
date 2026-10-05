@@ -1,0 +1,103 @@
+{
+  "scope": "CP1_IMPERSONATED_AUTHORIZATION_QUERIES",
+  "evidence_basis": "USER_CONSOLE_SUBMITTED",
+  "checked_at": "2026-10-06T00:48:46.008037+09:00",
+  "host": "k8s-control01",
+  "actor": "system:serviceaccount:ci-cd:cicd-runner-sa",
+  "groups": [
+    "system:serviceaccounts",
+    "system:serviceaccounts:ci-cd",
+    "system:authenticated"
+  ],
+  "checks": [
+    {
+      "namespace": "fds-app",
+      "verb": "get",
+      "resource": "deployments.apps/transaction-api",
+      "expected": "yes",
+      "actual": "yes"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "update",
+      "resource": "deployments.apps/transaction-api",
+      "expected": "yes",
+      "actual": "yes"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "patch",
+      "resource": "deployments.apps/transaction-api",
+      "expected": "yes",
+      "actual": "yes"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "get",
+      "resource": "deployments.apps/fds-engine",
+      "expected": "yes",
+      "actual": "yes"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "update",
+      "resource": "deployments.apps/fds-engine",
+      "expected": "yes",
+      "actual": "yes"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "patch",
+      "resource": "deployments.apps/fds-engine",
+      "expected": "yes",
+      "actual": "yes"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "create",
+      "resource": "deployments.apps",
+      "expected": "no",
+      "actual": "no"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "delete",
+      "resource": "deployments.apps/transaction-api",
+      "expected": "no",
+      "actual": "no"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "patch",
+      "resource": "deployments.apps/unapproved-probe",
+      "expected": "no",
+      "actual": "no"
+    },
+    {
+      "namespace": "default",
+      "verb": "patch",
+      "resource": "deployments.apps/transaction-api",
+      "expected": "no",
+      "actual": "no"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "get",
+      "resource": "secrets",
+      "expected": "no",
+      "actual": "no"
+    },
+    {
+      "namespace": "fds-app",
+      "verb": "list",
+      "resource": "pods",
+      "expected": "no",
+      "actual": "no"
+    }
+  ],
+  "result": "PASS_12_OF_12",
+  "coverage": "ONLY_LISTED_AUTHORIZATION_QUERIES_NOT_ALL_PERMISSIONS",
+  "RUNNER_TOKEN_AUTH": "NOT_VERIFIED",
+  "TOKEN_ISSUED": false,
+  "DEPLOY": "NOT_EXECUTED"
+}
