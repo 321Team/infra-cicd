@@ -3,10 +3,13 @@
   "scope": "PUSH_ONLY",
   "evidence_basis": {
     "github_run_and_log": "DIRECTLY_READ",
-    "server_receipts_and_hash_checks": "USER_CONSOLE_SUBMITTED",
+    "server_receipts_and_hash_checks": "RECEIVED_ARCHIVE_BYTES_VERIFIED",
     "actions_secret_cleanup": "USER_CONSOLE_SUBMITTED",
-    "raw_receipt_archive_received": false,
-    "independent_runtime_evidence_review": "PENDING"
+    "raw_receipt_archive_received": true,
+    "independent_runtime_evidence_review": "PENDING",
+    "receipt_archive_sha256": "9f937675b6bd96ff989ce36cfef7a20a816036888a3869a9a31d2fc7a467d2d4",
+    "raw_oci_report_db_received": false,
+    "receiver_verification": "RECEIPT_REVIEW.json"
   },
   "source": {
     "repository": "321Team/fds-msa",
