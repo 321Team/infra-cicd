@@ -294,5 +294,31 @@ class DeliveryGateTests(unittest.TestCase):
                 self.assertIn(reason, result['reasons'])
 
 
+    def test_invalid_manifest_types_block_without_exceptions(self):
+        for phase in ('pre_push', 'pre_deploy'):
+            for name in gate.SERVICES:
+                for value in ([], {}, ['digest'], {'digest': 'bad'}, None, True, 1, ''):
+                    with self.subTest(phase=phase, service=name, value=value):
+                        record = fixture()
+                        record['build_scan']['images'][name]['manifest_digest'] = value
+                        result = gate.evaluate(record, phase)
+                        self.assertEqual(result['decision'], 'BLOCK')
+                        self.assertIn(name + ':MANIFEST_DIGEST_INVALID', result['reasons'])
+                        self.assertIsNone(result['plan'])
+
+    def test_invalid_equal_digests_do_not_report_valid_digest_equality(self):
+        for value in (None, '', 'bad', [], {}):
+            with self.subTest(value=value):
+                record = fixture()
+                record['build_scan']['images']['transaction-api']['manifest_digest'] = value
+                record['targets']['transaction-api']['previous_manifest_digest'] = value
+                result = gate.evaluate(record, 'pre_deploy')
+                self.assertEqual(result['decision'], 'BLOCK')
+                self.assertIn('transaction-api:ROLLBACK_DIGEST_INVALID', result['reasons'])
+                self.assertNotIn('transaction-api:ROLLBACK_DIGEST_EQUALS_NEW_DIGEST',
+                                 result['reasons'])
+                self.assertIsNone(result['plan'])
+
+
 if __name__ == '__main__':
     unittest.main()
