@@ -109,8 +109,10 @@ def evaluate(record, phase):
 
         check(_match(image.get('archive_sha256'), SHA256), 'ARCHIVE_HASH_INVALID')
         manifest = image.get('manifest_digest')
-        manifest_digests.append(manifest)
-        check(_match(manifest, DIGEST), 'MANIFEST_DIGEST_INVALID')
+        manifest_valid = _match(manifest, DIGEST)
+        if manifest_valid:
+            manifest_digests.append(manifest)
+        check(manifest_valid, 'MANIFEST_DIGEST_INVALID')
         check(_match(image.get('config_digest'), DIGEST), 'CONFIG_DIGEST_INVALID')
         check(scanned.get('scan') == 'PASS', 'SCAN_NOT_PASS')
         check(type(scanned.get('exit_code')) is int and scanned.get('exit_code') == 0,
@@ -144,8 +146,10 @@ def evaluate(record, phase):
         check(target.get('deployment') == name, 'TARGET_DEPLOYMENT_INVALID')
         check(target.get('container') == name, 'TARGET_CONTAINER_INVALID')
         previous = target.get('previous_manifest_digest')
-        check(_match(previous, DIGEST), 'ROLLBACK_DIGEST_INVALID')
-        check(previous != manifest, 'ROLLBACK_DIGEST_EQUALS_NEW_DIGEST')
+        previous_valid = _match(previous, DIGEST)
+        check(previous_valid, 'ROLLBACK_DIGEST_INVALID')
+        if previous_valid and manifest_valid:
+            check(previous != manifest, 'ROLLBACK_DIGEST_EQUALS_NEW_DIGEST')
         plans.append({'service': name, 'namespace': NAMESPACE, 'deployment': name,
                       'container': name, 'image': registry + '@' + str(manifest),
                       'previous_manifest_digest': previous})
