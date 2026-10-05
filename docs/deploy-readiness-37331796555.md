@@ -52,3 +52,11 @@ AI usage: CODEX_ASSISTED.
 
 사용자 cp1(server02@k8s-control01) 콘솔에서 API https://10.1.93.109:6443 / server v1.36.4, 두 Deployment 3/3 가용 및 observedGeneration 일치를 확인했다. 원본 제출값은 handoff/deploy-prep-37331796555/cp1-baseline.json에 연결한다. 위 이전digest는 이 시점 실측 복구 후보이며 이전 이미지 재Pull·호환성·rollback 승인 또는 성공을 뜻하지 않는다.
 Runner kubectl 미설치는 사용자가 명시 확인했다. cp1 조회는 Runner 접근/SA 인증·권한 검증을 대체하지 않는다. 설치·단기 인증 인계·adapter 구현은 미완료다. 현재 resourceVersion은 실행 직전 재조회해야 하며 이 스냅샷을 고정 재사용하지 않는다.
+
+## 10/6 00:48 KST 유효 권한 질의 결과
+
+사용자 cp1 콘솔에서 cicd-runner-sa와 system:serviceaccounts/system:serviceaccounts:ci-cd/system:authenticated 그룹을 지정한 auth can-i 12건이 기대값과 일치했다. 상세: handoff/deploy-prep-37331796555/cp1-effective-rbac.json. 두 Deployment의 get/update/patch 6건 허용, create/delete/다른 이름/다른 namespace/Secret get/Pod list 6건 거부. 이 결과는 조회한 권한에 한정하며 모든 권한 부재 또는 실제 Runner 토큰 인증 성공을 증명하지 않는다.
+
+cp1-auth-config.json에서 세 apiserver issuer 공통값과 공식 기본 동작으로 기대 audience https://kubernetes.default.svc.cluster.local를 도출했다. 아직 구현되지 않은 adapter는 이를 명시적으로 검증해야 하며 단순 non-empty gate를 실제 audience 검증으로 간주하지 않는다.
+
+현장 사전조회는 여기까지 보존한다. 다음 구현 순서는 무변경 preflight/입력결박 → 지정 Deployment image만 조건부 변경 및 get 기반 readiness → 서비스별 부분실패/이전digest 복구·정리 → 독립 코드리뷰/CI이다. 실제 인증자료는 사용 시점에만 준비하며 토큰 발급·Runner 설치·Deploy는 이번 사전조회 승인으로 실행하지 않는다. 원래 Push 1회는 이미 완료됐고 00:55:07 만료는 Deploy 변경창이 아니다.
