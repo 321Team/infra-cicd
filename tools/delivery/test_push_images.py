@@ -153,7 +153,9 @@ class PushTests(unittest.TestCase):
     def test_malformed_digest_is_block_not_unhandled_typeerror(self):
         self.record['build_scan']['images']['transaction-api']['manifest_digest'] = []
         rc, result, scan = self.run_push()
-        self.assertEqual((rc, result['error_code']), (1, 'DELIVERY_INPUT_MALFORMED'))
+        self.assertEqual((rc, result['error_code']), (1, 'DELIVERY_GATE_BLOCK'))
+        self.assertEqual(result['PUSH'], 'NOT_EXECUTED')
+        self.assertEqual(self.calls, [])
         scan.assert_not_called()
 
     def test_wrong_execution_approval_blocks_fresh_scan(self):
