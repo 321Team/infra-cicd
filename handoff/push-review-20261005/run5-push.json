@@ -1,0 +1,78 @@
+{
+  "schema": "P1-CICD-delivery-gate-1",
+  "template_only": false,
+  "status": "APPROVED_FOR_DELIVERY",
+  "source_evidence_directory": "FDS_CICD_AppWorkflow.1poajpf_",
+  "app_result_sha256": "63d3944fcd541bb2dfb617710a641613d268c5c72a05019fdb67acbd9845e810",
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": "368786c1e36b2bfb5424c4da472c1cc319c5c8c3",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5882412875"
+  },
+  "workflow": {
+    "repository": "321Team/infra-cicd",
+    "ref": "refs/heads/main",
+    "commit": "52cf494bec02ab4b814bed07e4cf66f37a3547b6",
+    "run_id": 36521959454,
+    "run_attempt": 1
+  },
+  "build_scan": {
+    "result": "PASS",
+    "source_commit": "368786c1e36b2bfb5424c4da472c1cc319c5c8c3",
+    "workflow_commit": "52cf494bec02ab4b814bed07e4cf66f37a3547b6",
+    "run_id": 36521959454,
+    "run_attempt": 1,
+    "input_sha256": "05dadd477f483e8c288acfabb2e785193185b402d8dba3baf24fc4562b9796d8",
+    "scan_result_sha256": "bc5aa83bd4c8e3ff10f3ad8389599c7cb5e3834be8c876bc2731dc3ba63fb0ec",
+    "images": {
+      "transaction-api": {
+        "archive_sha256": "c13cb05f072c212e0282473c8b60d0037c42d06d1b43d051e3f15c9215e7b256",
+        "manifest_digest": "sha256:b4d8675dc350bb6f602196f840a7afc3c034163f28ad83f718496cfc345be966",
+        "config_digest": "sha256:20c72b6b6d35fc92860f7573d9ad67feb3878ede4c807dd3ee84e1f42695c21b"
+      },
+      "fds-engine": {
+        "archive_sha256": "53322489ffe5049e3b21b1cb6c825b313d9737c131aaeefba244b01a114554f1",
+        "manifest_digest": "sha256:eea750c2ff3a86d5bbe50a699fc98266b2d9a032c4e1ebeb268526781d8a4f79",
+        "config_digest": "sha256:b07e79980c6b1390dd9de25849281e97ebd58c2bc90daa518ab8acb2914fcc77"
+      }
+    },
+    "scan": {
+      "transaction-api": {
+        "scan": "PASS",
+        "exit_code": 0,
+        "counts": {
+          "HIGH": 0,
+          "CRITICAL": 0
+        },
+        "manifest_digest": "sha256:b4d8675dc350bb6f602196f840a7afc3c034163f28ad83f718496cfc345be966",
+        "report_sha256": "fac045ca2c7477a35f1d1af83ce6eb7b97bac169f9920c8aa23938eeb6bbd234"
+      },
+      "fds-engine": {
+        "scan": "PASS",
+        "exit_code": 0,
+        "counts": {
+          "HIGH": 0,
+          "CRITICAL": 0
+        },
+        "manifest_digest": "sha256:eea750c2ff3a86d5bbe50a699fc98266b2d9a032c4e1ebeb268526781d8a4f79",
+        "report_sha256": "fe26ae881ba408728bf6d737bb0dc1939a6173a48003e9fc6b155a485725646e"
+      }
+    }
+  },
+  "harbor": {
+    "endpoint": "https://10.1.93.54",
+    "runner_tls_trust": "PASS",
+    "if09_ac02": "PASS",
+    "handoff_reference": "https://github.com/321Team/fds-project-baseline/issues/13#issuecomment-5947371286",
+    "credential_reference": "actions-secret:HARBOR_CI_ROBOT_USERNAME/HARBOR_CI_ROBOT_TOKEN",
+    "repositories": {
+      "transaction-api": "10.1.93.54/fds/transaction-api",
+      "fds-engine": "10.1.93.54/fds/fds-engine"
+    }
+  },
+  "push_authorization": {
+    "workflow_sha": "4b782a5046156ce0be72d865710e2145d84f0abf",
+    "reference": "https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-5994339631",
+    "expires_at": "2026-10-05T22:21:09+09:00"
+  }
+}
