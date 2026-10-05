@@ -5,6 +5,7 @@ Default mode is local validation. Execution requires a separately approved
 current dispatch context; the historical build run is never relabelled.
 """
 import argparse
+from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
@@ -145,6 +146,15 @@ def auth_copy(path, target):
     target.chmod(0o600)
 
 
+def authorize(record, context):
+    approval = record['push_authorization']
+    require(set(approval) == {'workflow_sha', 'reference', 'expires_at'}, 'PUSH_AUTH_FIELDS')
+    require(gate._match(approval.get('reference'), gate.REFERENCE), 'PUSH_APPROVAL_REFERENCE')
+    require(approval.get('workflow_sha') == context['workflow_sha'], 'PUSH_EXECUTION_BINDING')
+    expires = datetime.fromisoformat(approval['expires_at'].replace('Z', '+00:00'))
+    require(expires.tzinfo is not None and expires > datetime.now(timezone.utc), 'PUSH_APPROVAL_EXPIRED')
+
+
 def execute(record, root, folder, authfile=None, context=None):
     """New private folder required. A failed copy can leave remote blobs/tags."""
     result = {'PUSH': 'NOT_EXECUTED', 'DEPLOY': 'NOT_EXECUTED',
@@ -160,12 +170,7 @@ def execute(record, root, folder, authfile=None, context=None):
                 result['VALIDATION'] = 'PASS'
                 rc = 0
             else:
-                approval = record['push_execution']
-                require(gate._match(approval.get('reference'), gate.REFERENCE), 'PUSH_APPROVAL_REFERENCE')
-                require(approval.get('workflow_sha') == context['workflow_sha'] and
-                        str(approval.get('run_id')) == str(context['run_id']) and
-                        type(approval.get('attempt')) is int and
-                        approval['attempt'] == context['attempt'], 'PUSH_EXECUTION_BINDING')
+                authorize(record, context)
                 require(Path(SKOPEO).is_file(), 'SKOPEO_REQUIRED')
                 private_auth = work / 'auth.json'
                 auth_copy(authfile, private_auth)
@@ -192,6 +197,7 @@ def execute(record, root, folder, authfile=None, context=None):
                 # Each unique delivery tag is scoped to this execution, never latest/stable.
                 nonce = uuid.uuid4().hex
                 for name in SERVICES:
+                    authorize(record, context)
                     image = record['build_scan']['images'][name]
                     repository = gate.REGISTRY_PREFIX + name
                     tag = 'delivery-' + nonce
@@ -246,10 +252,7 @@ def main():
                 digest == args.record_sha256, 'REVIEWED_RECORD_HASH')
         context = runtime_context(os.environ) if args.execute else None
         if args.execute:
-            dirty = subprocess.check_output(
-                ['/usr/bin/git', 'status', '--porcelain', '--untracked-files=all'],
-                timeout=15, stderr=subprocess.DEVNULL)
-            require(not dirty.strip(), 'CLEAN_CHECKOUT_REQUIRED')
+            require(False, 'USE_REVIEWED_PUSH_WORKFLOW_ENTRYPOINT')
         require(not args.execute or args.authfile is not None, 'AUTHFILE_REQUIRED')
         home = Path.home()
         fd = os.open(home / 'FDS_CICD_Push.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
