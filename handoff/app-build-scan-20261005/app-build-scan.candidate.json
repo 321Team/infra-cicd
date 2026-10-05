@@ -113,9 +113,9 @@
       "dockerfile": "transaction-api/Dockerfile",
       "setup": [],
       "unit": {
-        "approval_reference": "",
-        "approved_by": "",
-        "reason": "제안: 기존 contract 배정과 Unit NOT_APPLICABLE 유지. 기존 승인 source와 새 source 간 transaction-api/·fds-engine/ 변경 0건 확인. 새 source 9658255ce9e39167cc8876a38b98aeb1f0311694에 대한 APP Owner의 시험 범위 재확인 대기. 이 문구는 승인 기록이 아니다.",
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347",
+        "approved_by": "이재환 (supreme33-kr)",
+        "reason": "APP Lead 이재환이 새 source 9658255ce9e39167cc8876a38b98aeb1f0311694의 기존 test scope 유지를 명시적으로 재확인했다. transaction-api는 자체 판정 로직이 없는 라우팅·영속성 계층이고 판정은 fds-engine tests/test_rules.py가 담당한다. API 동작은 contract 3개 파일로 검증하며 새 base의 Test 결과는 새로 판정한다. Push/Deploy 및 현장 실행 승인은 별도다.",
         "status": "NOT_APPLICABLE"
       }
     }
@@ -123,8 +123,8 @@
   "source": {
     "repository": "321Team/fds-msa",
     "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694",
-    "approved_by": "",
-    "approval_reference": ""
+    "approved_by": "이재환 (supreme33-kr)",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347"
   },
-  "status": "PENDING"
+  "status": "APPROVED_FOR_TEST_BUILD_SCAN"
 }
