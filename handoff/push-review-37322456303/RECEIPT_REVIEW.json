@@ -1,0 +1,66 @@
+{
+  "verification": {
+    "check": "PUSH_RECEIPT_ARCHIVE_VERIFICATION",
+    "result": "PASS",
+    "archive_sha256": "9f937675b6bd96ff989ce36cfef7a20a816036888a3869a9a31d2fc7a467d2d4",
+    "files": 8,
+    "record_sha256": "94e78ae5157156f0b2e9fce013992600c6e419e4de87f07e192eea203b59fb00",
+    "run_id": "37331796555",
+    "attempt": 1,
+    "workflow_sha": "966a268bdf002f537d6d21d1eec87dfd116f27a5",
+    "source_sha": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+    "checks": [
+      "archive_sidecar_console_hash",
+      "exact_tar_allowlist_no_links_duplicates",
+      "dispatch_manifests",
+      "five_receipt_execution_contexts",
+      "approved_input_and_build_binding",
+      "two_image_identities",
+      "fresh_scan_and_db_receipt_hash_chain",
+      "scan_counts_and_reported_status",
+      "db_reported_validity_at_execution",
+      "approval_window_and_event_order",
+      "credential_cleanup_receipts"
+    ],
+    "raw_oci_report_db_check": "NOT_INCLUDED",
+    "remote_registry_requery": "NOT_PERFORMED",
+    "actions_secret_cleanup": "USER_CONSOLE_SUBMITTED",
+    "independent_reviewer_acceptance": "PENDING",
+    "DEPLOY": "NOT_EXECUTED",
+    "DELIVERY_GATE": "NOT_VERIFIED"
+  },
+  "files": {
+    "dispatch.json": {
+      "sha256": "981696e4c200750f11afc0f711d8bb1d7bfe90f2874d28f2ab00add2f79586aa",
+      "utf8_content": "{\n  \"record_sha256\": \"94e78ae5157156f0b2e9fce013992600c6e419e4de87f07e192eea203b59fb00\",\n  \"execution_context\": {\n    \"workflow_sha\": \"966a268bdf002f537d6d21d1eec87dfd116f27a5\",\n    \"run_id\": \"37331796555\",\n    \"attempt\": 1,\n    \"run_url\": \"https://github.com/321Team/infra-cicd/actions/runs/37331796555\",\n    \"host\": \"cicd-runner01\",\n    \"user\": \"server01_cicd-runner\",\n    \"uid\": 1000\n  },\n  \"mode\": \"true\",\n  \"authorization_scope\": \"EXACT_RECORD_AND_WORKFLOW_DISPATCH\",\n  \"approval_verification\": \"DECLARED_INPUT_NOT_GITHUB_API_VERIFIED\"\n}\n"
+    },
+    "result.json": {
+      "sha256": "786ca29208f962742b1c022e041a8038d5b0ce1866c4041fc0b2d3a38eb8225e",
+      "utf8_content": "{\n  \"PUSH\": \"PASS\",\n  \"DEPLOY\": \"NOT_EXECUTED\",\n  \"DELIVERY_GATE\": \"NOT_VERIFIED\",\n  \"started_at\": \"2026-10-05T15:18:59.277902+00:00\",\n  \"images\": {\n    \"transaction-api\": {\n      \"result\": \"PASS\",\n      \"registry_repository\": \"10.1.93.54/fds/transaction-api\",\n      \"tag\": \"delivery-716a8ef98f76492786e73a340db35883\",\n      \"manifest_digest\": \"sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50\"\n    },\n    \"fds-engine\": {\n      \"result\": \"PASS\",\n      \"registry_repository\": \"10.1.93.54/fds/fds-engine\",\n      \"tag\": \"delivery-716a8ef98f76492786e73a340db35883\",\n      \"manifest_digest\": \"sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b\"\n    }\n  },\n  \"build_workflow\": {\n    \"repository\": \"321Team/infra-cicd\",\n    \"ref\": \"refs/heads/main\",\n    \"commit\": \"966a268bdf002f537d6d21d1eec87dfd116f27a5\",\n    \"run_id\": 37322456303,\n    \"run_attempt\": 1\n  },\n  \"execution_context\": {\n    \"workflow_sha\": \"966a268bdf002f537d6d21d1eec87dfd116f27a5\",\n    \"run_id\": \"37331796555\",\n    \"attempt\": 1,\n    \"run_url\": \"https://github.com/321Team/infra-cicd/actions/runs/37331796555\",\n    \"host\": \"cicd-runner01\",\n    \"user\": \"server01_cicd-runner\",\n    \"uid\": 1000\n  },\n  \"error_code\": \"NONE\",\n  \"fresh_scan_result_sha256\": \"edd12ffb4121c61bd07921329160aac421db6558e1c66c385536110614d70ae5\",\n  \"finished_at\": \"2026-10-05T15:19:36.282360+00:00\"\n}\n"
+    },
+    "credential-cleanup.json": {
+      "sha256": "ab1efe7275df08dd31b363410107c0f4390ba5350ac98567d8aad5897bbce641",
+      "utf8_content": "{\"temporary_auth_cleanup\":\"PASS\"}\n"
+    },
+    "dispatch-result.json": {
+      "sha256": "3582444d5927c54f5978c53303e257e2be8bdea4643a396a3cf4a8422913b232",
+      "utf8_content": "{\"DISPATCH\": \"PASS\", \"PUSH\": \"PASS\", \"record_sha256\": \"94e78ae5157156f0b2e9fce013992600c6e419e4de87f07e192eea203b59fb00\", \"execution_context\": {\"workflow_sha\": \"966a268bdf002f537d6d21d1eec87dfd116f27a5\", \"run_id\": \"37331796555\", \"attempt\": 1, \"run_url\": \"https://github.com/321Team/infra-cicd/actions/runs/37331796555\", \"host\": \"cicd-runner01\", \"user\": \"server01_cicd-runner\", \"uid\": 1000}, \"credential_cleanup\": \"PASS\"}\n"
+    },
+    "dispatch-SHA256SUMS": {
+      "sha256": "ad3f6144f1351228a080980047f6a458060203068e1dddde0bf684495d3e5f0f",
+      "utf8_content": "981696e4c200750f11afc0f711d8bb1d7bfe90f2874d28f2ab00add2f79586aa  dispatch.json\n786ca29208f962742b1c022e041a8038d5b0ce1866c4041fc0b2d3a38eb8225e  result.json\nab1efe7275df08dd31b363410107c0f4390ba5350ac98567d8aad5897bbce641  credential-cleanup.json\n3582444d5927c54f5978c53303e257e2be8bdea4643a396a3cf4a8422913b232  dispatch-result.json\n"
+    },
+    "SHA256SUMS": {
+      "sha256": "5ed0c59a720a065c43cd9a310af25c6c17d25f369b99b92d42665da65622bb6d",
+      "utf8_content": "786ca29208f962742b1c022e041a8038d5b0ce1866c4041fc0b2d3a38eb8225e  result.json\n"
+    },
+    "fresh-scan/result.json": {
+      "sha256": "edd12ffb4121c61bd07921329160aac421db6558e1c66c385536110614d70ae5",
+      "utf8_content": "{\n  \"IMAGE_SCAN\": \"PASS\",\n  \"DELIVERY_GATE\": \"NOT_VERIFIED\",\n  \"push\": \"NOT_EXECUTED\",\n  \"deploy\": \"NOT_EXECUTED\",\n  \"context\": {\n    \"workflow_sha\": \"966a268bdf002f537d6d21d1eec87dfd116f27a5\",\n    \"run_id\": \"37331796555\",\n    \"attempt\": 1,\n    \"run_url\": \"https://github.com/321Team/infra-cicd/actions/runs/37331796555\",\n    \"host\": \"cicd-runner01\",\n    \"user\": \"server01_cicd-runner\",\n    \"uid\": 1000\n  },\n  \"source_sha\": \"9658255ce9e39167cc8876a38b98aeb1f0311694\",\n  \"source_approval\": \"NOT_VERIFIED\",\n  \"images\": {\n    \"transaction-api\": {\n      \"scan\": \"PASS\",\n      \"exit_code\": 0,\n      \"counts\": {\n        \"HIGH\": 0,\n        \"CRITICAL\": 0\n      },\n      \"report_sha256\": \"994f3315ea88fab35a0d4130e42ed28298c0d2c0ccaec1ee53c7d051821d6cb3\",\n      \"archive_sha256\": \"99695906131fb4a1de91a14db9d38ffbf9669a2ec67c48493250e99e8b49942d\",\n      \"manifest_digest\": \"sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50\",\n      \"config_digest\": \"sha256:4f0def254539b18edce578d8313b54cde11262532bd80dd0ea14f24dc268e330\",\n      \"diff_ids\": [\n        \"sha256:be9e5f0fd990f4b4e14d90e0a5c037b0a2f7e29d538a47e07f7cb3bce3d208e2\",\n        \"sha256:602e39f7f9de7a36b541a84d7345b870a6a7173c1330d119ed767591f9b388aa\",\n        \"sha256:8bcb552701579e64e013cbfd5dd3e85cff5716faad20473bb9b7b4e1bb25082f\",\n        \"sha256:3adb06e40451ca103248f508a2271863baad168205a596ab9a300a50d4f134cf\"\n      ],\n      \"platform\": \"linux/amd64\"\n    },\n    \"fds-engine\": {\n      \"scan\": \"PASS\",\n      \"exit_code\": 0,\n      \"counts\": {\n        \"HIGH\": 0,\n        \"CRITICAL\": 0\n      },\n      \"report_sha256\": \"7b3e15146366f7729f14cbfea77386320392ae7cf893b87050541401e1f434c3\",\n      \"archive_sha256\": \"8b97ea24bd10f1f9a378e428249a242efc5d4337a15198b6f35b56383515bcd7\",\n      \"manifest_digest\": \"sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b\",\n      \"config_digest\": \"sha256:ceac9b0a9fcf574355379f953800876f2a163ac7673d922d8899fb0f298b1117\",\n      \"diff_ids\": [\n        \"sha256:be9e5f0fd990f4b4e14d90e0a5c037b0a2f7e29d538a47e07f7cb3bce3d208e2\",\n        \"sha256:0cd221cac801b21e81e8ff5b0c8e4fb50816a7f5b903fb835aeb6b56a209e222\",\n        \"sha256:0ee6bd6b74f3a63a981223fd66bfbc1fd2f701bfa4f64f552156f95a78f63d75\",\n        \"sha256:98df7aaba0b5976c424223d82551e25549f905f56b3d2ffcd2b2d8620057049e\"\n      ],\n      \"platform\": \"linux/amd64\"\n    }\n  },\n  \"binary_sha256\": \"d89bcc6510a267f11b773398cbf1be5520ce39f9e8b6633178c4487f05b7d791\",\n  \"started_at\": \"2026-10-05T15:18:59.459806+00:00\",\n  \"db_result_sha256\": \"917676d1f5e304dd60e9bf32659f82b66f4a9ea202463ffbb02d4297fe4ea26e\",\n  \"finished_at\": \"2026-10-05T15:19:32.592341+00:00\"\n}\n"
+    },
+    "fresh-scan/db/result.json": {
+      "sha256": "917676d1f5e304dd60e9bf32659f82b66f4a9ea202463ffbb02d4297fe4ea26e",
+      "utf8_content": "{\n  \"DB_PREFLIGHT\": \"PASS\",\n  \"DELIVERY_GATE\": \"NOT_VERIFIED\",\n  \"started_at\": \"2026-10-05T15:18:59.686295+00:00\",\n  \"context\": {\n    \"workflow_sha\": \"966a268bdf002f537d6d21d1eec87dfd116f27a5\",\n    \"run_id\": \"37331796555\",\n    \"attempt\": 1,\n    \"run_url\": \"https://github.com/321Team/infra-cicd/actions/runs/37331796555\",\n    \"host\": \"cicd-runner01\",\n    \"user\": \"server01_cicd-runner\",\n    \"uid\": 1000\n  },\n  \"binary_sha256\": \"d89bcc6510a267f11b773398cbf1be5520ce39f9e8b6633178c4487f05b7d791\",\n  \"db_repository\": \"ghcr.io/aquasecurity/trivy-db:2\",\n  \"download_exit_code\": 0,\n  \"metadata\": {\n    \"Version\": 2,\n    \"UpdatedAt\": \"2026-10-05T13:07:51.292695513Z\",\n    \"DownloadedAt\": \"2026-10-05T15:19:26.11208782Z\",\n    \"NextUpdate\": \"2026-10-06T13:07:51.292695253Z\"\n  },\n  \"db_sha256\": \"d0b30302df0af5b967f542393733c4c17eccd22aa97a5b802f937202e656f784\",\n  \"metadata_sha256\": \"937201d9ef030ad99209e475174e72775f039149181d54b571a1e98374bf3679\",\n  \"validated_at\": \"2026-10-05T15:19:27.095092+00:00\",\n  \"cache_dir\": \"/home/server01_cicd-runner/FDS_CICD_Push.skl2vo8_/fresh-scan/db/cache\",\n  \"phase\": \"hash\",\n  \"finished_at\": \"2026-10-05T15:19:27.095128+00:00\"\n}\n"
+    }
+  }
+}
