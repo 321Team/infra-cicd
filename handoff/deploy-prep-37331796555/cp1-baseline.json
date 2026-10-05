@@ -1,0 +1,51 @@
+{
+  "scope": "READ_ONLY_CP1_BASELINE",
+  "evidence_basis": "USER_CONSOLE_SUBMITTED",
+  "host": "k8s-control01",
+  "user": "server02",
+  "checked_at": "2026-10-06T00:43:27.190096+09:00",
+  "api_server": "https://10.1.93.109:6443",
+  "server_version": "v1.36.4",
+  "deployments": [
+    {
+      "name": "transaction-api",
+      "namespace": "fds-app",
+      "uid": "8a2af808-ec33-41f2-80b5-addde4e28910",
+      "resourceVersion": "3992698",
+      "generation": 6,
+      "observedGeneration": 6,
+      "replicas": 3,
+      "updatedReplicas": 3,
+      "availableReplicas": 3,
+      "container": "transaction-api",
+      "current_manifest_digest": "sha256:a7093136d12640da00570c18ed278eacbb8e9ba3637c7d509571346eac45cc33",
+      "proposed_manifest_digest": "sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50"
+    },
+    {
+      "name": "fds-engine",
+      "namespace": "fds-app",
+      "uid": "bf825dec-465b-4603-8b71-f768d195531c",
+      "resourceVersion": "3992686",
+      "generation": 4,
+      "observedGeneration": 4,
+      "replicas": 3,
+      "updatedReplicas": 3,
+      "availableReplicas": 3,
+      "container": "fds-engine",
+      "current_manifest_digest": "sha256:5e2a081cd51a957c3fad038b3eab07884c446ea3c2a814a905e3f41c24f67369",
+      "proposed_manifest_digest": "sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b"
+    }
+  ],
+  "runner_kubectl": "NOT_INSTALLED_USER_CONFIRMED",
+  "runner_api_authentication": "NOT_VERIFIED",
+  "runner_rbac_runtime": "NOT_VERIFIED",
+  "token_audience": "NOT_VERIFIED",
+  "previous_image_repull": "NOT_VERIFIED",
+  "rollback": "NOT_EXECUTED",
+  "DEPLOY": "NOT_EXECUTED",
+  "notes": [
+    "cp1 access does not prove Runner access",
+    "resourceVersion is a snapshot and must be refreshed immediately before mutation",
+    "previous digests are candidates, not independently approved rollback results"
+  ]
+}
