@@ -1,0 +1,64 @@
+{
+  "scope": "CP1_READ_ONLY_AUTH_CONFIG",
+  "evidence_basis": "USER_CONSOLE_SUBMITTED",
+  "received_at": "2026-10-06T00:46:37+09:00",
+  "observed_at": "NOT_RECORDED_IN_COMMAND",
+  "host": "k8s-control01",
+  "sa": {
+    "name": "cicd-runner-sa",
+    "namespace": "ci-cd",
+    "uid": "8f1ddfef-7bec-4b15-8cb7-c4b1a068a176",
+    "automountServiceAccountToken": false
+  },
+  "role": {
+    "name": "cicd-deploy-updater",
+    "namespace": "fds-app",
+    "rules": [
+      {
+        "apiGroups": [
+          "apps"
+        ],
+        "resourceNames": [
+          "transaction-api",
+          "fds-engine"
+        ],
+        "resources": [
+          "deployments"
+        ],
+        "verbs": [
+          "get",
+          "update",
+          "patch"
+        ]
+      }
+    ]
+  },
+  "binding": {
+    "roleRef": {
+      "apiGroup": "rbac.authorization.k8s.io",
+      "kind": "Role",
+      "name": "cicd-deploy-updater"
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "cicd-runner-sa",
+        "namespace": "ci-cd"
+      }
+    ]
+  },
+  "apiserver_nodes": [
+    "k8s-control01",
+    "k8s-control02",
+    "k8s-control03"
+  ],
+  "explicit_api_audiences": [],
+  "service_account_issuer": "https://kubernetes.default.svc.cluster.local",
+  "derived_expected_audience": "https://kubernetes.default.svc.cluster.local",
+  "derivation": "When api-audiences is omitted and service-account-issuer is set, Kubernetes defaults to the issuer URL.",
+  "reference": "https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/#options",
+  "effective_authorization": "NOT_VERIFIED",
+  "runner_token_authentication": "NOT_VERIFIED",
+  "token_issued": false,
+  "DEPLOY": "NOT_EXECUTED"
+}
