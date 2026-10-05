@@ -12,8 +12,8 @@ Push/Scan/정리 PASS. 원본 영수증8파일 회수 SHA2569f937675b6bd96ff989c
 
 | 대상 | 신규 Harbor manifest digest | 이전 Runtime digest |
 |---|---|---|
-| fds-app/transaction-api / container transaction-api | sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50 | 미확인 |
-| fds-app/fds-engine / container fds-engine | sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b | 미확인 |
+| fds-app/transaction-api / container transaction-api | sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50 | sha256:a7093136d12640da00570c18ed278eacbb8e9ba3637c7d509571346eac45cc33 |
+| fds-app/fds-engine / container fds-engine | sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b | sha256:5e2a081cd51a957c3fad038b3eab07884c446ea3c2a814a905e3f41c24f67369 |
 
 ## 실제 코드 상태와 필수 해소 사항
 
@@ -47,3 +47,8 @@ Push/Scan/정리 PASS. 원본 영수증8파일 회수 SHA2569f937675b6bd96ff989c
 참조: docs/delivery-runtime-gate-20261002.md, tools/delivery/delivery_gate.py,
 infra-kubernetes@7329bf2.../manifests/06-rbac.yaml 및 scripts/create-secrets-safe.sh.
 AI usage: CODEX_ASSISTED.
+
+## 10/6 00:43 KST 현장 조회 반영
+
+사용자 cp1(server02@k8s-control01) 콘솔에서 API https://10.1.93.109:6443 / server v1.36.4, 두 Deployment 3/3 가용 및 observedGeneration 일치를 확인했다. 원본 제출값은 handoff/deploy-prep-37331796555/cp1-baseline.json에 연결한다. 위 이전digest는 이 시점 실측 복구 후보이며 이전 이미지 재Pull·호환성·rollback 승인 또는 성공을 뜻하지 않는다.
+Runner kubectl 미설치는 사용자가 명시 확인했다. cp1 조회는 Runner 접근/SA 인증·권한 검증을 대체하지 않는다. 설치·단기 인증 인계·adapter 구현은 미완료다. 현재 resourceVersion은 실행 직전 재조회해야 하며 이 스냅샷을 고정 재사용하지 않는다.
