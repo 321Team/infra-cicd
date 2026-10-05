@@ -6,7 +6,7 @@ Source 구현·로컬 fixture 검증. 독립 코드 리뷰/병합/Runner Runtime
 기존 main `07f7f26d306056203e057b43bdf5234a2de2b8ae`의 delivery_gate,
 OCI 검사기와 scanner를 소비한다. #47 Gate hardening은 별도 PR로 유지하고
 기존 Gate의 malformed-input 예외는 adapter 경계에서 fail-closed로 처리한다.
-Workflow 변경·credential 발급·Deploy·Health/E2E·rollback은 이 PR에 없다.
+수동 dispatch Workflow와 credential 주입 wrapper를 포함한다. Credential 신규 발급·Deploy·Health/E2E·rollback은 포함하지 않는다.
 새 Runtime 코드이므로 Pre-check 병합 예외가 아닌 독립 기술 리뷰 대상이다.
 
 ## 처리 순서
@@ -34,9 +34,12 @@ Workflow 변경·credential 발급·Deploy·Health/E2E·rollback은 이 PR에 �
 추가 필드는 다음과 같다.
 
 - `app_result_sha256`: 승인된 원본 APP result.json 실제 SHA256.
-- `push_execution`: `workflow_sha`, `run_id`, `attempt`, `reference`.
-  새 Push dispatch의 exact SHA·Run·Attempt 및 321Team 승인 링크다.
-  이 값은 원본 `workflow`(Test/Build/Scan Run)와 별개다.
+- `push_authorization`: `workflow_sha`, `reference`, `expires_at`만 허용한다.
+  새 Push 실행의 exact main SHA·321Team 승인 링크·timezone 포함 ISO8601 유효기간이다.
+  미래 Run ID는 사전에 알 수 없으므로 승인 입력에 채우지 않는다. 실제 Run/Attempt는
+  dispatch 실행 시 context로 결박하며 이를 과거 승인이 Run ID까지 지정했다고 표시하지 않는다.
+- `source_evidence_directory`: Runner HOME 아래 기존 `FDS_CICD_AppWorkflow.<suffix>` 폴더명.
+  절대경로·상위경로·symlink는 거부한다.
 - CLI의 `--record-sha256`은 독립적으로 검토된 record의 정확한 해시.
 
 기록 생성/승인자는 원본에서 값을 연결한다. PASS/승인 reference를 도구가 자동 생성하지 않는다.
@@ -73,11 +76,35 @@ python3 tools/delivery/push_images.py \
   --evidence-root /path/to/original-app-evidence
 ```
 
-실행 시에는 같은 인자에 `--execute --authfile /private/path/auth.json`을 추가한다.
-그러나 **본 PR은 dispatch Workflow를 추가하지 않는다**. 기존 Run #5 workflow에 몰래
-Push를 연결하거나 환경변수를 수동 위조해 runtime_context를 통과시키지 않는다.
-독립 리뷰 이후 승인 record 주입·current dispatch 연결·credential provisioning 경로를
-확정해야 운영 실행할 수 있다. 예시의 placeholder를 임의 PASS 값으로 채우지 않는다.
+운영 실행은 `.github/workflows/app-push.yml`의 main-only 수동 dispatch로만 연결한다.
+adapter CLI의 `--execute`는 거부하고 `push_workflow.py`가 기존 runtime_context,
+정확한 workflow ref/SHA, clean checkout, 동시 실행 잠금을 확인한다.
+환경변수를 수동 위조해 실행하지 않는다. 예시 placeholder를 임의 PASS 값으로 채우지 않는다.
+
+### Dispatch 연결 및 입력 인계
+
+1. 독립 리뷰·병합 후 actual main SHA를 승인 record의 `push_authorization.workflow_sha`에 고정한다.
+   record는 실행 코드 저장소 밖에서 작성하므로 자기 commit SHA를 파일 내부에 넣는 순환 문제가 없다.
+2. 기존 Runner 계정의 HOME/`FDS_CICD_PushInputs`(uid 소유·0700·symlink 없음)에 검토한
+   `<이름>.json`을 보존하고 실제 SHA256을 승인 기록과 연결한다. 입력 생성·승인은 자동화하지 않는다.
+3. 승인된 기존 CI Robot을 GitHub secrets `HARBOR_CI_ROBOT_USERNAME` / `HARBOR_CI_ROBOT_TOKEN`으로
+   provisioning한다. **이 이름은 새 Workflow의 연결 인터페이스이며 실제 Secret 등록·권한·만료는 미확인**이다.
+   새 계정/Secret 발급이나 기존 값의 변경을 이 PR이 수행하지 않는다.
+4. dispatch 입력은 `record_name`, `record_sha256`, `execute`다. 기본 execute=false는
+   자격증명 없는 로컬 검증이다. execute=true만 Secret을 해당 step에 주입한다.
+5. wrapper는 Secret 환경변수를 자식 환경에서 제거하고 별도0700 임시 폴더의0600 authfile로
+   전달한다. auth가 포함된 명령/서버 stdout/stderr를 출력하지 않는다. 종료 후 임시 파일을 정리한다.
+6. HOME/`FDS_CICD_PushClaims/<record_sha256>.json`을 배타 생성한 뒤에만 실제 scanner/Push로 진행한다.
+   동일 record의 rerun/새 dispatch는 거부한다. 실패해도 claim은 남긴다. 임의 삭제로 우회하지 않고
+   원격 잔여 확인·재승인된 입력을 사용한다. 검증 모드는 claim을 소비하지 않는다.
+7. completion은 `dispatch-result.json`과 `dispatch-SHA256SUMS`까지 확인한다. result.json의
+   PUSH=PASS만으로 바깥 credential 정리·봉인까지 완료됐다고 보지 않는다.
+   SIGKILL/host failure는 여전히 수동 reconciliation 대상이다.
+
+이 입력은 승인 사실을 자동 인증하지 않는다. dispatch 권한자와 GitHub Secrets 접근 정책,
+record 원본 인계·승인, 같은 UID 신뢰 경계는 기존 운영 통제를 따른다.
+Workflow는 checkout action을 기존과 동일 SHA로 고정하고 contents:read만 요청한다.
+새 checkout 경로·runner label·main/manual 조건을 유지하며 raw evidence artifact 업로드는 하지 않는다.
 
 ## 실패·복구·증적
 
@@ -101,14 +128,14 @@ Push를 연결하거나 환경변수를 수동 위조해 runtime_context를 통�
 
 ```bash
 PYTHONPATH=tools/delivery:tools/trivy python3 -m unittest \
-  discover -s tools/delivery -p 'test_push_images.py' -v
+  discover -s tools/delivery -p 'test_push*.py' -v
 ```
 
 정상 pair, 로컬검증 무네트워크, 원본·report·receipt·context 변조, symlink,
 malformed digest, 실행 승인 binding, fresh Scan/보고서 실패, auth mode/helper 거부,
 원격 manifest 불일치, 두 번째 복사 실패, 중단을 synthetic fixture로 확인한다.
 실제 Skopeo·Harbor TLS/auth/copy·DB 다운로드는 이 시험에서 실행하지 않는다.
-로컬 실행 결과: adapter 16/16, 기존 delivery Gate 13/13, scanner/OCI 20/20 통과(총49개).
+로컬 실행 결과: adapter 16/16, dispatch wrapper 10/10, 기존 delivery Gate 13/13, scanner/OCI 20/20 통과(총59개).
 실제 registry/scanner 호출은 fixture/mock이며 Runtime 성공이 아니다.
 
 근거: [Skopeo copy](https://github.com/containers/skopeo/blob/main/docs/skopeo-copy.1.md),
