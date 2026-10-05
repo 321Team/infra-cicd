@@ -1,27 +1,28 @@
-# 새 apko 공급물 인계 후보 — 2026-10-05
-
-## 현재 판정
-실제 공급물 manifest와 SHA256SUMS 125개 항목을 사용자 PC의 다운로드 폴더에서 검증했다. manifest SHA256은 3c792ed983e785980a0fa3fc8cb45d08b54bdef57ccbe45288a9adbc169a46ee이다. ZIP 원본 해시는 GitHub API/업로드 로그 근거이며 로컬 ZIP 검증은 수행하지 않았다.
+# 새 apko 공급물 인계 — 2026-10-05
 
 source/supply_tool: 9658255ce9e39167cc8876a38b98aeb1f0311694
 공급물 Run: https://github.com/321Team/fds-msa/actions/runs/37317542246
-앱 소스 PR: https://github.com/321Team/fds-msa/pull/17 (독립 APPROVED 후 병합)
-후보 이미지 CI: https://github.com/321Team/fds-msa/actions/runs/37316299351 (PR HEAD 92f2f236 기준, 두 서비스 HIGH/CRITICAL 0)
-병합 후 source CI: https://github.com/321Team/fds-msa/actions/runs/37317543208
+artifact: 11348745659
+manifest SHA256: 3c792ed983e785980a0fa3fc8cb45d08b54bdef57ccbe45288a9adbc169a46ee
 
-## 파일과 실행 경계
-- app-build-scan.candidate.json: 실행용 config의 제안. status=PENDING이고 승인자/승인 링크를 비워 승인 승계를 방지한다.
-- SUPPLY_SOURCE.json: artifact 식별값과 검증 범위.
-- 현재 config/app-build-scan.json과 workflow는 변경하지 않았다. 본 후보를 복사하거나 dispatch하지 않는다.
-- 새 Runner 공급 경로는 후보이며 디렉터리 생성/배치/권한 검증은 미실행이다. 기존 공급 폴더를 덮어쓰지 않는다.
-- 새 Python/OpenSSL/glibc와 이미지 해시를 반영했다. profiles와 requirements 해시는 기존과 모두 동일하다. 서비스별 시험 명령은 유지 제안이다.
+## 실제 검증
+사용자 PC 다운로드 폴더의 SHA256SUMS 125개 항목 및 manifest 해시 일치. profiles/requirements는 이전 공급물과 동일.
+ZIP 해시는 GitHub API/업로드 로그 근거이며 로컬 ZIP 해시 검증은 미실행.
 
-## 남은 순서
-1. APP Owner 이재환이 exact source의 시험 범위 및 transaction-api Unit NOT_APPLICABLE 유지 여부를 확인한다: https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995562351
-2. 회신 근거를 후보에 반영하고 실제 config 전환 diff를 완성한다. 작성자 외 독립 리뷰 전에는 APPROVED_FOR_TEST_BUILD_SCAN으로 선언하거나 main 실행 설정을 바꾸지 않는다.
-3. 실제 Runner 계정 server01_cicd-runner/UID1000의 새 공급 폴더에 원본을 배치하고 125개 해시 및 안전한 경로/권한을 검증한다.
-4. 최신 config/코드의 리뷰·병합과 현장 실행 조건 확인 후 중앙 app-test-build-scan workflow로 Test→Build→fresh scan을 실행한다.
-5. 새 Push 입력/승인은 별도다. 22:21:09 KST에 만료된 기존 승인은 재사용하지 않는다.
+## 승인과 변경
+APP Lead 이재환의 새 source 시험 범위 확인: https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347
+contract 각 3파일, engine unit tests/test_rules.py, transaction-api Unit NOT_APPLICABLE을 유지한다. 새 base로 Test→Build→Scan 결과는 새로 판정한다.
+config/app-build-scan.json과 app-build-scan.candidate.json은 같은 전환안이다. APPROVED_FOR_TEST_BUILD_SCAN은 APP 인계 범위이며 이 PR의 독립 코드 리뷰, 병합, Runner 배치 또는 현장 실행을 완료했다는 뜻이 아니다.
 
-실패 시 중단하고 원본 및 로그를 보존한다. 현재는 handoff 후보만 추가하므로 main/Runner의 원복 작업은 없다.
-REVIEW=PENDING / RUNTIME=NOT_EXECUTED / PUSH=NOT_EXECUTED / DEPLOY=NOT_EXECUTED.
+## 현장 선행조건
+새 공급 경로: /home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.9658255ce9e3.3c792ed983e7
+아직 Runner 배치/생성/권한 검증은 미실행이다. 원본을 새 경로에 배치하고 해시·소유자·권한·링크를 검증한다. 기존 공급 폴더는 보존한다.
+최신 PR HEAD 독립 리뷰·병합과 현장 조건 확인 전에는 app-test-build-scan workflow를 dispatch하지 않는다. 해당 workflow에는 Push/Deploy가 없다.
+온프렘 Test→Build→fresh scan 후 새 Push 입력과 별도 승인을 준비한다. 기존 22:21:09 KST 만료 승인은 재사용하지 않는다.
+DB sslmode/Harbor TLS 및 OpenSSL 라이브러리 변경 영향은 해당 Runtime 회귀에서 확인한다.
+
+## CI 정합
+기존 test_push_images의 malformed digest 시험은 gate가 안전하게 BLOCK을 반환하는 현재 동작과 기대 코드가 달랐다. 운영 gate는 변경하지 않고 DELIVERY_GATE_BLOCK과 PUSH=NOT_EXECUTED, 스캔/registry 호출 0을 검사하도록 정합화했다.
+
+## 복구
+미병합 상태는 main/Runner 영향 없음. 병합 후 실행 전 문제 발견 시 dispatch를 중단하고 config 전환 커밋을 revert한다. 새 공급물/로그는 보존한다. 실제 Push/Deploy/기존 이미지 삭제는 이 변경에 없다.
