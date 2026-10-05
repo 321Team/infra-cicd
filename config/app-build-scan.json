@@ -1,32 +1,32 @@
 {
   "offline_supply": {
-    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.368786c1e36b.24ee3192ecff",
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.9658255ce9e3.3c792ed983e7",
     "images": {
       "builder": {
-        "archive_sha256": "2ecd4edf1c7f98bbba421aff9cecc20ae78762f87f69790f5fa62786a3b1dc53",
-        "config_digest": "sha256:d6b6281d9e6a17e04279476128d6b797a85ccb75fe83078e99592a8226c4f90e",
+        "archive_sha256": "769f58d17073c03805effdb645809c61b453e398969df31a555029fb0765a8db",
+        "config_digest": "sha256:6178da416b1e8685652432421552002142e91c56c8d5c62cc4fd207e9499690c",
         "diff_ids": [
-          "sha256:3c139ba200eee44ac5f41af3af633f3e03a54b42f07af259b3de056ce85e981d"
+          "sha256:c34ff2c64d47c5981e15ab8683608aeaeadf09805a2d2c6a8df1105007132266"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "38cabd02d9a3091bf0c8355a0c9a4437db685f97adfd36d706370d59ad1481af",
+        "index_json_sha256": "13f6ee0972d6470284b73b4cad0dcb1ed51213d85abe79d9975cb7863843d1a7",
         "layer_count": 1,
-        "manifest_json_sha256": "5d0efe4afa407dfd0683e9b36af90819e0732528ac9a5ff49d1f9808a8a5e636",
+        "manifest_json_sha256": "0f7a87d1b1838107a5e5932636ae32874eb0d017b89ce2f667c9b267da4ce8c0",
         "platform": "linux/amd64",
-        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:368786c1e36b2bfb5424c4da472c1cc319c5c8c3-amd64"
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:9658255ce9e39167cc8876a38b98aeb1f0311694-amd64"
       },
       "runtime": {
-        "archive_sha256": "062a21c23490b8b30ecea0678b7c09e7aa4e58b0601c58dc14c81a4757d75147",
-        "config_digest": "sha256:34bb173ec648d3bedb2b8c17e4335e4e171210d1ec284daaf175b45240c48279",
+        "archive_sha256": "0d0f8e403f2c36d921de7a902c56d07b699984a9b9425c735b3019221a4b3c29",
+        "config_digest": "sha256:33b925472816cc6032f461927c7d284a3001e50105d9d4f44b7e174a5ded23e8",
         "diff_ids": [
-          "sha256:90237ce13e8427bb536754beccaebce271758929d0ab4b8041e7578a6daf6ff0"
+          "sha256:be9e5f0fd990f4b4e14d90e0a5c037b0a2f7e29d538a47e07f7cb3bce3d208e2"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "6937abc5571dbcbfb7f2d80d05228c3391b89a89315520099572ed953417077a",
+        "index_json_sha256": "884e242032da82698726cf1bb86a2c1bddd3232705fd05f37e46cefd14754a68",
         "layer_count": 1,
-        "manifest_json_sha256": "a54deb5b744ec324b48e3d3719a0f897a96a943ebb32b78631e8101063de9560",
+        "manifest_json_sha256": "c49dda4a57801ad899a80d5963b7f91a388b204b1dad14c8caa704330c7e3d6a",
         "platform": "linux/amd64",
-        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:368786c1e36b2bfb5424c4da472c1cc319c5c8c3-amd64"
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:9658255ce9e39167cc8876a38b98aeb1f0311694-amd64"
       }
     },
     "profiles": {
@@ -58,9 +58,9 @@
       "transaction-api/requirements.txt": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
     },
     "source_inputs": {
-      "ci/apko/wolfi-python313-builder.apko.lock.json": "e949feaedacbc580392cfb1bf8a6833a7d5010935d73a393bbb2d2b3be487b11",
+      "ci/apko/wolfi-python313-builder.apko.lock.json": "c64ad9dc1d9384e68840fab683011cb71de49bb4a854424b6b74ed2dc9a549aa",
       "ci/apko/wolfi-python313-builder.apko.yaml": "c2c0d81ec4a20fb06417b66c5a1d1a1c04a068f1c0c76d37a35f2c12bab264b2",
-      "ci/apko/wolfi-python313-runtime.apko.lock.json": "fbbbdd2231c510b763be4562e8a2fa2a1d2a7fc8f608c3759443cdbb291a65f0",
+      "ci/apko/wolfi-python313-runtime.apko.lock.json": "2b9a6e1a2fab88a37853cc9644178064ca7ab58f425bf872143cbc2fdfe48d7e",
       "ci/apko/wolfi-python313-runtime.apko.yaml": "dc32de753d5b78501fc4654f79f17a285a0d523aaf6f28e6cfcad9ab2cc8c070"
     }
   },
@@ -113,18 +113,18 @@
       "dockerfile": "transaction-api/Dockerfile",
       "setup": [],
       "unit": {
-        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5882412875",
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347",
         "approved_by": "이재환 (supreme33-kr)",
-        "reason": "새 Source 368786c1e36b2bfb5424c4da472c1cc319c5c8c3 기준 APP Lead 이재환(supreme33-kr)이 1c7f365...368786c compare를 직접 대조해 transaction-api/·fds-engine/ 하위 application code, tests, requirements 변경이 0건임을 확인하고 기존 transaction-api Unit NOT_APPLICABLE 및 test scope 유지에 재동의했다. 요청/DB/engine 연계 동작은 승인된 contract 테스트 및 후속 현장 Runtime Gate로 검증한다.",
+        "reason": "APP Lead 이재환이 새 source 9658255ce9e39167cc8876a38b98aeb1f0311694의 기존 test scope 유지를 명시적으로 재확인했다. transaction-api는 자체 판정 로직이 없는 라우팅·영속성 계층이고 판정은 fds-engine tests/test_rules.py가 담당한다. API 동작은 contract 3개 파일로 검증하며 새 base의 Test 결과는 새로 판정한다. Push/Deploy 및 현장 실행 승인은 별도다.",
         "status": "NOT_APPLICABLE"
       }
     }
   },
   "source": {
-    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5882412875",
+    "repository": "321Team/fds-msa",
+    "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694",
     "approved_by": "이재환 (supreme33-kr)",
-    "commit": "368786c1e36b2bfb5424c4da472c1cc319c5c8c3",
-    "repository": "321Team/fds-msa"
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347"
   },
   "status": "APPROVED_FOR_TEST_BUILD_SCAN"
 }
