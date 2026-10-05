@@ -1,0 +1,130 @@
+{
+  "offline_supply": {
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.9658255ce9e3.3c792ed983e7",
+    "images": {
+      "builder": {
+        "archive_sha256": "769f58d17073c03805effdb645809c61b453e398969df31a555029fb0765a8db",
+        "config_digest": "sha256:6178da416b1e8685652432421552002142e91c56c8d5c62cc4fd207e9499690c",
+        "diff_ids": [
+          "sha256:c34ff2c64d47c5981e15ab8683608aeaeadf09805a2d2c6a8df1105007132266"
+        ],
+        "format": "docker-archive",
+        "index_json_sha256": "13f6ee0972d6470284b73b4cad0dcb1ed51213d85abe79d9975cb7863843d1a7",
+        "layer_count": 1,
+        "manifest_json_sha256": "0f7a87d1b1838107a5e5932636ae32874eb0d017b89ce2f667c9b267da4ce8c0",
+        "platform": "linux/amd64",
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:9658255ce9e39167cc8876a38b98aeb1f0311694-amd64"
+      },
+      "runtime": {
+        "archive_sha256": "0d0f8e403f2c36d921de7a902c56d07b699984a9b9425c735b3019221a4b3c29",
+        "config_digest": "sha256:33b925472816cc6032f461927c7d284a3001e50105d9d4f44b7e174a5ded23e8",
+        "diff_ids": [
+          "sha256:be9e5f0fd990f4b4e14d90e0a5c037b0a2f7e29d538a47e07f7cb3bce3d208e2"
+        ],
+        "format": "docker-archive",
+        "index_json_sha256": "884e242032da82698726cf1bb86a2c1bddd3232705fd05f37e46cefd14754a68",
+        "layer_count": 1,
+        "manifest_json_sha256": "c49dda4a57801ad899a80d5963b7f91a388b204b1dad14c8caa704330c7e3d6a",
+        "platform": "linux/amd64",
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:9658255ce9e39167cc8876a38b98aeb1f0311694-amd64"
+      }
+    },
+    "profiles": {
+      "fds-engine-runtime": {
+        "inventory_sha256": "f202a2cc3c3cc6785facafc7e9aa4a126c387281fc0b8c8e7d2ebbdcd0229eeb",
+        "lock_sha256": "88e45719485bdeb8c3ea2c70f8f3303127c7136fe465e1330f45775a9e163fc8",
+        "roots_sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c"
+      },
+      "fds-engine-test": {
+        "inventory_sha256": "675e625721fe8ef0edb69f15359467151f5d7c9dbd485fdfe5665e5abd7f7ac8",
+        "lock_sha256": "6568bb9c1cf014c229c66579b89c589eb74fdac4749625861e50f1d56bc3f560",
+        "roots_sha256": "ed2c667809886aba216e9953d026f15a3be4d624214ac0d48739c3d7ad192c99"
+      },
+      "transaction-api-runtime": {
+        "inventory_sha256": "2f6bc210cd47a6f8de6bc87b93aef6440676a1c8957d5e25cd127cf868b12177",
+        "lock_sha256": "1b6c12a68a3bdbe4f2d56f0d9ce31054937d17fb46708566d795041c4a153187",
+        "roots_sha256": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
+      },
+      "transaction-api-test": {
+        "inventory_sha256": "56914c6a5c5e53dca23a04f8858054fda1a13abdf0ed6f1bde87f60e8c030f7b",
+        "lock_sha256": "9a047257be36385144d698d81889f707a032a11142c63409189cf944e0fbfc88",
+        "roots_sha256": "bb82768573d677bf8d4a6cb592f9a82950c0d85b25f9c927e28a3b955880ed03"
+      }
+    },
+    "requirements": {
+      "fds-engine/requirements-test.txt": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78",
+      "fds-engine/requirements.txt": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c",
+      "transaction-api/requirements-test.txt": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2",
+      "transaction-api/requirements.txt": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
+    },
+    "source_inputs": {
+      "ci/apko/wolfi-python313-builder.apko.lock.json": "c64ad9dc1d9384e68840fab683011cb71de49bb4a854424b6b74ed2dc9a549aa",
+      "ci/apko/wolfi-python313-builder.apko.yaml": "c2c0d81ec4a20fb06417b66c5a1d1a1c04a068f1c0c76d37a35f2c12bab264b2",
+      "ci/apko/wolfi-python313-runtime.apko.lock.json": "2b9a6e1a2fab88a37853cc9644178064ca7ab58f425bf872143cbc2fdfe48d7e",
+      "ci/apko/wolfi-python313-runtime.apko.yaml": "dc32de753d5b78501fc4654f79f17a285a0d523aaf6f28e6cfcad9ab2cc8c070"
+    }
+  },
+  "schema": "P1-CICD-app-build-scan-3",
+  "services": {
+    "fds-engine": {
+      "context": "fds-engine",
+      "contract": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "cwd": "fds-engine",
+        "timeout_seconds": 300
+      },
+      "dockerfile": "fds-engine/Dockerfile",
+      "setup": [],
+      "unit": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_rules.py"
+        ],
+        "cwd": "fds-engine",
+        "timeout_seconds": 300
+      }
+    },
+    "transaction-api": {
+      "context": "transaction-api",
+      "contract": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "cwd": "transaction-api",
+        "timeout_seconds": 300
+      },
+      "dockerfile": "transaction-api/Dockerfile",
+      "setup": [],
+      "unit": {
+        "approval_reference": "",
+        "approved_by": "",
+        "reason": "제안: 기존 contract 배정과 Unit NOT_APPLICABLE 유지. 기존 승인 source와 새 source 간 transaction-api/·fds-engine/ 변경 0건 확인. 새 source 9658255ce9e39167cc8876a38b98aeb1f0311694에 대한 APP Owner의 시험 범위 재확인 대기. 이 문구는 승인 기록이 아니다.",
+        "status": "NOT_APPLICABLE"
+      }
+    }
+  },
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+    "approved_by": "",
+    "approval_reference": ""
+  },
+  "status": "PENDING"
+}
