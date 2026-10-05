@@ -1,6 +1,6 @@
 {
   "schema": "P1-CICD-apko-supply-handoff-1",
-  "status": "PENDING_TEST_SCOPE_AND_CONFIG_REVIEW",
+  "status": "TEST_SCOPE_CONFIRMED_CONFIG_REVIEW_PENDING",
   "artifact": {
     "id": 11348745659,
     "name": "apko-offline-supply-9658255ce9e39167cc8876a38b98aeb1f0311694-1",
@@ -31,7 +31,7 @@
     "manifest_sha256": "PASS_LOCAL_WINDOWS",
     "archive_sha256": "GITHUB_API_AND_UPLOAD_LOG_ONLY_NOT_LOCALLY_VERIFIED",
     "runner_staging": "NOT_EXECUTED",
-    "test_scope": "PENDING_APP_OWNER",
-    "reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995562351"
+    "test_scope": "CONFIRMED_APP_OWNER",
+    "reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347"
   }
 }
