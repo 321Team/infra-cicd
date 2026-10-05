@@ -1,0 +1,74 @@
+name: P1 Verified App Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_name:
+        description: Approved JSON filename in runner FDS_CICD_PushInputs
+        required: true
+        type: string
+      record_sha256:
+        description: Independently reviewed SHA256 of that exact file
+        required: true
+        type: string
+      execute:
+        description: Push after all runtime handoff conditions are confirmed
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1-app-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    if: github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, Linux, X64, p1-cicd, onprem, podman]
+    timeout-minutes: 90
+    env:
+      CICD_CHECKOUT: cicd-push-${{ github.run_id }}-${{ github.run_attempt }}
+      PUSH_RECORD_NAME: ${{ inputs.record_name }}
+      PUSH_RECORD_SHA256: ${{ inputs.record_sha256 }}
+      PUSH_EXECUTE: ${{ inputs.execute && 'true' || 'false' }}
+    steps:
+      - name: Require a new checkout directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(hostname -s)" = cicd-runner01
+          test "$(id -un)" = server01_cicd-runner
+          test "$(id -u)" = 1000
+          test ! -e "$GITHUB_WORKSPACE/$CICD_CHECKOUT"
+          test ! -L "$GITHUB_WORKSPACE/$CICD_CHECKOUT"
+      - name: Checkout the reviewed workflow commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          path: ${{ env.CICD_CHECKOUT }}
+          persist-credentials: false
+          clean: false
+          set-safe-directory: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+      - name: Validate archived evidence without registry credentials
+        if: ${{ !inputs.execute }}
+        working-directory: ${{ env.CICD_CHECKOUT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec /usr/bin/python3 tools/delivery/push_workflow.py
+      - name: Execute approved Push
+        if: ${{ inputs.execute }}
+        env:
+          HARBOR_PUSH_USERNAME: ${{ secrets.HARBOR_CI_ROBOT_USERNAME }}
+          HARBOR_PUSH_TOKEN: ${{ secrets.HARBOR_CI_ROBOT_TOKEN }}
+        working-directory: ${{ env.CICD_CHECKOUT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec /usr/bin/python3 tools/delivery/push_workflow.py
