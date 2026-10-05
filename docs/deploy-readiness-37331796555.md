@@ -60,3 +60,7 @@ Runner kubectl 미설치는 사용자가 명시 확인했다. cp1 조회는 Runn
 cp1-auth-config.json에서 세 apiserver issuer 공통값과 공식 기본 동작으로 기대 audience https://kubernetes.default.svc.cluster.local를 도출했다. 아직 구현되지 않은 adapter는 이를 명시적으로 검증해야 하며 단순 non-empty gate를 실제 audience 검증으로 간주하지 않는다.
 
 현장 사전조회는 여기까지 보존한다. 다음 구현 순서는 무변경 preflight/입력결박 → 지정 Deployment image만 조건부 변경 및 get 기반 readiness → 서비스별 부분실패/이전digest 복구·정리 → 독립 코드리뷰/CI이다. 실제 인증자료는 사용 시점에만 준비하며 토큰 발급·Runner 설치·Deploy는 이번 사전조회 승인으로 실행하지 않는다. 원래 Push 1회는 이미 완료됐고 00:55:07 만료는 Deploy 변경창이 아니다.
+
+## 10/6 후속 구현 상태
+
+Deploy 변경·readiness·복구 core와 MOCK 시험을 이 PR에 추가했다. 앞의 '미구현'은 준비 문서 작성 당시 상태다. 현재 범위와 잔여 통합은 docs/deploy-adapter-core.md가 설명한다. 코드 변경이 포함되어 이제 문서 전용 PR이 아니며 독립 코드 리뷰 대상이다. 실제 transport/인증·Gate 실행 identity 분리·lock/claim·내구성 있는 증적·정리·workflow는 아직 연결하지 않았다. 서버 Runtime과 token 발급은 미실행이다.
