@@ -1,5 +1,6 @@
 """Synthetic archives and fake registry/scanner; no network, Push or credentials."""
 import copy
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -23,7 +24,8 @@ class PushTests(unittest.TestCase):
         self.output.mkdir()
         self.record = fixture()
         self.context = {'workflow_sha': 'c' * 40, 'run_id': '456', 'attempt': 1}
-        self.record['push_execution'] = {**self.context,
+        self.record['push_authorization'] = {'workflow_sha': self.context['workflow_sha'],
+            'expires_at': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
             'reference': 'https://github.com/321Team/fds-project-baseline/issues/16#fixture'}
         oldctx = {'workflow_sha': '2' * 40, 'run_id': '123', 'attempt': 1,
                   'input_sha256': '3' * 64}
@@ -155,7 +157,7 @@ class PushTests(unittest.TestCase):
         scan.assert_not_called()
 
     def test_wrong_execution_approval_blocks_fresh_scan(self):
-        self.record['push_execution']['workflow_sha'] = 'd' * 40
+        self.record['push_authorization']['workflow_sha'] = 'd' * 40
         rc, _, scan = self.run_push()
         self.assertEqual(rc, 1)
         scan.assert_not_called()
