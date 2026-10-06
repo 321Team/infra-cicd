@@ -56,6 +56,16 @@ def trace(raw, *, name='transaction-api', verb='PATCH', url=None, code=422, lega
     return prefix.encode() + body
 
 
+def multiline_trace(raw, **kwargs):
+    # Literal klog writeStringValue layout, including the ambiguous final LF.
+    prefix = trace(b'', **kwargs).splitlines(keepends=True)[:2]
+    chunks = raw.decode('utf-8').split('\n')
+    if chunks[-1] == '':
+        chunks.pop()
+    return (b''.join(prefix) + b'I0000 "Response Body" body=<\n' +
+            ''.join('\t' + row + '\n' for row in chunks).encode('utf-8') + b' >\n')
+
+
 def body_log(obj, **kwargs):
     return trace(json.dumps(obj, separators=(',', ':')).encode(), **kwargs)
 
@@ -300,6 +310,21 @@ class CP1Tests(unittest.TestCase):
             self.backend().negative_test('other')
 
 
+    def test_negative_probe_collects_actual_multiline_status_without_raw_log(self):
+        backend = self.backend()
+        def operation(argv, _):
+            if 'patch' in argv:
+                return completed(code=1, stderr=multiline_trace(
+                    json.dumps(status()).encode() + b'\n'))
+            return completed(self.object)
+        self.operation = operation
+        observed = backend.negative_test('transaction-api')
+        self.assertEqual(observed['status_body_hash_basis'], 'KLOG_NORMALIZED_TRAILING_LF')
+        self.assertEqual(observed['spec_observation'], 'UNCHANGED_AT_TWO_READS')
+        self.assertEqual(observed['DEPLOY'], 'NOT_EXECUTED')
+        self.assertNotIn('PRIVATE', json.dumps(observed))
+
+
 class ProjectionTests(unittest.TestCase):
     def test_details_missing_422_remains_projection_only(self):
         result = a.status_projection(body_log(status(False)), 'transaction-api')
@@ -409,6 +434,72 @@ class ProjectionTests(unittest.TestCase):
                     b'PRIVATE_CREDENTIAL_ERROR'):
             with self.subTest(raw=raw[:30]), self.assertRaises(a.AccessError):
                 a.status_projection(raw, 'transaction-api')
+
+
+
+
+    def test_actual_klog_trailing_lf_status_block_is_collected(self):
+        raw = json.dumps(status(), separators=(',', ':')).encode() + b'\n'
+        observed = a.status_projection(multiline_trace(raw), 'transaction-api')
+        self.assertEqual(observed['status_projection']['code'], 422)
+        self.assertEqual(observed['status_body_sha256'], b.sha(raw))
+        self.assertEqual(observed['status_body_hash_basis'], 'KLOG_NORMALIZED_TRAILING_LF')
+        self.assertNotIn('PRIVATE', json.dumps(observed))
+
+    def test_klog_cannot_prove_original_final_lf_and_hash_is_labeled(self):
+        raw = json.dumps(status(), indent=2).encode()
+        without_lf = a.status_projection(multiline_trace(raw), 'transaction-api')
+        with_lf = a.status_projection(multiline_trace(raw + b'\n'), 'transaction-api')
+        self.assertEqual(without_lf, with_lf)
+        self.assertEqual(without_lf['status_body_sha256'], b.sha(raw + b'\n'))
+        self.assertNotEqual(without_lf['status_body_sha256'], b.sha(raw))
+        self.assertEqual(without_lf['status_body_hash_basis'], 'KLOG_NORMALIZED_TRAILING_LF')
+
+    def test_multiline_discovery_is_consumed_before_quoted_or_multiline_target(self):
+        raw = json.dumps(status(), separators=(',', ':')).encode() + b'\n'
+        discovery = multiline_trace(b'{"kind":"APIGroupList"\n[truncated 2000 chars]\n',
+                                    verb='GET', url=a.t.API_SERVER + '/apis', code=200)
+        for target in (trace(raw), multiline_trace(raw)):
+            observed = a.status_projection(discovery + target, 'transaction-api')
+            self.assertEqual(observed['status_projection']['code'], 422)
+
+    def test_discovery_block_rows_cannot_inject_log_request_markers(self):
+        discovery = multiline_trace(
+            b' >\nI0000 "Request" verb="PATCH" url="https://other"\n'
+            b'I0000 "Response" status="200 Fake"\n'
+            b'I0000 "Response Body" body=<\n',
+            verb='GET', url=a.t.API_SERVER + '/apis', code=200)
+        observed = a.status_projection(discovery + body_log(status()), 'transaction-api')
+        self.assertEqual(observed['status_body_hash_basis'], 'LOG_BODY_DECODED')
+
+    def test_missing_terminator_bad_indent_empty_truncated_and_duplicate_blocks_stop(self):
+        raw = json.dumps(status()).encode() + b'\n'
+        good = multiline_trace(raw)
+        variants = [
+            good[:-3], good.replace(b'\t{', b' {', 1),
+            good.replace(b' >\n', b'\t>\n'),
+            multiline_trace(b''), multiline_trace(raw + b'[truncated 10 chars]\n'),
+            multiline_trace(b'{"kind":"Status","kind":"Status"}\n'), good + good,
+        ]
+        for data in variants:
+            with self.subTest(data=data[:30]), self.assertRaises(a.AccessError):
+                a.status_projection(data, 'transaction-api')
+
+    def test_discovery_multiline_without_terminator_cannot_swallow_valid_target(self):
+        discovery = multiline_trace(b'{"kind":"APIGroupList"}\n',
+                                    verb='GET', url=a.t.API_SERVER + '/apis', code=200)
+        with self.assertRaises(a.AccessError):
+            a.status_projection(discovery[:-3] + body_log(status()), 'transaction-api')
+
+    def test_multiline_realistic_url_and_409_status_are_bound(self):
+        obj = status()
+        obj.update(code=409, reason='Conflict')
+        url = (a.t.API_SERVER + '/apis/apps/v1/namespaces/fds-app/deployments/transaction-api'
+               '?dryRun=All&fieldManager=kubectl-patch&fieldValidation=Strict&timeout=9.5s')
+        observed = a.status_projection(
+            multiline_trace(json.dumps(obj).encode() + b'\n', url=url, code=409), 'transaction-api')
+        self.assertEqual(observed['status_projection']['code'], 409)
+        self.assertEqual(observed['response_binding'], 'PATCH_REQUEST_HTTP_STATUS_BODY')
 
 
 

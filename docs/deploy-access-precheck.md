@@ -31,7 +31,7 @@ CA는 별도로 확인한 SHA256 및 기존 transport.context_checked의 PEM/TLS
 proxy 없음이어야 한다. 현재 구현은 client certificate/key 인증만 지원한다. embedded 인증
 자료는 config 자체의 해시로, 외부 cert/key 파일은 보호 경로와 해시로 변경을 감시한다.
 exec/auth-provider/token/기본 인증/impersonation 설정, 여러 kubeconfig 병합은 거부한다.
-실제 CP1 인증 방식은 현장 확인 전이므로 unsupported 결과가 나면 기존 설정을 바꿔 우회하지 않는다.
+현장 metadata 관측과 실제 인증 결과는 PR의 실행 기록에 구분한다. unsupported 결과가 나면 기존 설정을 바꿔 우회하지 않는다.
 
 매 호출 전에 선택 config를 다시 대조하고 API/CA/IP TLS name/context/request timeout를 명시한다.
 proxy 환경을 제거하고 KUBECTL_KUBERC=false, TokenReview는 --v=0으로 호출한다.
@@ -64,14 +64,23 @@ kubectl --v=8의 client-go v0.36.4 Request(verb/url)→Response(status)→Respon
 잘림·비JSON 여부에 관계없이 PATCH 증거로 사용하지 않는다. Request/Response 행이 없는 구형·다른
 로그 형식, 미완료 discovery, 대상 구간의 interleave·중복 PATCH·미결속 body는 STOP이다.
 이름이 같은 Status만 검색해 다른 요청의 실패를 성공 관측으로 오인하는 방식은 사용하지 않는다.
-대상 본문의 기존 "Response Body: {...}" 및 quoted body="{...}" 형식을 지원한다.
+대상 본문의 기존 "Response Body: {...}", quoted body="{...}", klog의 body=< 여러 줄 형식을 지원한다.
+여러 줄 본문은 각 행의 선행 TAB 하나와 정확한 닫힘 행 " >"를 대조해 전체 블록을 소비한다.
+discovery 본문 안의 Request/Response 문자열을 새 로그 이벤트로 처리하지 않는다.
+닫힘/들여쓰기 누락과 대상 Status 잘림·비JSON은 STOP이다. apimachinery v0.36.4의 JSON
+Encode는 마지막 LF를 추가하며, client-go가 사용하는 klog v2.140.0은 LF가 있는 본문을
+여러 줄 블록으로 기록한다. 단일 행 fixture만으로 현장 형식 수용을 증명하지 않는다.
 raw stderr/HTTP headers/request body/Status message/causes는 저장·출력하지 않는다.
 하나의 v1 Status Failure, HTTP/body code가 동일한409/422, reason Conflict/Invalid만 수용한다.
 대상 Status의 잘림/중복 JSON key/누락/다른 응답/예상과 다른 성공이면 static STOP이다.
 관측 response_binding=PATCH_REQUEST_HTTP_STATUS_BODY와 고정 request_path를 남긴다.
 이 결속은 신뢰된 kubectl stderr의 순서를 대조한 것이며 독립 HTTP capture나 서버 audit 증거는 아니다.
-관측은 고정 Status 필드와 allowlisted details, 원 Status body SHA256만 포함한다.
-sanitized projection은 raw 원문 증적이나 전체 원문 해시 재검증을 대신하지 않는다.
+관측은 고정 Status 필드와 allowlisted details, 로그에서 복원한 본문 SHA256 및
+status_body_hash_basis만 포함한다. LOG_BODY_DECODED는 단일 행 로그에서 복원한 값이고,
+KLOG_NORMALIZED_TRAILING_LF는 여러 줄 행을 결합하고 마지막 LF 하나를 붙인 값이다.
+klog는 원 본문의 마지막 LF 유무를 구별해 기록하지 않으므로 이 해시는 원 HTTP payload의
+바이트 해시라고 주장할 수 없다. sanitized projection은 raw 원문 증적이나 전체 원문 해시
+재검증을 대신하지 않는다.
 실제 shape 수용을 검토하려면 필요한 비밀 없는 필드를 별도 검토해 확장해야 한다.
 
 이후 Deployment UID와 canonical 전체 spec 해시를 재확인한다.
@@ -88,7 +97,7 @@ kubeconfig 전제를 충족한다고 볼 수 없다. 실제 사용자 경로가 
 관리 인증 값/전체 kubeconfig/stdout·stderr 원문을 출력하지 않고 field 존재 여부만 기록한다.
 이 metadata 관측은 인증 성공이나 backend의 모든 CA/파일 drift 조건을 통과했다는 증명이 아니다.
 
-**실행 위치: k8s-control01, server02.** 이 문서의 점검 명령은 현장에서 아직 미실행이다.
+**실행 위치: k8s-control01, server02.** 현장 실행 여부와 사용자 제공 metadata 관측은 PR 본문의 실행 기록에서 확인한다.
 기존 승인된 계정의 읽기 전용 config 점검으로 실행할 수 있다. NO_READABLE_USER_KUBECONFIG/
 UNSAFE_CONFIG_PATH/unsupported metadata면 그 결과에서 중단한다.
 admin.conf chmod·복사·sudo wrapper 추가나 exec/token 인증 허용으로 우회하지 않는다.
@@ -169,7 +178,9 @@ PY
 2. CP1 사용자 kubeconfig metadata를 먼저 확인한다. 지원되는 경로가 확인되면 공개 CA와
    SHA256을 신뢰된 CP1 조회 경로에서 따로 전달한다.
 3. 그 공개 CA만 Runner에 옮긴 뒤 runner-tls를 실행한다.
-4. CP1에서 cp1-negative-test를 실행해 sanitized 409/422 형태를 확인한다.
+4. 현장 kubectl 버전과 실제 로그 형식을 확인하고, 최신 독립 리뷰한 parser SHA로 CP1
+   cp1-negative-test를 실행해 sanitized 409/422 형태를 확인한다. 필요하면 먼저 고정 API의
+   무해한 GET을 --v=8로 메모리에서 수집해 형식만 대조한다. 원 stderr/headers를 저장·전달하지 않는다.
 5. 실제 단기 TokenRequest 발급/주입/원본 정리 경로를 별도 검토한 뒤에만 cp1-review를 실행한다.
    기존 유효한 candidate가 없으면 이 도구 때문에 token을 새로 발급하지 않는다.
 6. Runner의 실제 SA API 인증·Runtime wiring·최신 Deployment/Worker/APP 조건을 확인한 뒤 별도 Deploy 범위를 결정한다.
@@ -215,16 +226,22 @@ close 후 public closed 값을 다시 False로 바꾸더라도 token()과 remain
 삭제된 token 참조를 재사용할 수 없다. 로컬 참조 해제는 서버 취소/파일·Secret 삭제/물리적
 zeroization을 의미하지 않는다.
 
-기존27개+이번10개=37개 precheck 시험은 private POSIX 파일·변경/링크/권한 거부, 명령 scope, token stdin·오류 비노출,
+기존27개+PATCH 결속10개+여러 줄 회귀8개=45개 precheck 시험은 private POSIX 파일·변경/링크/권한 거부, 명령 scope, token stdin·오류 비노출,
 config TLS/인증/선택 거부, fresh UID, timeout/중단, 실패 dry-run projection·spec 변화,
 Runner TLS Mock과 TTY/local cleanup을 확인한다. PR59의 credential 재사용 회귀 시험 1개는 유지한다.
 이번10개는 discovery 잘림/비JSON/다른 실패를 제외하고 대상 PATCH의 URL·dryRun·HTTP/body code,
 미결속/중복/interleave·미완료 discovery·target Status 잘림·두 서비스 이름 결속을 확인한다.
-전체 CI 수/결과와 리뷰 상태는 이 변경 PR에 기록한다.
+여러 줄 회귀8개는 실제 trailing-LF Status, 원 마지막 LF의 불확실성과 hash basis,
+여러 줄 discovery/본문 안 로그 문자열, 닫힘·TAB 누락·빈 블록·잘림·중복,
+현실적인 URL의409와 CP1 negative_test 통합 관측을 확인한다.
+전체 CI 수/결과와 최신 HEAD 리뷰 상태는 이 변경 PR에 기록한다. 실제 kubectl 현장 실행은 별도 증거다.
 
 참조:
 - [kubectl create](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/)의 --raw/-f -
 - [TokenReview](https://kubernetes.io/docs/reference/kubernetes-api/definitions/token-review-v1-authentication/)
 - [client-go v0.36.4 Request/Response logging](https://github.com/kubernetes/client-go/blob/v0.36.4/transport/round_trippers.go)
 - [client-go v0.36.4 response body logging](https://github.com/kubernetes/client-go/blob/v0.36.4/rest/request.go)
+- [apimachinery v0.36.4 JSON Encode](https://github.com/kubernetes/apimachinery/blob/v0.36.4/pkg/runtime/serializer/json/json.go)
+- [client-go v0.36.4 klog dependency](https://github.com/kubernetes/client-go/blob/v0.36.4/go.mod)
+- [klog v2.140.0 multiline string serialization](https://github.com/kubernetes/klog/blob/v2.140.0/internal/serialize/keyvalues.go)
 - [Known Issue와 Worker 확인](../handoff/deploy-prep-37331796555/known-issues.md)

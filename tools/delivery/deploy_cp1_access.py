@@ -122,7 +122,8 @@ def status_projection(stderr, name):
     pending_requests = pending_bodies = targets = 0
     active, http_code, selected = False, None, None
     try:
-        for line in stderr.decode('utf-8').splitlines():
+        lines = iter(stderr.decode('utf-8').split('\n'))
+        for line in lines:
             if '"Request" ' in line:
                 match = request_pattern.search(line)
                 need(match is not None, 'PROBE_TRACE_INVALID')
@@ -153,27 +154,42 @@ def status_projection(stderr, name):
                 continue
             need(pending_bodies > 0, 'PROBE_TRACE_INVALID')
             pending_bodies -= 1
-            if not active:
-                # Discovery can be truncated/non-JSON. Never use it as PATCH evidence.
-                continue
-            need(http_code is not None, 'PROBE_TRACE_INVALID')
+            hash_basis = 'LOG_BODY_DECODED'
             if structured:
                 fragment = line.split(' body=', 1)[1]
-                body, end = json.JSONDecoder().raw_decode(fragment)
-                need(type(body) is str and not fragment[end:].strip(), 'PROBE_BODY_INVALID')
-                raw = body.encode('utf-8')
+                if fragment == '<':
+                    chunks = []
+                    for continuation in lines:
+                        if continuation == ' >':
+                            break
+                        need(continuation.startswith('\t'), 'PROBE_BODY_INVALID')
+                        chunks.append(continuation[1:])
+                    else:
+                        raise AccessError('PROBE_BODY_INVALID')
+                    need(bool(chunks), 'PROBE_BODY_INVALID')
+                    # klog cannot distinguish whether the original last LF existed.
+                    raw = ('\n'.join(chunks) + '\n').encode('utf-8')
+                    hash_basis = 'KLOG_NORMALIZED_TRAILING_LF'
+                else:
+                    body, end = json.JSONDecoder().raw_decode(fragment)
+                    need(type(body) is str and not fragment[end:].strip(), 'PROBE_BODY_INVALID')
+                    raw = body.encode('utf-8')
             else:
                 raw = line.split('Response Body: ', 1)[1].encode('utf-8')
+            if not active:
+                # Consume discovery blocks; never interpret their rows as log events.
+                continue
+            need(http_code is not None, 'PROBE_TRACE_INVALID')
             need(b'[truncated ' not in raw, 'PROBE_BODY_TRUNCATED')
             obj = b.read(raw)
             need(obj.get('kind') == 'Status' and obj.get('status') == 'Failure'
                  and obj.get('apiVersion') == 'v1' and type(obj.get('code')) is int
                  and obj['code'] == http_code
                  and obj.get('reason') in ('Conflict', 'Invalid'), 'PROBE_STATUS_INVALID')
-            selected, active = (raw, obj), False
+            selected, active = (raw, obj, hash_basis), False
         need(targets == 1 and selected is not None and not active
              and pending_requests == pending_bodies == 0, 'PROBE_STATUS_UNCONFIRMED')
-        raw, obj = selected
+        raw, obj, hash_basis = selected
         result = {key: obj[key] for key in ('apiVersion', 'kind', 'status', 'code', 'reason')}
         if 'details' in obj:
             details = obj['details']
@@ -185,6 +201,7 @@ def status_projection(stderr, name):
                 for key, choices in allowed.items() if key in details
             }
         return {'status_projection': result, 'status_body_sha256': b.sha(raw),
+                'status_body_hash_basis': hash_basis,
                 'payload': 'ALLOWLISTED_PROJECTION_ONLY', 'transport_policy': 'UNCHANGED',
                 'response_binding': 'PATCH_REQUEST_HTTP_STATUS_BODY',
                 'request_path': '/apis/apps/v1/namespaces/fds-app/deployments/' + name}
