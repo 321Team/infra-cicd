@@ -237,6 +237,13 @@ class CredentialTests(unittest.TestCase):
             credential.__enter__()
         self.assertEqual(len(self.reviewer.calls), 1)
 
+    def test_public_closed_flag_cannot_restore_dropped_token(self):
+        credential = self.credential()
+        credential.close()
+        credential.closed = False  # Defensive misuse case from PR58 review.
+        with self.assertRaisesRegex(c.CredentialError, '^CREDENTIAL_UNAVAILABLE$'):
+            credential.token()
+
     def test_exception_exit_drops_local_reference_but_does_not_claim_server_revocation(self):
         credential = self.credential()
         with self.assertRaises(ValueError):

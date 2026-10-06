@@ -153,7 +153,7 @@ class Credential:
             raise CredentialError('CREDENTIAL_CLOCK_UNAVAILABLE') from None
 
     def remaining(self):
-        if self.closed:
+        if self.closed or self._token is None:
             return 0
         try:
             wall, mono = self.point()
@@ -168,7 +168,7 @@ class Credential:
             raise CredentialError('CREDENTIAL_WINDOW_UNAVAILABLE') from None
 
     def token(self):
-        need(self.remaining() > 0, 'CREDENTIAL_UNAVAILABLE')
+        need(self._token is not None and self.remaining() > 0, 'CREDENTIAL_UNAVAILABLE')
         return self._token
 
     def observation(self):
