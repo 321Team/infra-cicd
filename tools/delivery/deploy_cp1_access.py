@@ -14,6 +14,7 @@ import socket
 import stat
 import subprocess
 import time
+import urllib.parse
 
 import deploy_binding as b
 import deploy_credential as c
@@ -98,43 +99,112 @@ def timeout_checked(value):
     return float(value)
 
 
-def status_projection(stderr):
-    """Read client-go's body log only; never persist verbose stderr or headers."""
+def request_url_checked(url, name):
+    parsed = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+    need(parsed.scheme == 'https' and parsed.netloc == '10.1.93.109:6443'
+         and not parsed.fragment
+         and parsed.path == '/apis/apps/v1/namespaces/fds-app/deployments/' + name
+         and query.get('dryRun') == ['All']
+         and set(query) <= {'dryRun', 'fieldManager', 'fieldValidation', 'timeout'}
+         and all(len(values) == 1 and 0 < len(values[0]) <= 100 for values in query.values()),
+         'PROBE_REQUEST_SCOPE_INVALID')
+
+
+def status_projection(stderr, name):
+    """Bind one PATCH request/HTTP status/body; ignore completed discovery bodies."""
+    need(name in NAMES, 'DEPLOYMENT_SCOPE_INVALID')
     need(type(stderr) is bytes and len(stderr) <= MAX_BYTES, 'PROBE_LOG_INVALID')
-    bodies = []
+    # client-go v0.36.4 v8 emits Request(verb/url), Response(status), Response Body.
+    quoted = r'"(?:[^"\\]|\\.)*"'
+    request_pattern = re.compile(r'"Request" verb=(' + quoted + r') url=(' + quoted + r')(?=\s|$)')
+    response_pattern = re.compile(r'"Response" status=(' + quoted + r')(?=\s|$)')
+    pending_requests = pending_bodies = targets = 0
+    active, http_code, selected = False, None, None
     try:
-        lines = stderr.decode('utf-8').splitlines()
+        lines = iter(stderr.decode('utf-8').split('\n'))
         for line in lines:
-            if '"Response Body"' in line and ' body=' in line:
+            if '"Request" ' in line:
+                match = request_pattern.search(line)
+                need(match is not None, 'PROBE_TRACE_INVALID')
+                verb, url = (json.loads(value) for value in match.groups())
+                need(not active, 'PROBE_TRACE_INTERLEAVED')
+                if verb == 'PATCH':
+                    request_url_checked(url, name)
+                    need(targets == 0 and pending_requests == pending_bodies == 0,
+                         'PROBE_TRACE_AMBIGUOUS')
+                    targets += 1
+                    active, http_code = True, None
+                pending_requests += 1
+                continue
+            if '"Response" ' in line:
+                match = response_pattern.search(line)
+                need(match is not None and pending_requests > 0, 'PROBE_TRACE_INVALID')
+                pending_requests -= 1
+                pending_bodies += 1
+                if active:
+                    status = json.loads(match.group(1))
+                    need(http_code is None and re.fullmatch(r'(409|422) [^\r\n]+', status),
+                         'PROBE_HTTP_STATUS_INVALID')
+                    http_code = int(status[:3])
+                continue
+            structured = '"Response Body"' in line and ' body=' in line
+            legacy = 'Response Body: ' in line
+            if not structured and not legacy:
+                continue
+            need(pending_bodies > 0, 'PROBE_TRACE_INVALID')
+            pending_bodies -= 1
+            hash_basis = 'LOG_BODY_DECODED'
+            if structured:
                 fragment = line.split(' body=', 1)[1]
-                body, end = json.JSONDecoder().raw_decode(fragment)
-                need(type(body) is str and not fragment[end:].strip(), 'PROBE_BODY_INVALID')
-                bodies.append(body.encode('utf-8'))
-            elif 'Response Body: ' in line:
-                bodies.append(line.split('Response Body: ', 1)[1].encode('utf-8'))
-        candidates = []
-        for raw in bodies:
+                if fragment == '<':
+                    chunks = []
+                    for continuation in lines:
+                        if continuation == ' >':
+                            break
+                        need(continuation.startswith('\t'), 'PROBE_BODY_INVALID')
+                        chunks.append(continuation[1:])
+                    else:
+                        raise AccessError('PROBE_BODY_INVALID')
+                    need(bool(chunks), 'PROBE_BODY_INVALID')
+                    # klog cannot distinguish whether the original last LF existed.
+                    raw = ('\n'.join(chunks) + '\n').encode('utf-8')
+                    hash_basis = 'KLOG_NORMALIZED_TRAILING_LF'
+                else:
+                    body, end = json.JSONDecoder().raw_decode(fragment)
+                    need(type(body) is str and not fragment[end:].strip(), 'PROBE_BODY_INVALID')
+                    raw = body.encode('utf-8')
+            else:
+                raw = line.split('Response Body: ', 1)[1].encode('utf-8')
+            if not active:
+                # Consume discovery blocks; never interpret their rows as log events.
+                continue
+            need(http_code is not None, 'PROBE_TRACE_INVALID')
             need(b'[truncated ' not in raw, 'PROBE_BODY_TRUNCATED')
             obj = b.read(raw)
-            if obj.get('kind') == 'Status' and obj.get('status') == 'Failure':
-                need(obj.get('apiVersion') == 'v1' and type(obj.get('code')) is int
-                     and obj['code'] in (409, 422)
-                     and obj.get('reason') in ('Conflict', 'Invalid'), 'PROBE_STATUS_INVALID')
-                candidates.append((raw, obj))
-        need(len(candidates) == 1, 'PROBE_STATUS_UNCONFIRMED')
-        raw, obj = candidates[0]
+            need(obj.get('kind') == 'Status' and obj.get('status') == 'Failure'
+                 and obj.get('apiVersion') == 'v1' and type(obj.get('code')) is int
+                 and obj['code'] == http_code
+                 and obj.get('reason') in ('Conflict', 'Invalid'), 'PROBE_STATUS_INVALID')
+            selected, active = (raw, obj, hash_basis), False
+        need(targets == 1 and selected is not None and not active
+             and pending_requests == pending_bodies == 0, 'PROBE_STATUS_UNCONFIRMED')
+        raw, obj, hash_basis = selected
         result = {key: obj[key] for key in ('apiVersion', 'kind', 'status', 'code', 'reason')}
         if 'details' in obj:
             details = obj['details']
             need(type(details) is dict, 'PROBE_DETAILS_INVALID')
-            allowed = {'name': NAMES, 'namespace': ('fds-app',),
+            allowed = {'name': (name,), 'namespace': ('fds-app',),
                        'group': ('apps',), 'kind': ('deployments',)}
             result['details'] = {
                 key: details[key] if details[key] in choices else 'MISMATCH'
                 for key, choices in allowed.items() if key in details
             }
         return {'status_projection': result, 'status_body_sha256': b.sha(raw),
-                'payload': 'ALLOWLISTED_PROJECTION_ONLY', 'transport_policy': 'UNCHANGED'}
+                'status_body_hash_basis': hash_basis,
+                'payload': 'ALLOWLISTED_PROJECTION_ONLY', 'transport_policy': 'UNCHANGED',
+                'response_binding': 'PATCH_REQUEST_HTTP_STATUS_BODY',
+                'request_path': '/apis/apps/v1/namespaces/fds-app/deployments/' + name}
     except AccessError:
         raise
     except Exception:
@@ -342,7 +412,7 @@ class CP1Access:
                                    '--dry-run=server', '-p', patch, '-o', 'json'],
                                   verbosity=8, allow_failure=True)
             need(result.returncode != 0, 'NEGATIVE_TEST_UNEXPECTED_SUCCESS')
-            projection = status_projection(result.stderr)
+            projection = status_projection(result.stderr, name)
             after = self.deployment(name)
             spec_hash = lambda obj: b.sha(json.dumps(
                 obj['spec'], sort_keys=True, separators=(',', ':'), allow_nan=False).encode())
