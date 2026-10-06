@@ -146,16 +146,24 @@ class Adapter:
     remaining_seconds() must derive remaining deploy authorization from the
     verified expiry, not token TTL. The start budget is 2 * timeout + margin;
     margin must cover bounded requests/checkpoints in the integrating caller.
+    credential_remaining_seconds() must derive current token lifetime from
+    verified credential metadata, never from the requested TTL alone. Both
+    windows must cover the start budget. Each GET/PATCH also rejects expired
+    or unverifiable credentials, including rollback. The transport must bound
+    individual requests by the remaining credential/approval lifetime.
     Authority denial stops all further writes, including automatic rollback.
     """
 
     def __init__(self, client, authorize, checkpoint, *, remaining_seconds,
+                 credential_remaining_seconds,
                  window_margin=30, timeout=300, interval=2,
                  clock=time.monotonic, sleep=time.sleep):
         need(type(timeout) is int and 1 <= timeout <= 3600, 'TIMEOUT_INVALID')
         need(type(interval) is int and 1 <= interval <= timeout, 'INTERVAL_INVALID')
         need(callable(remaining_seconds), 'AUTH_WINDOW_PROVIDER_REQUIRED')
         need(type(window_margin) is int and window_margin > 0, 'WINDOW_MARGIN_INVALID')
+        need(callable(credential_remaining_seconds), 'CREDENTIAL_WINDOW_PROVIDER_REQUIRED')
+        self.credential_remaining_seconds = credential_remaining_seconds
         self.remaining_seconds = remaining_seconds
         self.required_window = 2 * timeout + window_margin
         self.client, self.authorize, self.checkpoint = client, authorize, checkpoint
@@ -175,8 +183,18 @@ class Adapter:
     def auth(self, action):
         try:
             need(self.authorize(action) is True, 'AUTHORIZATION_DENIED')
+            need(self.credential_window() > 0, 'AUTHORIZATION_DENIED')
         except Exception:
             raise Stop('AUTHORIZATION_DENIED') from None
+
+    def credential_window(self):
+        try:
+            value = self.credential_remaining_seconds()
+        except Exception:
+            raise Stop('CREDENTIAL_WINDOW_UNAVAILABLE') from None
+        need(type(value) in (int, float) and math.isfinite(value),
+             'CREDENTIAL_WINDOW_INVALID')
+        return value
 
     def check_start_window(self):
         try:
@@ -186,6 +204,7 @@ class Adapter:
         need(type(remaining) in (int, float) and math.isfinite(remaining),
              'AUTH_WINDOW_INVALID')
         need(remaining >= self.required_window, 'AUTH_WINDOW_TOO_SHORT')
+        need(self.credential_window() >= self.required_window, 'CREDENTIAL_WINDOW_TOO_SHORT')
 
     def get(self, target, action):
         self.auth(action)
@@ -216,6 +235,7 @@ class Adapter:
                 self.check_start_window()
         except Stop as exc:
             item[action] = ('NOT_SENT_AUTH_DENIED' if str(exc) == 'AUTHORIZATION_DENIED'
+                            else 'NOT_SENT_CREDENTIAL_WINDOW' if str(exc).startswith('CREDENTIAL_WINDOW_')
                             else 'NOT_SENT_AUTH_WINDOW')
             self.save()
             raise
