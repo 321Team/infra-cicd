@@ -186,10 +186,12 @@ class EndpointTests(unittest.TestCase):
             backend = Mock(attempted=False)
             backend.preflight.return_value = SA_UID
             with patch.object(n, 'Channel', return_value=channel), \
-                 patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked'), \
+                 patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
                  patch.object(n, 'NativeAccess', return_value=backend):
                 n.endpoint(role, 'a' * 40, '/synthetic', '/synthetic-ca', 'b' * 64, None)
             backend.issue.assert_not_called()
+            self.assertEqual(channel.sent[0]['stage'], 'ready')
+            self.assertEqual(channel.sent[-1]['stage'], 'done')
             self.assertEqual(channel.sent[-1]['token_issuance'], 'NOT_ATTEMPTED')
             self.assertTrue(channel.cleared)
 
@@ -198,7 +200,7 @@ class EndpointTests(unittest.TestCase):
         backend = Mock(attempted=False)
         backend.preflight.return_value = SA_UID
         with patch.object(n, 'Channel', return_value=channel), \
-             patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked'), \
+             patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
              patch.object(n, 'NativeAccess', return_value=backend):
             n.endpoint('cp1', 'a' * 40, '/synthetic', '/synthetic-ca', 'b' * 64, None)
         backend.issue.assert_not_called()
@@ -220,7 +222,7 @@ class EndpointTests(unittest.TestCase):
         factory = lambda token, uid, reviewer: actual(
             token, uid, reviewer, now=lambda: NOW, clock=lambda: 100.0)
         with patch.object(n, 'Channel', return_value=channel), \
-             patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked'), \
+             patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
              patch.object(n, 'Window', return_value=Mock(remaining=lambda: 600)), \
              patch.object(n, 'NativeAccess', return_value=backend), \
              patch.object(n.c, 'Credential', side_effect=factory), \
@@ -237,6 +239,36 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(done['credential']['local_credential_cleanup'], 'LOCAL_REFERENCE_DROPPED')
         self.assertNotIn(token, json.dumps(done))
         self.assertTrue(channel.cleared)
+
+    def test_runner_private_protocol_uses_fresh_pipe_review_then_closes_credential(self):
+        _, token, review, response = native_fixture()
+        candidate = {'stage': 'candidate', 'token': token, 'sa_uid': SA_UID,
+                     'status_expires_at': response['status']['expirationTimestamp']}
+        channel = FakeChannel([candidate, {'stage': 'review-result', 'response': review}])
+        actual, credentials = n.c.Credential, []
+        def factory(token, uid, reviewer):
+            value = actual(token, uid, reviewer, now=lambda: NOW, clock=lambda: 100.0)
+            credentials.append(value)
+            return value
+        probe = Mock()
+        probe.run.return_value = {'RUNNER_TOKEN_AUTH': 'PASS', 'DEPLOY': 'NOT_EXECUTED',
+                                  'DELIVERY_GATE': 'NOT_VERIFIED'}
+        with patch.object(n, 'Channel', return_value=channel), \
+             patch.object(n.a, 'host_checked'), \
+             patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
+             patch.object(n, 'Window', return_value=Mock(remaining=lambda: 600)), \
+             patch.object(n.c, 'Credential', side_effect=factory), \
+             patch.object(n, 'RunnerProbe', return_value=probe):
+            n.endpoint('runner', 'a' * 40, '/synthetic', '/synthetic-ca', 'b' * 64,
+                       'synthetic-window')
+        self.assertEqual([obj['stage'] for obj in channel.sent],
+                         ['ready', 'review', 'runner-result'])
+        self.assertEqual(channel.sent[1]['token'], token)
+        self.assertEqual(channel.sent[1]['audience'], n.b.AUDIENCE)
+        self.assertTrue(credentials[0].closed and channel.cleared)
+        self.assertEqual(channel.sent[-1]['result']['credential']['token_request_expires_at'],
+                         candidate['status_expires_at'])
+        self.assertNotIn(token, json.dumps(channel.sent[-1]))
 
     def test_unexpected_errors_do_not_echo_private_values(self):
         channel = FakeChannel([])
