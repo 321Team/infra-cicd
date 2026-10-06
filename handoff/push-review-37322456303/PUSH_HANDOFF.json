@@ -1,0 +1,85 @@
+{
+  "schema": "P1-CICD-push-handoff-1",
+  "scope": "PUSH_ONLY",
+  "evidence_basis": {
+    "github_run_and_log": "DIRECTLY_READ",
+    "server_receipts_and_hash_checks": "RECEIVED_ARCHIVE_BYTES_VERIFIED",
+    "actions_secret_cleanup": "USER_CONSOLE_SUBMITTED",
+    "raw_receipt_archive_received": true,
+    "independent_runtime_evidence_review": "PENDING",
+    "receipt_archive_sha256": "9f937675b6bd96ff989ce36cfef7a20a816036888a3869a9a31d2fc7a467d2d4",
+    "raw_oci_report_db_received": false,
+    "receiver_verification": "RECEIPT_REVIEW.json"
+  },
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694"
+  },
+  "build_run": {
+    "run_id": 37322456303,
+    "attempt": 1
+  },
+  "push_run": {
+    "run_id": 37331796555,
+    "attempt": 1,
+    "url": "https://github.com/321Team/infra-cicd/actions/runs/37331796555",
+    "workflow_sha": "966a268bdf002f537d6d21d1eec87dfd116f27a5",
+    "host": "cicd-runner01",
+    "user": "server01_cicd-runner",
+    "uid": 1000,
+    "started_at": "2026-10-06T00:18:59.277902+09:00",
+    "finished_at": "2026-10-06T00:19:36.282360+09:00"
+  },
+  "input": {
+    "reviewed_commit": "4f9e9bbc3e5799ac85951117e3a850166d6814c4",
+    "record_sha256": "94e78ae5157156f0b2e9fce013992600c6e419e4de87f07e192eea203b59fb00",
+    "authorization_reference": "https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-5997038348",
+    "expires_at": "2026-10-06T00:55:07+09:00"
+  },
+  "evidence_directory": "/home/server01_cicd-runner/FDS_CICD_Push.skl2vo8_",
+  "fresh_scan_result_sha256": "edd12ffb4121c61bd07921329160aac421db6558e1c66c385536110614d70ae5",
+  "services": {
+    "transaction-api": {
+      "registry_repository": "10.1.93.54/fds/transaction-api",
+      "tag": "delivery-716a8ef98f76492786e73a340db35883",
+      "manifest_digest": "sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50",
+      "remote_tag_and_digest_check": "PASS_REPORTED_BY_REVIEWED_ADAPTER",
+      "push": "PASS",
+      "fresh_scan": {
+        "result": "PASS",
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "harbor_scanner": "NOT_VERIFIED",
+      "deployment_manifest_digest": null,
+      "pod_image_id": null,
+      "rollback": "NOT_EXECUTED",
+      "four_way_match": "NOT_VERIFIED"
+    },
+    "fds-engine": {
+      "registry_repository": "10.1.93.54/fds/fds-engine",
+      "tag": "delivery-716a8ef98f76492786e73a340db35883",
+      "manifest_digest": "sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b",
+      "remote_tag_and_digest_check": "PASS_REPORTED_BY_REVIEWED_ADAPTER",
+      "push": "PASS",
+      "fresh_scan": {
+        "result": "PASS",
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "harbor_scanner": "NOT_VERIFIED",
+      "deployment_manifest_digest": null,
+      "pod_image_id": null,
+      "rollback": "NOT_EXECUTED",
+      "four_way_match": "NOT_VERIFIED"
+    }
+  },
+  "PUSH": "PASS",
+  "DISPATCH": "PASS",
+  "temporary_auth_cleanup": "PASS",
+  "credential_cleanup": "PASS",
+  "repository_actions_secret_cleanup": "PASS",
+  "dispatch_manifest_check": "PASS",
+  "DEPLOY": "NOT_EXECUTED",
+  "DELIVERY_GATE": "NOT_VERIFIED"
+}

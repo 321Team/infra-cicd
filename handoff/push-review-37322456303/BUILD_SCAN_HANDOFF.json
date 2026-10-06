@@ -1,0 +1,79 @@
+{
+  "schema": "P1-CICD-build-scan-handoff-1",
+  "scope": "BUILD_SCAN_ONLY",
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-5995840347"
+  },
+  "workflow": {
+    "repository": "321Team/infra-cicd",
+    "ref": "refs/heads/main",
+    "commit": "966a268bdf002f537d6d21d1eec87dfd116f27a5",
+    "run_id": 37322456303,
+    "run_attempt": 1
+  },
+  "evidence": {
+    "archive_sha256": "90c0e390adadb8c1e2dcaad65b9674ed441edb4235b9e3b3e95aef93c79b9ce7",
+    "app_result_sha256": "b531d6f06027f2b76b061c5c748dc0ebef943c2dcd48d4987a04540ab1faf64c",
+    "build_result_sha256": "3154490c3b013a2489f86cca8e35bae15b5185970ef4b79994db347487cc1576",
+    "scan_result_sha256": "4d97f0bae09acb66cfe03b93b0e87bf8e538f5c15d5797b25bd8df9f8a7f9421",
+    "server_collection": "PASS_LOCAL_BYTES",
+    "receiver_check": "ARCHIVE_RECEIPTS_AND_PAYLOAD_LEDGER_MATCH",
+    "raw_payloads_included": false
+  },
+  "scanner": {
+    "binary_sha256": "d89bcc6510a267f11b773398cbf1be5520ce39f9e8b6633178c4487f05b7d791",
+    "db_repository": "ghcr.io/aquasecurity/trivy-db:2",
+    "db_sha256": "d0b30302df0af5b967f542393733c4c17eccd22aa97a5b802f937202e656f784",
+    "scan_finished_at": "2026-10-05T14:11:29.179533+00:00",
+    "policy": "BLOCK_HIGH_OR_CRITICAL"
+  },
+  "services": {
+    "transaction-api": {
+      "archive_sha256": "99695906131fb4a1de91a14db9d38ffbf9669a2ec67c48493250e99e8b49942d",
+      "manifest_digest": "sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50",
+      "config_digest": "sha256:4f0def254539b18edce578d8313b54cde11262532bd80dd0ea14f24dc268e330",
+      "scan": {
+        "scan": "PASS",
+        "exit_code": 0,
+        "counts": {
+          "HIGH": 0,
+          "CRITICAL": 0
+        },
+        "manifest_digest": "sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50",
+        "report_sha256": "8fe3ee33d44cc99bff3a25eb94cd5658c9eef2d5efc54f4830e101c0242fb8c8"
+      },
+      "planned_registry_repository": "10.1.93.54/fds/transaction-api",
+      "remote_manifest_digest": null,
+      "deployment_manifest_digest": null,
+      "pod_image_id": null,
+      "rollback_result": "NOT_EXECUTED",
+      "four_way_match": "NOT_VERIFIED"
+    },
+    "fds-engine": {
+      "archive_sha256": "8b97ea24bd10f1f9a378e428249a242efc5d4337a15198b6f35b56383515bcd7",
+      "manifest_digest": "sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b",
+      "config_digest": "sha256:ceac9b0a9fcf574355379f953800876f2a163ac7673d922d8899fb0f298b1117",
+      "scan": {
+        "scan": "PASS",
+        "exit_code": 0,
+        "counts": {
+          "HIGH": 0,
+          "CRITICAL": 0
+        },
+        "manifest_digest": "sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b",
+        "report_sha256": "916dbc06308c7715b3eebbef78bdaf9bd0f557cf221036ca5e08a202306fe20a"
+      },
+      "planned_registry_repository": "10.1.93.54/fds/fds-engine",
+      "remote_manifest_digest": null,
+      "deployment_manifest_digest": null,
+      "pod_image_id": null,
+      "rollback_result": "NOT_EXECUTED",
+      "four_way_match": "NOT_VERIFIED"
+    }
+  },
+  "delivery_gate": "NOT_VERIFIED",
+  "push": "NOT_EXECUTED",
+  "deploy": "NOT_EXECUTED"
+}
