@@ -68,7 +68,8 @@ ROLLBACK=READY_HEALTH_NOT_VERIFIED도 앱·DB 호환성이나 E2E 복구 성공�
 이상 미완료 항목이 해소되기 전 workflow_dispatch/실제 배포 명령을 제공하지 않는다.
 독립 코드 리뷰와 별도 Runtime 실행·중단·복구 범위 승인은 실제 적용 전에 필요하다.
 
-## 검증
+## 최초 구현 검증 (caaf8e8 이전)
+
 
 로컬 Python 3.12 / Windows에서:
 ```text
@@ -89,3 +90,51 @@ PATCH 응답 유실, readiness timeout, 최종 재확인, journal 실패,
 공식 동작 근거:
 - https://kubernetes.io/docs/reference/using-api/api-concepts/
 - https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+
+## 독립 리뷰 보완 — 2026-10-06
+
+supreme33-kr의 [코어 승인 리뷰](https://github.com/321Team/infra-cicd/pull/53#pullrequestreview-5422444114)는
+caaf8e8287cdcd9f76d98e754ce58b40c8711617에 한정된다. 다음 변경은 재리뷰 대상이다.
+
+1. 만료/권한 거부에는 리뷰 대안 **(b)**를 적용한다. polling을 포함한 authorize 거부는
+   AUTHORIZATION_DENIED + MANUAL_RECONCILIATION_REQUIRED로 끝내고 자동 복구하지 않는다.
+   별도 rollback 권한이 남아 있더라도 이 경로에서는 추가 쓰기를 하지 않는다.
+   일반 readiness 실패/서버의 확정 PATCH 거부에 대한 기존 별도 승인 복구는 유지한다.
+2. PATCH 직전 권한 거부는 NOT_SENT_AUTH_DENIED를 checkpoint한다.
+   journal 이후 다시 권한을 검사하므로 journal 지연을 이유로 만료된 쓰기를 허용하지 않는다.
+   이 기록도 저장 실패하면 CHECKPOINT_FAILED가 최종 오류이며 마지막 durable journal로 수동 대조한다.
+3. remaining_seconds 콜백을 필수화했다. 두 대상 사전조회 후와 첫 PATCH 직전에
+   남은 Deploy 승인 시간이 2 × timeout + window_margin 이상이어야 한다.
+   margin 기본30초는 구현 기본값이며 팀 승인시간/Token TTL 정책 변경이 아니다.
+   Runtime 연결자는 bounded API 호출·journal 저장시간을 포함하도록 margin을 산정해야 한다.
+   콜백은 검증된 Deploy 승인 만료시각에서 계산하고 token TTL/고정 상수로 대체하지 않는다.
+   bool/NaN/infinity/누락·조회실패는 시작을 차단한다. 시작 여유는 완료 보장이 아니므로
+   이후 요청별 권한 검사도 계속 유지한다.
+4. cp1-baseline.json에 이미 제출된 00:43:27 KST 콘솔의 두 current_image 원문을 복원했다.
+   새 조회 또는 현재 live 값으로 표시하지 않는다. tag@digest/FQDN을 임의 정규화해
+   승인된 이전 이미지와 같다고 처리하지 않으며, 실제 실행 직전에 원문을 다시 대조한다.
+5. 대상 HPA 부재는 NOT_VERIFIED다. Runtime 사전조건에 **두 Deployment를 대상으로 하는
+   HPA 없음 및 작업 중 replica 변경 없음**을 추가한다. HPA가 발견되면 끄거나 삭제하지 말고
+   중단하여 별도 변경안을 검토한다. Runner Role에 HPA list 권한을 추가하지 않는다.
+
+### cp1 읽기 전용 확인 절차 (아직 미실행)
+
+대상 server02@k8s-control01, 기존 kubeconfig 및 조회 권한, 작업 경로는 사용자 홈.
+먼저 기존 context의 API가 https://10.1.93.109:6443이고 TLS 검증이 유지되는지 확인한다.
+다음 출력은 현재 image 원문과 HPA scaleTargetRef를 대조하기 위한 것이며 토큰을 출력하지 않는다.
+
+```sh
+kubectl --request-timeout=10s get deployment transaction-api fds-engine -n fds-app -o json
+kubectl --request-timeout=10s get hpa -n fds-app -o json
+```
+
+정상: 두 UID/컨테이너/image 원문이 승인 입력과 일치하고,
+HPA items 중 scaleTargetRef.kind=Deployment, name이 transaction-api/fds-engine인 항목이 없음.
+API/TLS/조회 실패·대상 변경·관련 HPA 존재는 STOP이며 미확인을 PASS로 바꾸지 않는다.
+조회만 하므로 설정 복구는 필요 없다. 실행 시각/호스트/RC/조회 원본을 남긴다.
+current_image/UID 검사는 core의 실행 직전 GET에서도 다시 수행한다.
+
+추가 MOCK7건: polling 중 만료 시 복구0건, 첫/두번째 PATCH 전 거부 시 미전송 기록,
+시작 budget 부족/잘못된 값/정확한 경계, journal 지연 후 재검사, provider 실패 비밀 비노출.
+이번 세션 로컬 shell이 실행 환경 오류로 열리지 않아 로컬 시험은 미실행이며,
+GitHub source-validation CI 결과를 대상 HEAD에 연결한다.
