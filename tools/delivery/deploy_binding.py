@@ -83,15 +83,8 @@ def validate(raw, push_raw, expected_sha256, execution, now):
         raise Invalid('RECORD_INVALID') from None
 
 
-def _validate(raw, push_raw, expected_sha256, execution, now):
-    need(type(expected_sha256) is str and gate.SHA256.fullmatch(expected_sha256),
-         'EXPECTED_HASH_INVALID')
-    record = read(raw)
-    need(sha(raw) == expected_sha256, 'INPUT_HASH_MISMATCH')
-    need(record.get('schema') == 'P1-CICD-deploy-binding-1' and
-         record.get('template_only') is False, 'SCHEMA_OR_TEMPLATE_INVALID')
-    actual = identity(execution)
-    need(identity(record['execution']) == actual, 'DEPLOY_EXECUTION_MISMATCH')
+def payload_checked(record, push_raw, actual):
+    """Shared Build/Push/target checks; caller validates its own approval schema."""
     delivery = record['delivery']
     need(gate.evaluate(delivery, 'pre_push')['decision'] == 'CONDITIONS_MATCH',
          'BUILD_INPUT_BLOCKED')
@@ -143,6 +136,19 @@ def _validate(raw, push_raw, expected_sha256, execution, now):
         targets = targets_checked(targets)
     except Exception:
         raise Invalid('TARGET_IMAGE_OR_UID_INVALID') from None
+    return dict(build), targets
+
+
+def _validate(raw, push_raw, expected_sha256, execution, now):
+    need(type(expected_sha256) is str and gate.SHA256.fullmatch(expected_sha256),
+         'EXPECTED_HASH_INVALID')
+    record = read(raw)
+    need(sha(raw) == expected_sha256, 'INPUT_HASH_MISMATCH')
+    need(record.get('schema') == 'P1-CICD-deploy-binding-1' and
+         record.get('template_only') is False, 'SCHEMA_OR_TEMPLATE_INVALID')
+    actual = identity(execution)
+    need(identity(record['execution']) == actual, 'DEPLOY_EXECUTION_MISMATCH')
+    build, targets = payload_checked(record, push_raw, actual)
     approval = record['approval']
     need(type(approval['reference']) is str and REFERENCE.fullmatch(approval['reference']),
          'APPROVAL_REFERENCE_INVALID')
