@@ -29,7 +29,7 @@ no-cache 요청, 응답1MiB 상한과 JSON 중복 키 거부를 사용한다. �
 새 GitHub 권한/Secret 생성이나 Workflow 권한 확대는 이번 변경에 없다.
 
 소스:
-- [GitHub Get an issue comment](https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28#get-an-issue-comment)
+- [GitHub Get an issue comment](https://docs.github.com/en/rest/issues/comments?apiVersion=2026-03-10#get-an-issue-comment)
 - [Python urllib.request](https://docs.python.org/3/library/urllib.request.html)
 
 매 GET/PATCH/rollback의 authorize가 댓글을 다시 읽는다. 원문 수정·삭제, 다른 작성자,
@@ -113,3 +113,49 @@ Workflow와 검증된 credential metadata/읽기 권한 연결 → 운영 실행
 기존 K8S 시험·보호 실패, 최신 Deployment/HPA, 이전 image 재Pull/호환성,
 Worker Pull, APP DB TLS/Health/E2E는 별도 실제 검증 대상이다.
 이번 변경은 Runner 상태 디렉터리 생성, 토큰 발급, Deploy·Runtime 실행 승인 또는 Phase1 인수가 아니다.
+
+## PR56 리뷰 후 운영 연결 결정
+
+2026-10-06 / 리뷰 supreme33-kr, HEAD0373fa2605a11db8f77ab399fd0f0364265d44cb.
+현재 선택은 기존 코드의 **매 GET/PATCH 승인 fresh lookup과 단일 실패 시 중단**이다.
+GET에서 캐시된 승인으로 진행하는 완화는 채택하지 않는다. GitHub 429/장애가 첫 PATCH 뒤
+발생하면 부분 rollout과 MANUAL_RECONCILIATION_REQUIRED가 될 수 있다. polling interval=2로
+300초까지 대기할 경우 대상당 약150회 조회 가능성이 있으므로 운영 호출자는 실제
+GitHub rate budget을 확인하고, 검토된 polling 간격/기간과 수동 대조 절차를 정해야 한다.
+이는 철회 탐색 실패를 허용하지 않는 현 구현 선택이며 가용성 위험을 없앴다는 뜻이 아니다.
+다른 댓글의 철회는 자동 탐색하지 않는다. 원문 수정·삭제를 다음 authorize에서 확인하며,
+이미 진행 중인 API 호출은 소급 취소하지 못한다. 원문 조회와 PATCH의 원자성은 보장하지 않는다.
+
+운영 승인 위치는 **infra-cicd#11**을 사용한다. 다른 private 저장소의 baseline#16
+조회 권한을 GITHUB_TOKEN에 있다고 가정하지 않는다. 라이브러리의 기존 reference 지원을
+변경하지 않았으며 새 cross-repository Secret이나 GitHub 권한 확대도 하지 않는다.
+기존 Workflow의 실제 issue-comment 읽기 권한은 연결 PR에서 확인해야 한다.
+
+X-GitHub-Api-Version은 코드와 같은 **2026-03-10**이다.
+[공식 지원 버전 목록](https://docs.github.com/en/rest/about-the-rest-api/api-versions)에
+2026-03-10과 2022-11-28이 명시되어 있다. 지원 문서 확인은 실제 읽기 token에 의한
+운영 API 성공 검증과 구분하며, 그 조회/권한 검증은 미실행이다.
+
+### 승인 원문 게시·확정 runbook (실행하지 않은 절차)
+
+1. 고정 Workflow SHA/계획 bytes·해시, 최신 Deployment UID/이전 digest와 실행/복구 범위를
+   확정한다. 일반 리뷰 승인을 Runtime 승인 JSON으로 자동 변환하지 않는다.
+2. Lead GWONUK가 infra-cicd#11에 댓글 위치를 확보한다. 임시 댓글은 승인 원문이 아니므로
+   실행할 수 없다. 반환된 ID와 html_url을 보존한다.
+3. 해당 URL을 reference에 넣은 최종 v2 승인 JSON을 UTF-8 **LF**로 만든다.
+   끝 개행은 **LF 한 개**로 고정하며 UTF-8 BOM, fence와 설명을 붙이지 않는다.
+   plan/approval의 순환 hash를 만들지 않고 plan_sha256만 승인 원문에 포함한다.
+4. 승인 댓글 작성자 계정의 REST PATCH /repos/321Team/infra-cicd/issues/comments/{id}로
+   JSON 객체의 body에 위 파일을 UTF-8로 읽은 문자열을 넣는다.
+   shell --body/복사붙여넣기를 거치지 않고 JSON encoder로 요청 파일을 생성해 보내며,
+   줄바꿈을 다시 정규화하지 않는다. 실제 수행 명령은 별도 실행 승인/환경에 맞춰 제공한다.
+5. 같은 API 버전, application/vnd.github.raw+json GET으로 id/html_url/작성자 및
+   body.encode('utf-8')를 원본 bytes와 비교한다. **완전 일치한 원본 SHA-256**을 외부 입력으로 고정한다.
+   게시 후 재편집하면 저장된 원본/hash와 달라져 거부된다.
+6. Runner 입력과 댓글의 exact bytes를 재검증한 뒤 계획/승인 hash를 dispatch에 전달한다.
+   승인 만료 또는 원문 수정·삭제 시 추가 쓰기·자동 rollback을 중단한다.
+   철회는 승인 원문을 REVOKED로 편집하거나 삭제하는 절차로 수행한다.
+   이미 소진한 claim이나 checkpoint를 삭제해 같은 계획을 재실행하지 않는다.
+
+LF 끝 개행이 있는 원문은 같은 bytes의 body에만 일치한다. CRLF, 끝 개행 추가/삭제,
+Markdown fence를 동등한 승인으로 정규화하지 않는 회귀 시험을 추가한다.
