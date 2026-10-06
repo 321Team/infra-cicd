@@ -19,7 +19,8 @@
       "availableReplicas": 3,
       "container": "transaction-api",
       "current_manifest_digest": "sha256:a7093136d12640da00570c18ed278eacbb8e9ba3637c7d509571346eac45cc33",
-      "proposed_manifest_digest": "sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50"
+      "proposed_manifest_digest": "sha256:fa18dc36db8de35fb29ae9f5ec7bea7b7a6a0d0cd293649a79ed0d4dbb093b50",
+      "current_image": "10.1.93.54/fds/transaction-api@sha256:a7093136d12640da00570c18ed278eacbb8e9ba3637c7d509571346eac45cc33"
     },
     {
       "name": "fds-engine",
@@ -33,7 +34,8 @@
       "availableReplicas": 3,
       "container": "fds-engine",
       "current_manifest_digest": "sha256:5e2a081cd51a957c3fad038b3eab07884c446ea3c2a814a905e3f41c24f67369",
-      "proposed_manifest_digest": "sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b"
+      "proposed_manifest_digest": "sha256:d77b80954fec5c408fb0bb91995d5faf3155ef2b74c76bc4f7e95cf319249e5b",
+      "current_image": "10.1.93.54/fds/fds-engine@sha256:5e2a081cd51a957c3fad038b3eab07884c446ea3c2a814a905e3f41c24f67369"
     }
   ],
   "runner_kubectl": "NOT_INSTALLED_USER_CONFIRMED",
@@ -46,6 +48,10 @@
   "notes": [
     "cp1 access does not prove Runner access",
     "resourceVersion is a snapshot and must be refreshed immediately before mutation",
-    "previous digests are candidates, not independently approved rollback results"
-  ]
+    "previous digests are candidates, not independently approved rollback results",
+    "current_image restores the full image strings omitted from this transcription; refresh on the target before execution",
+    "HPA absence for the two target Deployments must be checked by the existing cp1 operator; do not grant Runner HPA list permission"
+  ],
+  "current_image_basis": "VERBATIM_FROM_EXISTING_USER_CONSOLE_2026-10-06T00:43:27+09:00_NOT_A_NEW_QUERY",
+  "target_hpa_absence": "NOT_VERIFIED"
 }
