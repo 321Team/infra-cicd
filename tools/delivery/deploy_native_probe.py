@@ -68,6 +68,10 @@ def expiry(raw):
     return value
 
 
+def utcnow():
+    return dt.datetime.now(dt.timezone.utc)
+
+
 class Window:
     def __init__(self, raw, *, now=lambda: dt.datetime.now(dt.timezone.utc),
                  clock=time.monotonic):
@@ -470,20 +474,25 @@ def endpoint(role, source_sha, workdir, ca_path, ca_hash, authorization_expires)
             need(message == {'action': 'issue-once'}, 'CP1_ACTION_INVALID')
             issued = 'ATTEMPTED_UNCONFIRMED'
             candidate = backend.issue(uid, window.remaining)
-            credential = c.Credential(candidate['token'], uid, backend)
+            status_left = (expiry(candidate['status_expires_at']) - utcnow()).total_seconds()
+            need(status_left > 30, 'CANDIDATE_WINDOW_TOO_SHORT')
+            credential = c.Credential(candidate['token'], uid, backend,
+                                      review_timeout=min(10, window.remaining(), status_left))
             issued = 'ISSUED_AND_CP1_REVIEWED'
             need(credential.remaining() > 30, 'CANDIDATE_WINDOW_TOO_SHORT')
-            need(expiry(candidate['status_expires_at']) > dt.datetime.now(dt.timezone.utc),
+            need(expiry(candidate['status_expires_at']) > utcnow(),
                  'CANDIDATE_STATUS_EXPIRED')
             window.remaining()
-            channel.send({'stage': 'candidate', **candidate})
+            channel.send({'stage': 'candidate', **candidate},
+                         min(10, window.remaining(), credential.remaining(),
+                             (expiry(candidate['status_expires_at']) - utcnow()).total_seconds()))
             message = channel.recv(30)
             need(set(message) == {'stage', 'token', 'audience', 'timeout'}
                  and message['stage'] == 'review' and message['token'] == credential.token()
                  and message['audience'] == b.AUDIENCE, 'RELAY_REVIEW_BINDING_INVALID')
             remaining = min(credential.remaining(), window.remaining(),
                             (expiry(candidate['status_expires_at']) -
-                             dt.datetime.now(dt.timezone.utc)).total_seconds())
+                             utcnow()).total_seconds())
             timeout = min(a.timeout_checked(message['timeout']), remaining)
             need(timeout > 0, 'RELAY_REVIEW_EXPIRED')
             review = backend.review(message['token'], b.AUDIENCE, timeout)
@@ -509,7 +518,10 @@ def endpoint(role, source_sha, workdir, ca_path, ca_hash, authorization_expires)
             stamp = expiry(message['status_expires_at'])
             need(claims['iat'] < stamp.timestamp() <= claims['exp'],
                  'RUNNER_STATUS_EXPIRY_INVALID')
-            credential = c.Credential(token, message['sa_uid'], PipeReviewer(channel))
+            status_left = (stamp - utcnow()).total_seconds()
+            need(status_left > 0, 'RUNNER_CREDENTIAL_EXPIRED')
+            credential = c.Credential(token, message['sa_uid'], PipeReviewer(channel),
+                                      review_timeout=min(10, window.remaining(), status_left))
             probe = RunnerProbe(ca_path, ca_hash, credential, message['status_expires_at'], window)
             native_expiry = message['status_expires_at']
             message = token = None
@@ -520,7 +532,7 @@ def endpoint(role, source_sha, workdir, ca_path, ca_hash, authorization_expires)
             result['credential'] = metadata
             result['credential']['local_credential_cleanup'] = 'LOCAL_REFERENCE_DROPPED'
             result['input_reference_cleanup'] = 'LOCAL_REFERENCE_DROPPED'
-            result['checked_at'] = dt.datetime.now(dt.timezone.utc).isoformat()
+            result['checked_at'] = utcnow().isoformat()
             channel.send({'stage': 'runner-result', 'result': result})
     except Exception as exc:
         safe_codes = {

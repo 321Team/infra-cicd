@@ -219,15 +219,14 @@ class EndpointTests(unittest.TestCase):
                                       'status_expires_at': response['status']['expirationTimestamp']}
         backend.review.return_value = review
         actual = n.c.Credential
-        factory = lambda token, uid, reviewer: actual(
-            token, uid, reviewer, now=lambda: NOW, clock=lambda: 100.0)
+        factory = lambda token, uid, reviewer, **kw: actual(
+            token, uid, reviewer, now=lambda: NOW, clock=lambda: 100.0, **kw)
         with patch.object(n, 'Channel', return_value=channel), \
              patch.object(n.a, 'host_checked'), patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
              patch.object(n, 'Window', return_value=Mock(remaining=lambda: 600)), \
              patch.object(n, 'NativeAccess', return_value=backend), \
              patch.object(n.c, 'Credential', side_effect=factory), \
-             patch.object(n, 'expiry', return_value=dt.datetime.now(dt.timezone.utc) +
-                          dt.timedelta(minutes=15)):
+             patch.object(n, 'utcnow', return_value=NOW):
             n.endpoint('cp1', 'a' * 40, '/synthetic', '/synthetic-ca', 'b' * 64,
                        'synthetic-window')
         self.assertEqual(backend.issue.call_count, 1)
@@ -246,8 +245,9 @@ class EndpointTests(unittest.TestCase):
                      'status_expires_at': response['status']['expirationTimestamp']}
         channel = FakeChannel([candidate, {'stage': 'review-result', 'response': review}])
         actual, credentials = n.c.Credential, []
-        def factory(token, uid, reviewer):
-            value = actual(token, uid, reviewer, now=lambda: NOW, clock=lambda: 100.0)
+        def factory(token, uid, reviewer, **kw):
+            self.assertEqual(kw['review_timeout'], 2)
+            value = actual(token, uid, reviewer, now=lambda: NOW, clock=lambda: 100.0, **kw)
             credentials.append(value)
             return value
         probe = Mock()
@@ -256,8 +256,9 @@ class EndpointTests(unittest.TestCase):
         with patch.object(n, 'Channel', return_value=channel), \
              patch.object(n.a, 'host_checked'), \
              patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
-             patch.object(n, 'Window', return_value=Mock(remaining=lambda: 600)), \
+             patch.object(n, 'Window', return_value=Mock(remaining=lambda: 2)), \
              patch.object(n.c, 'Credential', side_effect=factory), \
+             patch.object(n, 'utcnow', return_value=NOW), \
              patch.object(n, 'RunnerProbe', return_value=probe):
             n.endpoint('runner', 'a' * 40, '/synthetic', '/synthetic-ca', 'b' * 64,
                        'synthetic-window')
@@ -269,6 +270,31 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(channel.sent[-1]['result']['credential']['token_request_expires_at'],
                          candidate['status_expires_at'])
         self.assertNotIn(token, json.dumps(channel.sent[-1]))
+
+    def test_native_status_expiry_stops_before_first_token_review(self):
+        _, token, _, response = native_fixture()
+        for role in ('cp1', 'runner'):
+            candidate = {'token': token, 'sa_uid': SA_UID,
+                         'status_expires_at': response['status']['expirationTimestamp']}
+            messages = [{'action': 'issue-once'}] if role == 'cp1' else [
+                {'stage': 'candidate', **candidate}]
+            channel, backend = FakeChannel(messages), Mock(attempted=True)
+            backend.preflight.return_value = SA_UID
+            backend.issue.return_value = candidate
+            with self.subTest(role=role), \
+                 patch.object(n, 'Channel', return_value=channel), \
+                 patch.object(n.a, 'host_checked'), \
+                 patch.object(n.a, 'ca_checked', return_value=(b'CA', Mock())), \
+                 patch.object(n, 'Window', return_value=Mock(remaining=lambda: 600)), \
+                 patch.object(n, 'NativeAccess', return_value=backend), \
+                 patch.object(n.c, 'Credential') as credential, \
+                 patch.object(n, 'utcnow', return_value=NOW + dt.timedelta(seconds=900)):
+                n.endpoint(role, 'a' * 40, '/synthetic', '/synthetic-ca', 'b' * 64,
+                           'synthetic-window')
+                credential.assert_not_called()
+                backend.review.assert_not_called()
+                self.assertEqual(channel.sent[-1]['stage'], 'error')
+                self.assertNotIn(token, json.dumps(channel.sent))
 
     def test_unexpected_errors_do_not_echo_private_values(self):
         channel = FakeChannel([])
