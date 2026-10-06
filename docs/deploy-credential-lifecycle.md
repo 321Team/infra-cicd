@@ -17,7 +17,8 @@ POST /apis/authentication.k8s.io/v1/tokenreviews를 pin된 CA/TLS로 인증하�
 같은 token/spec.audiences의 fresh v1 TokenReview 응답을 돌려줘야 한다.
 cache·외부 파일·서명 검증 없는 전달 자료·임의 PASS dict로 대체할 수 없다.
 이 라이브러리는 backend의 TLS나 반환 dict의 네트워크 출처를 스스로 증명하지 않는다.
-실제 backend 구현/권한/보안 전달은 **미연결**이다. Mock을 붙여 운영 credential로 사용하지 않는다.
+CP1 기존 인증을 사용하는 backend와 사전 확인 CLI는 [후속 구현](deploy-access-precheck.md)에 있다.
+그 코드의 독립 리뷰/실제 CP1 실행은 별도로 확인하며, 발급·Runner 주입·Runtime 연결은 **미연결**이다. Mock을 붙여 운영 credential로 사용하지 않는다.
 
 Runner SA에 TokenReview 권한이 있다고 가정하거나 그 권한을 추가하지 않는다.
 검토된 발급/확인 경로는 기존 관리 권한을 가진 CP1 측이 수행할 수 있지만, CP1 관리자
@@ -47,7 +48,11 @@ TokenReview spec에 candidate token 자체가 포함될 수 있으므로 요청�
 5. remaining()은 wall clock 잔여와 **조회 전부터 시작한 monotonic deadline** 중 작은 값이다.
    조회 시간을 수명에 더하지 않는다. wall clock 역행으로 수명이 늘지 않으며 monotonic
    역행/clock 실패는 로컬 token 참조를 버리고 중단한다. 현재 시각 신뢰/chrony도 실제 확인 대상이다.
-6. 만료나 close() 후 remaining()=0이고 token()은 거부한다. 자동 refresh·재발급은 없다.
+6. 만료나 close() 후 remaining()=0이고 token()은 거부한다. public closed=False로 바꾸어도
+   삭제된 참조가 있으면 remaining()=0, token/context 재진입은 거부한다. 자동 refresh·재발급은 없다.
+7. exp-iat≤3600은 직접 TokenRequest로 받은 단기 주입 token의 제한이며 kubelet projected token의
+   연장된 expiry를 수용하는 계약이 아니다. CREDENTIAL_NOT_YET_VALID 시 CP1/Runner의 UTC·chrony
+   offset을 먼저 확인하고 근거 없이 clock skew 허용치를 늘리지 않는다.
 
 서명을 로컬 crypto 구현으로 검증했다고 표기하지 않는다.
 authentication_basis=CALLER_AUTHENTICATED_FRESH_TOKEN_REVIEW와
@@ -78,7 +83,7 @@ initial 서버 인증 관측을 지속적인 인증 유효성·배포 성공으�
 
 ## 검증과 후속 순서
 
-24개 Synthetic/Mock 시험은 token/SA/audience/수명·서버 응답 결속, decode-only 거부,
+25개 Synthetic/Mock 시험은 token/SA/audience/수명·서버 응답 결속, decode-only 거부,
 오류 원문 비노출, 조회 지연·만료·시계 역행, local cleanup 후 사용 금지,
 첫 PATCH 이후 실제 만료에 따른 추가 PATCH/자동 rollback 중단을 확인한다.
 fixture 서명은 MOCK이며 실제 서명 검증·발급·TLS·Runtime 시험이 아니다.
