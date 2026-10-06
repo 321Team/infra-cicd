@@ -1,6 +1,6 @@
 # CP1 native SA → Runner 인증 진단
 
-P1-CICD-01의 다음 진단 후보다. CP1의 기존 사용자 인증으로 짧은 ServiceAccount 토큰을 요청하고, 같은 후보를 CP1의 fresh TokenReview와 Runner의 직접 TLS API 요청으로 확인한다. 현재 코드는 독립 리뷰 대상이며 현장 실행·토큰 발급·배포 완료 기록이 아니다.
+P1-CICD-01의 다음 진단 후보다. CP1의 기존 사용자 인증으로 짧은 ServiceAccount 토큰을 요청하고, 같은 후보를 CP1의 fresh TokenReview와 Runner의 직접 TLS API 요청으로 확인한다. 진단 소스 `14dba0f018e6dcaa32bdb569552b40fae7bb269f`는 [PR #61](https://github.com/321Team/infra-cicd/pull/61)의 독립 리뷰를 거쳐 merge `88394d7a8ec472be2e86cad5227d079250b91daf`로 편입됐다. 소스 승인·병합은 현장 실행·토큰 발급·배포 완료 기록이 아니다.
 
 ## 기존 관측과 이번 범위
 
@@ -49,7 +49,7 @@ Bundle 형식은 UTF-8 JSON 한 줄에 마지막 LF 하나다. 실제 파일 전
 {"schema":"P1-CICD-native-probe-source-1","source_sha":"<40 lowercase hex>","files":{"<exact module name>":{"git_blob":"<Git blob SHA-1 at that source>","content":"<exact UTF-8 source>"}}}
 ```
 
-실제 bundle에는 일곱 파일이 모두 있어야 한다. Git blob은 `SHA1(b"blob " + decimal_byte_length + b"\\0" + UTF8_content)`다. source SHA와 각 blob의 저장소 결속 및 승인 여부는 **인계하는 사람이 독립 확인**한다. 도구의 자기 해시 검증은 승인 확인을 대신하지 않는다.
+실제 bundle에는 일곱 파일이 모두 있어야 한다. Git blob은 `SHA1(b"blob " + decimal_byte_length + b"\x00" + UTF8_content)`다. source SHA와 각 blob의 저장소 결속 및 승인 여부는 **인계하는 사람이 독립 확인**한다. 도구의 자기 해시 검증은 승인 확인을 대신하지 않는다.
 
 Broker는 같은 loader로 Ansible·CP1·Runner에 bundle SHA-256, 정확한 파일 집합, 각 Git blob, Python compile을 검증한 뒤 보호된 HOME의 새 `FDS_NativeProbeSource.*` 디렉터리에 공개 코드만 둔다. 디렉터리 0700 / 파일 0600, symlink·hardlink·과다 쓰기 권한·파일 변경을 거부한다. 공개 source 디렉터리는 조사 및 source 확인용으로 보존한다. CA, kubeconfig, 개인키를 bundle에 포함하지 않는다.
 
@@ -77,6 +77,8 @@ printf 'NATIVE_PROBE_RC=%s\n' "$probe_rc"
 
 현장 발급 판단 **후에만** 위 명령에 `--execute --authorization-expires '<YYYY-MM-DDTHH:MM:SS+00:00>'`를 추가한다. 필요하면 이미 승인된 대상별 개인키를 `--cp1-key`와 `--runner-key`로 각각 지정한다. SSH 암호 인증은 기존 interactive terminal에서 수행한다. 새 경로의 현장 SSH 암호 입력 동작은 아직 확인되지 않았다.
 
+SSH 준비 시간도 프로토콜 기한을 소비한다. broker는 첫 bundle 전송을 30초로 제한하며, CP1이 `ready`를 보낸 뒤 다음 action 대기는 60초다. Runner 연결·인증·staging은 이 CP1 대기 안에 끝나야 한다. 암호 입력이나 인증 지연 때문에 전송이 pipe에서 막히면 기본 preflight도 실패할 수 있다. 이미 승인된 대상별 키가 있으면 이를 우선 사용한다. 키가 없다는 이유로 새 trust/key를 만들거나 timeout을 변경하지 않는다. 실패 시 무발급 결과부터 검토하고 발급 모드로 전환하지 않는다.
+
 기본 preflight PASS는 `TOKEN_ISSUED=false`, `RUNNER_TOKEN_AUTH=NOT_VERIFIED`다. 전체 성공은 `NATIVE_AUTH_PROBE=PASS` 및 `runner_observation.RUNNER_TOKEN_AUTH=PASS`다. 두 모드 모두 `DEPLOY=NOT_EXECUTED`, `DELIVERY_GATE=NOT_VERIFIED`를 유지한다.
 
 ## Runner 요청과 판정
@@ -96,7 +98,7 @@ Credential의 공통 메타데이터 `runner_token_authentication=NOT_VERIFIED`�
 
 - Kubernetes TokenRequest status의 만료 시각은 JWT 생성보다 먼저 계산될 수 있다. 둘의 문자열 일치를 강요하지 않고 `iat < status expiry <= JWT exp`와 허용 TTL을 확인한다. Runner는 status/JWT/wall/monotonic/진단 승인 기한 중 이른 한계를 사용하며 재설정하지 않는다.
 - wrapper는 한 번의 TokenRequest **명령 호출**만 허용한다. `kubectl`/client-go 내부 HTTP 재시도까지 제어하지 못하므로 서버 발급 횟수의 exactly-once를 보장하지 않는다. 타임아웃·응답 유실이면 발급 여부는 불명확하다. 기존 승인 기한·토큰 기한을 확인하고 원인을 조사한 뒤 별도 재실행 판단을 한다.
-- 토큰과 raw TokenReview는 bounded 메모리/SSH pipe에만 전달하고 argv/env/파일/공개 결과/오류에 넣지 않는다. CP1 kubectl verbose 로그는 0, SSH stderr는 broker에서 폐기한다. 이 wrapper의 출력 통제는 API 서버 audit, OS swap/core dump, 같은 UID의 악성 프로세스나 물리 메모리 zeroization을 보장하지 않는다.
+- 토큰과 raw TokenReview는 bounded 메모리/SSH pipe에만 전달하고 argv/env/파일/공개 결과/오류에 넣지 않는다. 실발급 후보 전달과 fresh review 중계 때 **ansible01 broker 메모리에도 토큰이 존재**한다. ansible01의 과거 LB 음성시험을 현재 API 접근 차단 증명으로 전용하지 않으며, 실발급 판단 전에 현재 LB 접근 경계를 재확인한다. CP1 kubectl verbose 로그는 0, SSH stderr는 broker에서 폐기한다. 이 wrapper의 출력 통제는 API 서버 audit, OS swap/core dump, 같은 UID의 악성 프로세스나 물리 메모리 zeroization을 보장하지 않는다.
 - 성공 결과의 `LOCAL_REFERENCE_DROPPED`는 도구가 보유한 논리 참조를 해제했다는 뜻이다. 서버 토큰 폐기나 전체 메모리 소거가 아니다. `server_revocation=NOT_PERFORMED`이며 SA/Role/Secret을 삭제해 회수하지 않는다. 토큰은 자연 만료한다.
 - 실패 시 broker는 자기 SSH subprocess만 닫고 중단한다. 원격 정리 ACK가 없으면 `ENDPOINT_CLEANUP=NOT_CONFIRMED`다. issue 명령을 보낸 뒤 결과를 확인 못 하면 `TOKEN_ISSUANCE=ISSUE_COMMAND_SENT_UNCONFIRMED`로 표시하며 실제 발급을 확정하지 않는다.
 - 진단 PASS는 Runtime 배포, claim/journal 충족, 배치 선행조건, 스모크 테스트, 증적 저장소 인수, Delivery gate PASS를 대신하지 않는다. 실제 Deploy는 해당 선행조건과 별도 Lead 판단을 고정한 후 진행한다.
