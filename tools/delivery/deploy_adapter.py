@@ -7,6 +7,7 @@ only the bounded GET/JSON-Patch state machine. See docs/deploy-adapter-core.md.
 import copy
 import hashlib
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -142,12 +143,21 @@ class Adapter:
     authorize(action) must freshly enforce reviewed inputs, lock ownership,
     execution identity and authorization expiry; rollback is a separate action.
     checkpoint(receipt) must durably save or raise *before* returning.
+    remaining_seconds() must derive remaining deploy authorization from the
+    verified expiry, not token TTL. The start budget is 2 * timeout + margin;
+    margin must cover bounded requests/checkpoints in the integrating caller.
+    Authority denial stops all further writes, including automatic rollback.
     """
 
-    def __init__(self, client, authorize, checkpoint, *, timeout=300, interval=2,
+    def __init__(self, client, authorize, checkpoint, *, remaining_seconds,
+                 window_margin=30, timeout=300, interval=2,
                  clock=time.monotonic, sleep=time.sleep):
         need(type(timeout) is int and 1 <= timeout <= 3600, 'TIMEOUT_INVALID')
         need(type(interval) is int and 1 <= interval <= timeout, 'INTERVAL_INVALID')
+        need(callable(remaining_seconds), 'AUTH_WINDOW_PROVIDER_REQUIRED')
+        need(type(window_margin) is int and window_margin > 0, 'WINDOW_MARGIN_INVALID')
+        self.remaining_seconds = remaining_seconds
+        self.required_window = 2 * timeout + window_margin
         self.client, self.authorize, self.checkpoint = client, authorize, checkpoint
         self.timeout, self.interval, self.clock, self.sleep = timeout, interval, clock, sleep
         self.used = False
@@ -167,6 +177,15 @@ class Adapter:
             need(self.authorize(action) is True, 'AUTHORIZATION_DENIED')
         except Exception:
             raise Stop('AUTHORIZATION_DENIED') from None
+
+    def check_start_window(self):
+        try:
+            remaining = self.remaining_seconds()
+        except Exception:
+            raise Stop('AUTH_WINDOW_UNAVAILABLE') from None
+        need(type(remaining) in (int, float) and math.isfinite(remaining),
+             'AUTH_WINDOW_INVALID')
+        need(remaining >= self.required_window, 'AUTH_WINDOW_TOO_SHORT')
 
     def get(self, target, action):
         self.auth(action)
@@ -189,7 +208,17 @@ class Adapter:
         item = self.receipt['images'][target.service]
         item[action] = 'PATCH_PENDING'
         self.save()
-        self.auth(action)
+        try:
+            self.auth(action)
+            if action == 'deploy' and not any(
+                    entry['deploy'] in ('APPLIED', 'READY')
+                    for entry in self.receipt['images'].values()):
+                self.check_start_window()
+        except Stop as exc:
+            item[action] = ('NOT_SENT_AUTH_DENIED' if str(exc) == 'AUTHORIZATION_DENIED'
+                            else 'NOT_SENT_AUTH_WINDOW')
+            self.save()
+            raise
         try:
             after = self.client.patch(target.service, image_patch(before, target, old, new))
         except Rejected:
@@ -232,6 +261,7 @@ class Adapter:
                 self.receipt['images'][target.service] = {
                     'before': summary(obj, target), 'deploy': 'NOT_EXECUTED',
                     'rollback': 'NOT_EXECUTED'}
+            self.check_start_window()
             self.receipt['ROLLOUT'] = 'IN_PROGRESS'
             self.save()
             for target in targets:
@@ -256,8 +286,9 @@ class Adapter:
             code = str(exc)
             self.receipt['error_code'] = code
             self.receipt['ROLLOUT'] = 'FAILED'
-            if code in ('PATCH_OUTCOME_UNKNOWN', 'CHECKPOINT_FAILED'):
-                # A late write or missing journal makes automatic recovery unsafe.
+            if code in ('PATCH_OUTCOME_UNKNOWN', 'CHECKPOINT_FAILED', 'AUTHORIZATION_DENIED'):
+                # Authority loss must never trigger a recovery write, even if
+                # rollback authority independently remains valid.
                 self.receipt['ROLLBACK'] = 'MANUAL_RECONCILIATION_REQUIRED'
             elif rollback_on_failure and applied:
                 self.rollback(targets, baseline, applied)
