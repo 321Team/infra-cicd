@@ -42,9 +42,22 @@ def status(details=True):
     return obj
 
 
-def body_log(obj):
-    body = json.dumps(obj, separators=(',', ':'))
-    return ('I0000 "Response Body" body=' + json.dumps(body) + '\n').encode()
+def trace(raw, *, name='transaction-api', verb='PATCH', url=None, code=422, legacy=False):
+    url = url or (a.t.API_SERVER + '/apis/apps/v1/namespaces/fds-app/deployments/'
+                  + name + '?dryRun=All&fieldManager=kubectl-patch')
+    prefix = ('I0000 "Request" verb=' + json.dumps(verb) + ' url=' + json.dumps(url)
+              + ' headers={"Authorization":["Bearer PRIVATE_HEADER"]}\n'
+              + 'I0000 "Response" status=' + json.dumps(str(code) + ' Fixture Status')
+              + ' headers={"Private":["PRIVATE_RESPONSE_HEADER"]}\n')
+    if legacy:
+        body = b'I0000 Response Body: ' + raw + b'\n'
+    else:
+        body = ('I0000 "Response Body" body=' + json.dumps(raw.decode()) + '\n').encode()
+    return prefix.encode() + body
+
+
+def body_log(obj, **kwargs):
+    return trace(json.dumps(obj, separators=(',', ':')).encode(), **kwargs)
 
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX private-file tests')
@@ -289,7 +302,7 @@ class CP1Tests(unittest.TestCase):
 
 class ProjectionTests(unittest.TestCase):
     def test_details_missing_422_remains_projection_only(self):
-        result = a.status_projection(body_log(status(False)))
+        result = a.status_projection(body_log(status(False)), 'transaction-api')
         self.assertNotIn('details', result['status_projection'])
         self.assertEqual(result['transport_policy'], 'UNCHANGED')
 
@@ -297,25 +310,107 @@ class ProjectionTests(unittest.TestCase):
         obj = status()
         obj.update(code=409, reason='Conflict')
         raw = json.dumps(obj).encode()
-        result = a.status_projection(b'I0000 Response Body: ' + raw + b'\n')
+        result = a.status_projection(trace(raw, code=409, legacy=True), 'transaction-api')
         self.assertEqual(result['status_body_sha256'], b.sha(raw))
         self.assertEqual(result['status_projection']['code'], 409)
 
     def test_missing_duplicate_truncated_or_wrong_status_is_not_observation(self):
         malformed = [b'PRIVATE_HEADERS', body_log(status()) * 2,
                      body_log({**status(), 'code': 403}),
-                     b'I "Response Body" body="{ [truncated 10 chars]"\n',
-                     b'I "Response Body" body="{\\"kind\\":1,\\"kind\\":2}"\n']
+                     trace(b'{ [truncated 10 chars]'),
+                     trace(b'{"kind":1,"kind":2}')]
         for raw in malformed:
             with self.subTest(raw=raw[:30]), self.assertRaises(a.AccessError):
-                a.status_projection(raw)
+                a.status_projection(raw, 'transaction-api')
 
     def test_arbitrary_details_do_not_enter_projection(self):
         obj = status()
         obj['details'].update(name='PRIVATE_IDENTITY', secret='PRIVATE_VALUE')
-        result = a.status_projection(body_log(obj))
+        result = a.status_projection(body_log(obj), 'transaction-api')
         self.assertEqual(result['status_projection']['details']['name'], 'MISMATCH')
         self.assertNotIn('PRIVATE', json.dumps(result))
+
+
+    def test_truncated_or_nonjson_discovery_is_not_parsed_as_patch(self):
+        for raw in (b'{"kind":"APIGroupList" [truncated 2000 chars]', b'NOT_JSON'):
+            discovery = trace(raw, verb='GET', url=a.t.API_SERVER + '/apis', code=200)
+            result = a.status_projection(discovery + body_log(status()), 'transaction-api')
+            self.assertEqual(result['status_projection']['code'], 422)
+            self.assertEqual(result['response_binding'], 'PATCH_REQUEST_HTTP_STATUS_BODY')
+            self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_discovery_status_failure_is_not_accepted_as_patch_evidence(self):
+        discovery = body_log(status(), verb='GET', url=a.t.API_SERVER + '/apis')
+        with self.assertRaisesRegex(a.AccessError, '^PROBE_STATUS_UNCONFIRMED$'):
+            a.status_projection(discovery, 'transaction-api')
+        result = a.status_projection(discovery + body_log(status()), 'transaction-api')
+        self.assertEqual(result['request_path'].split('/')[-1], 'transaction-api')
+
+    def test_target_status_truncation_duplicate_keys_or_nonjson_still_stops(self):
+        for raw in (b'{"kind":"Status" [truncated 99 chars]', b'NON_JSON',
+                    b'{"kind":"Status","kind":"Status"}'):
+            with self.subTest(raw=raw), self.assertRaises(a.AccessError):
+                a.status_projection(trace(raw), 'transaction-api')
+
+    def test_patch_url_host_path_or_dryrun_mismatch_stops(self):
+        path = '/apis/apps/v1/namespaces/fds-app/deployments/transaction-api'
+        urls = ['https://other:6443' + path + '?dryRun=All',
+                a.t.API_SERVER + path.replace('fds-app', 'default') + '?dryRun=All',
+                a.t.API_SERVER + path.replace('transaction-api', 'fds-engine') + '?dryRun=All',
+                a.t.API_SERVER + path,
+                a.t.API_SERVER + path + '?dryRun=All&dryRun=All',
+                a.t.API_SERVER + path + '?dryRun=All&unknown=value',
+                a.t.API_SERVER + path + '?dryRun=All#fragment']
+        for url in urls:
+            with self.subTest(url=url), self.assertRaisesRegex(
+                    a.AccessError, '^PROBE_REQUEST_SCOPE_INVALID$'):
+                a.status_projection(body_log(status(), url=url), 'transaction-api')
+
+    def test_http_and_body_status_must_agree(self):
+        for code in (200, 403, 409):
+            with self.subTest(code=code), self.assertRaises(a.AccessError):
+                a.status_projection(body_log(status(), code=code), 'transaction-api')
+
+    def test_unassociated_body_or_incomplete_trace_never_passes(self):
+        complete = body_log(status())
+        lines = complete.splitlines(keepends=True)
+        for raw in (lines[2], lines[0] + lines[2], lines[1] + lines[2],
+                    lines[0] + lines[1], complete + lines[2]):
+            with self.subTest(raw=raw[:30]), self.assertRaises(a.AccessError):
+                a.status_projection(raw, 'transaction-api')
+
+    def test_duplicate_patch_or_interleaved_request_is_ambiguous(self):
+        complete = body_log(status())
+        discovery = trace(b'{}', verb='GET', url=a.t.API_SERVER + '/apis', code=200)
+        lines = complete.splitlines(keepends=True)
+        for raw in (complete * 2, lines[0] + discovery + b''.join(lines[1:])):
+            with self.subTest(raw=raw[:30]), self.assertRaises(a.AccessError):
+                a.status_projection(raw, 'transaction-api')
+
+    def test_pending_discovery_response_at_patch_start_stops(self):
+        discovery = trace(b'{}', verb='GET', url=a.t.API_SERVER + '/apis', code=200)
+        lines = discovery.splitlines(keepends=True)
+        for prefix in (lines[0], lines[0] + lines[1]):
+            with self.subTest(prefix=prefix), self.assertRaises(a.AccessError):
+                a.status_projection(prefix + body_log(status()), 'transaction-api')
+
+    def test_both_service_requests_are_bound_to_their_own_name(self):
+        obj = status()
+        obj['details']['name'] = 'fds-engine'
+        result = a.status_projection(body_log(obj, name='fds-engine'), 'fds-engine')
+        self.assertEqual(result['status_projection']['details']['name'], 'fds-engine')
+        result = a.status_projection(body_log(obj), 'transaction-api')
+        self.assertEqual(result['status_projection']['details']['name'], 'MISMATCH')
+
+    def test_wrong_log_format_or_private_error_never_becomes_observation(self):
+        complete = body_log(status())
+        for raw in (complete.replace(b'"Request"', b'"Unknown Request"'),
+                    complete.replace(b'"Response" status=', b'"Response" unsupported='),
+                    b'PRIVATE_CREDENTIAL_ERROR'):
+            with self.subTest(raw=raw[:30]), self.assertRaises(a.AccessError):
+                a.status_projection(raw, 'transaction-api')
+
+
 
 
 class PrecheckTests(unittest.TestCase):

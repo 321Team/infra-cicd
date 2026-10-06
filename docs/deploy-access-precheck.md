@@ -1,7 +1,8 @@
 # CP1 TokenReview·실패 dry-run 및 Runner TLS 사전 확인
 
 2026-10-06 KST / AI usage: CODEX_ASSISTED.
-기준 main da047db73c0b9e02f4393acc4e9ddb3e814587d7(PR58 승인 병합).
+후속 기준 main e9b0d40d9c8c7f1cc2d68f25193cd5a63d8711e1(PR59 승인 병합).
+PR59 리뷰5426333521의 discovery 잘림과 CP1 인증 경로 미확인을 후속 처리한다.
 이 변경의 코드 승인과 실제 Deploy/Runtime 승인은 별개다.
 
 ## 이번 구현과 실행 경계
@@ -56,11 +57,19 @@ wrapper 자체의 자동 재시도·token 재발급은 없다. 실제 kubectl �
 [{"op":"test","path":"/metadata/uid","value":"00000000-0000-0000-0000-000000000000"}]
 ~~~
 
-kubectl --v=8의 client-go Response Body 행만 메모리에서 파싱한다.
-기존 "Response Body: {...}" 및 quoted body="{...}" 형식을 지원한다.
+kubectl --v=8의 client-go v0.36.4 Request(verb/url)→Response(status)→Response Body
+순서를 메모리에서 대조한다. 고정 API의 해당 named Deployment PATCH 및 dryRun=All만
+대상이며 허용 query(dryRun/fieldManager/fieldValidation/timeout)는 단일 값이어야 한다.
+대상 PATCH 전에 모든 기존 요청·응답 본문이 완료되어야 한다. 완료된 discovery의 본문은
+잘림·비JSON 여부에 관계없이 PATCH 증거로 사용하지 않는다. Request/Response 행이 없는 구형·다른
+로그 형식, 미완료 discovery, 대상 구간의 interleave·중복 PATCH·미결속 body는 STOP이다.
+이름이 같은 Status만 검색해 다른 요청의 실패를 성공 관측으로 오인하는 방식은 사용하지 않는다.
+대상 본문의 기존 "Response Body: {...}" 및 quoted body="{...}" 형식을 지원한다.
 raw stderr/HTTP headers/request body/Status message/causes는 저장·출력하지 않는다.
-하나의 v1 Status Failure, code409/422, reason Conflict/Invalid만 수용한다.
-중복/누락/잘림/다른 응답/예상과 다른 성공이면 static STOP이다.
+하나의 v1 Status Failure, HTTP/body code가 동일한409/422, reason Conflict/Invalid만 수용한다.
+대상 Status의 잘림/중복 JSON key/누락/다른 응답/예상과 다른 성공이면 static STOP이다.
+관측 response_binding=PATCH_REQUEST_HTTP_STATUS_BODY와 고정 request_path를 남긴다.
+이 결속은 신뢰된 kubectl stderr의 순서를 대조한 것이며 독립 HTTP capture나 서버 audit 증거는 아니다.
 관측은 고정 Status 필드와 allowlisted details, 원 Status body SHA256만 포함한다.
 sanitized projection은 raw 원문 증적이나 전체 원문 해시 재검증을 대신하지 않는다.
 실제 shape 수용을 검토하려면 필요한 비밀 없는 필드를 별도 검토해 확장해야 한다.
@@ -71,10 +80,94 @@ sanitized projection은 raw 원문 증적이나 전체 원문 해시 재검증�
 details 없는 422는 관측만 가능하며 기존 transport의 outcome unknown/수동 대조 판정은 유지한다.
 각 API 단계는 config 확인을 포함하여 최대10초이며 두 서비스 probe는 여러 단계의 합이다.
 
+## CP1 인증 경로를 먼저 확인
+
+PR59 리뷰의 기존 root0600 admin.conf 경로는 server02가 sudo 없이 읽는 단일 client-cert
+kubeconfig 전제를 충족한다고 볼 수 없다. 실제 사용자 경로가 있는지 아래 로컬 metadata 점검으로
+확인한다. API/TokenReview/PATCH 호출·token 발급·파일 쓰기·sudo 호출이 없다.
+관리 인증 값/전체 kubeconfig/stdout·stderr 원문을 출력하지 않고 field 존재 여부만 기록한다.
+이 metadata 관측은 인증 성공이나 backend의 모든 CA/파일 drift 조건을 통과했다는 증명이 아니다.
+
+**실행 위치: k8s-control01, server02.** 이 문서의 점검 명령은 현장에서 아직 미실행이다.
+기존 승인된 계정의 읽기 전용 config 점검으로 실행할 수 있다. NO_READABLE_USER_KUBECONFIG/
+UNSAFE_CONFIG_PATH/unsupported metadata면 그 결과에서 중단한다.
+admin.conf chmod·복사·sudo wrapper 추가나 exec/token 인증 허용으로 우회하지 않는다.
+기존 허용된 관리 경로와 backend 전제의 차이를 확인한 뒤 별도 구현/검토한다.
+
+~~~bash
+python3 - <<'PY'
+import datetime as dt
+import json
+import os
+import pwd
+import shutil
+import socket
+import stat
+import subprocess
+from pathlib import Path
+
+def require(ok, code):
+    if not ok:
+        raise SystemExit("STOP: " + code)
+
+require(socket.gethostname().split(".")[0] == "k8s-control01", "HOST_MISMATCH")
+require(pwd.getpwuid(os.getuid()).pw_name == "server02", "ACCOUNT_MISMATCH")
+print("CHECKED_AT=" + dt.datetime.now(dt.timezone.utc).isoformat())
+configured = os.environ.get("KUBECONFIG")
+require(configured is None or (configured and ":" not in configured), "MULTIPLE_KUBECONFIG")
+path = Path(configured) if configured else Path.home() / ".kube/config"
+print("KUBECONFIG_PATH=" + str(path))
+print("KUBECONFIG_READABLE=" + str(os.access(path, os.R_OK)).lower())
+require(path.is_absolute() and path.exists() and os.access(path, os.R_OK),
+        "NO_READABLE_USER_KUBECONFIG")
+for node in (path, *path.parents):
+    info = node.lstat()
+    require((stat.S_ISREG(info.st_mode) if node == path else stat.S_ISDIR(info.st_mode))
+            and info.st_uid in (0, os.getuid()) and not info.st_mode & 0o022
+            and (node != path or info.st_nlink == 1), "UNSAFE_CONFIG_PATH")
+binary = shutil.which("kubectl")
+require(binary is not None, "KUBECTL_MISSING")
+env = {k: v for k, v in os.environ.items()
+       if k.lower() not in ("http_proxy", "https_proxy", "all_proxy")}
+env["KUBECTL_KUBERC"] = "false"
+try:
+    result = subprocess.run(
+        [binary, "--kubeconfig=" + str(path), "--v=0", "config", "view", "--minify", "-o", "json"],
+        capture_output=True, timeout=10, env=env)
+    require(result.returncode == 0, "CONFIG_VIEW_FAILED")
+    data = json.loads(result.stdout)
+    require(len(data.get("clusters", [])) == len(data.get("users", [])) ==
+            len(data.get("contexts", [])) == 1, "CONFIG_SELECTION_INVALID")
+    cluster, user = data["clusters"][0]["cluster"], data["users"][0]["user"]
+    flags = {k: k in user for k in (
+        "client-certificate", "client-certificate-data", "client-key", "client-key-data",
+        "exec", "auth-provider", "token", "tokenFile", "username", "password",
+        "as", "as-uid", "as-groups", "as-user-extra")}
+    print(json.dumps({
+        "api_server_matches": cluster.get("server") == "https://10.1.93.109:6443",
+        "tls_verification_disabled": bool(cluster.get("insecure-skip-tls-verify", False)),
+        "tls_name_supported": cluster.get("tls-server-name", "10.1.93.109") in ("", "10.1.93.109"),
+        "proxy_configured": bool(cluster.get("proxy-url")),
+        "auth_fields_present": flags,
+        "CP1_AUTH_METADATA": "CAPTURED_NOT_AUTHENTICATED",
+        "TOKEN_ISSUED": False, "DEPLOY": "NOT_EXECUTED"
+    }, ensure_ascii=False, indent=2))
+except SystemExit:
+    raise
+except Exception:
+    raise SystemExit("STOP: CONFIG_METADATA_CAPTURE_FAILED") from None
+PY
+~~~
+
+정상 수집은 CHECKED_AT/KUBECONFIG_PATH/READABLE와 CP1_AUTH_METADATA=CAPTURED_NOT_AUTHENTICATED다.
+고정 API·TLS·단일 client-cert 조건을 결과로 판단한 뒤 공개 CA/별도 지문 수집으로 넘어간다.
+불일치/예외 시 STOP만 전달한다. 설정·권한·캐시를 바꾸거나 전체 인증 파일을 전달하지 않는다.
+
 ## 실행 순서와 명령
 
 1. 이 코드와 credential 보완을 독립 리뷰한 HEAD를 고정한다. 병합 후 달라진 main을 임의로 사용하지 않는다.
-2. CP1의 공개 CA를 확인하고 SHA256을 신뢰된 CP1 조회 경로에서 따로 전달한다.
+2. CP1 사용자 kubeconfig metadata를 먼저 확인한다. 지원되는 경로가 확인되면 공개 CA와
+   SHA256을 신뢰된 CP1 조회 경로에서 따로 전달한다.
 3. 그 공개 CA만 Runner에 옮긴 뒤 runner-tls를 실행한다.
 4. CP1에서 cp1-negative-test를 실행해 sanitized 409/422 형태를 확인한다.
 5. 실제 단기 TokenRequest 발급/주입/원본 정리 경로를 별도 검토한 뒤에만 cp1-review를 실행한다.
@@ -105,6 +198,8 @@ python3 "$checkout/tools/delivery/capture_deploy_access.py" cp1-review \
 ~~~
 
 Runner와 CP1은 각자 해당 호스트의 명령만 실행한다. stdout의 sanitized JSON만 보존한다.
+성공·실패 모두 호스트/계정, 리뷰 승인 source SHA와 실제 checkout 대조, KST 시각,
+실행 명령/RC, sanitized observation을 함께 기록한다. 필드 값이나 해시 하나로 Runtime 인수로 확대하지 않는다.
 실패 시 코드·시각·호스트·source SHA를 기록하고 반복 실행하기 전에 원인을 확인한다.
 --v=8 로그 전체나 관리자 인증 파일을 전달하지 않는다.
 
@@ -120,13 +215,16 @@ close 후 public closed 값을 다시 False로 바꾸더라도 token()과 remain
 삭제된 token 참조를 재사용할 수 없다. 로컬 참조 해제는 서버 취소/파일·Secret 삭제/물리적
 zeroization을 의미하지 않는다.
 
-27개 신규 시험은 private POSIX 파일·변경/링크/권한 거부, 명령 scope, token stdin·오류 비노출,
+기존27개+이번10개=37개 precheck 시험은 private POSIX 파일·변경/링크/권한 거부, 명령 scope, token stdin·오류 비노출,
 config TLS/인증/선택 거부, fresh UID, timeout/중단, 실패 dry-run projection·spec 변화,
-Runner TLS Mock과 TTY/local cleanup을 확인한다. credential 재사용 회귀 시험 1개도 추가한다.
+Runner TLS Mock과 TTY/local cleanup을 확인한다. PR59의 credential 재사용 회귀 시험 1개는 유지한다.
+이번10개는 discovery 잘림/비JSON/다른 실패를 제외하고 대상 PATCH의 URL·dryRun·HTTP/body code,
+미결속/중복/interleave·미완료 discovery·target Status 잘림·두 서비스 이름 결속을 확인한다.
 전체 CI 수/결과와 리뷰 상태는 이 변경 PR에 기록한다.
 
 참조:
 - [kubectl create](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/)의 --raw/-f -
 - [TokenReview](https://kubernetes.io/docs/reference/kubernetes-api/definitions/token-review-v1-authentication/)
+- [client-go v0.36.4 Request/Response logging](https://github.com/kubernetes/client-go/blob/v0.36.4/transport/round_trippers.go)
 - [client-go v0.36.4 response body logging](https://github.com/kubernetes/client-go/blob/v0.36.4/rest/request.go)
 - [Known Issue와 Worker 확인](../handoff/deploy-prep-37331796555/known-issues.md)
