@@ -98,7 +98,7 @@ Source/Build/Scan·Harbor 원본 인수까지 이번 승인 조회로 상향하�
 
 ## 시험과 다음 작업
 
-승인 조회 MOCK16건, POSIX 연결 MOCK20건을 기존 source-validation CI에 추가한다.
+승인 조회 MOCK16건, POSIX 연결 MOCK21건을 기존 source-validation CI에 추가한다.
 명시적 TLS/redirect/proxy·원문/작성자/hash/삭제·응답 상한, short window의 claim 비소진,
 사전조회 실패의 claim 소진, 변경/삭제된 claim과 승인에 따른 쓰기 중단,
 PENDING 뒤 token 만료, 별도 rollback·철회, checkpoint 실패, 벽시계 역행,

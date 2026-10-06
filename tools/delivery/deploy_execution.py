@@ -96,7 +96,13 @@ class Execution:
         return value
 
     def start_window(self):
-        self.adapter.check_start_window()
+        # Validate here before the Adapter wraps exceptions from providers.
+        remaining = self.remaining()
+        core.need(type(remaining) in (int, float) and math.isfinite(remaining),
+                  'AUTH_WINDOW_INVALID')
+        core.need(remaining >= self.adapter.required_window, 'AUTH_WINDOW_TOO_SHORT')
+        core.need(self.credential_window() >= self.adapter.required_window,
+                  'CREDENTIAL_WINDOW_TOO_SHORT')
 
     def lookup(self):
         remaining, credential = self.remaining(), self.credential_window()

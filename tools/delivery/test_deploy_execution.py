@@ -95,6 +95,14 @@ class ExecutionTests(unittest.TestCase):
                 self.assertEqual(result['error_code'], 'CREDENTIAL_WINDOW_INVALID')
                 self.assertEqual(list(self.root.iterdir()), [])
 
+    def test_token_metadata_provider_failure_is_unavailable_without_claim(self):
+        def fail():
+            raise ValueError('PRIVATE_TOKEN')
+        result = self.run_execution(credential_provider=fail)
+        self.assertEqual(result['error_code'], 'CREDENTIAL_WINDOW_UNAVAILABLE')
+        self.assertEqual(list(self.root.iterdir()), [])
+        self.assertNotIn('PRIVATE_TOKEN', json.dumps(result))
+
     def test_reference_not_verified_blocks_before_any_claim_or_kubernetes_read(self):
         self.source.obj['user']['login'] = 'other'
         result = self.run_execution()
