@@ -80,6 +80,7 @@ class AdapterTests(unittest.TestCase):
     def adapter(self, **kwargs):
         return d.Adapter(self.client, kwargs.pop('authorize', self.auth),
                          kwargs.pop('checkpoint', self.receipts.append), timeout=3,
+                         credential_remaining_seconds=kwargs.pop('credential_remaining_seconds', lambda: 3600),
                          remaining_seconds=kwargs.pop('remaining_seconds', lambda: 3600),
                          interval=1, clock=lambda: self.now, sleep=self.sleep, **kwargs)
 
@@ -382,6 +383,63 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result['error_code'], 'AUTH_WINDOW_UNAVAILABLE')
         self.assertNotIn('secret provider detail', json.dumps(result))
         self.assertEqual(self.client.patches, [])
+
+
+    def test_short_token_window_blocks_despite_long_approval(self):
+        result = self.run_adapter(credential_remaining_seconds=lambda: 35)
+        self.assertEqual(result['error_code'], 'CREDENTIAL_WINDOW_TOO_SHORT')
+        self.assertEqual(self.client.patches, [])
+
+    def test_exact_token_start_window_allowed(self):
+        result = self.run_adapter(credential_remaining_seconds=lambda: 36)
+        self.assertEqual(result['ROLLOUT'], 'READY')
+
+    def test_token_expiry_during_polling_stops_without_rollback(self):
+        def lifetime():
+            return 0 if self.client.patches else 3600
+        result = self.run_adapter(True, credential_remaining_seconds=lifetime)
+        self.assertEqual(result['error_code'], 'AUTHORIZATION_DENIED')
+        self.assertEqual(result['ROLLBACK'], 'MANUAL_RECONCILIATION_REQUIRED')
+        self.assertEqual(len(self.client.patches), 1)
+
+    def test_token_expiry_while_pending_records_not_sent(self):
+        expired = False
+        def checkpoint(receipt):
+            nonlocal expired
+            self.receipts.append(receipt)
+            expired = any(x['deploy'] == 'PATCH_PENDING' for x in receipt['images'].values())
+        result = self.run_adapter(checkpoint=checkpoint,
+                                  credential_remaining_seconds=lambda: 0 if expired else 3600)
+        self.assertEqual(result['images'][d.SERVICES[0]]['deploy'], 'NOT_SENT_AUTH_DENIED')
+        self.assertEqual(self.client.patches, [])
+
+    def test_invalid_token_lifetime_fails_closed(self):
+        for value in (None, True, '3600', float('nan'), float('inf'), -1):
+            with self.subTest(value=value):
+                result = self.run_adapter(credential_remaining_seconds=lambda: value)
+                self.assertEqual(result['error_code'], 'AUTHORIZATION_DENIED')
+                self.assertEqual(self.client.patches, [])
+
+    def test_token_provider_failure_does_not_leak_exception(self):
+        def fail():
+            raise ValueError('secret token contents')
+        result = self.run_adapter(credential_remaining_seconds=fail)
+        self.assertEqual(result['error_code'], 'AUTHORIZATION_DENIED')
+        self.assertNotIn('secret token contents', json.dumps(result))
+        self.assertEqual(self.client.patches, [])
+
+    def test_token_does_not_replace_short_approval(self):
+        result = self.run_adapter(remaining_seconds=lambda: 35,
+                                  credential_remaining_seconds=lambda: 3600)
+        self.assertEqual(result['error_code'], 'AUTH_WINDOW_TOO_SHORT')
+        self.assertEqual(self.client.patches, [])
+
+    def test_rollback_requires_live_credential(self):
+        self.fail_second()
+        result = self.run_adapter(True, credential_remaining_seconds=lambda:
+                                  0 if len(self.client.patches) >= 2 else 3600)
+        self.assertEqual(result['rollback_error_code'], 'AUTHORIZATION_DENIED')
+        self.assertEqual(len(self.client.patches), 2)
 
 
 if __name__ == '__main__':
