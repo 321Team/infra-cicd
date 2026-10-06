@@ -7,6 +7,7 @@ import json
 import socket
 import sys
 import time
+import warnings
 
 import deploy_cp1_access as a
 import deploy_credential as c
@@ -62,7 +63,9 @@ def cp1_review(backend):
     token = None
     credential = None
     try:
-        token = getpass.getpass('이미 발급된 단기 SA token (표시되지 않음): ')
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', getpass.GetPassWarning)
+            token = getpass.getpass('이미 발급된 단기 SA token (표시되지 않음): ')
         credential = c.Credential(token, uid, backend)
         credential.close()
         result = credential.observation()

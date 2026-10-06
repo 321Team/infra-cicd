@@ -39,6 +39,7 @@ config·CA·외부 인증 파일·kubectl 속성을 호출 전후 대조한다. 
 
 TokenReview token은 stdin에만 넣는다. argv/env/임시 파일/영수증에 넣지 않는다.
 반환 응답은 Credential의 exact token/audience/SA UID/group 검증에 사용한 후 출력하지 않는다.
+TTY 확인과 getpass.GetPassWarning 오류 전환으로 echo fallback 전에 중단한다.
 raw TokenReview나 subprocess stderr를 PR/증적에 넣지 않는다. 관측은 token 없는 메타데이터만 출력한다.
 TokenReview 요청 전 config 확인을 포함한 전체 예산은 caller가 준 min(10초, expiry 잔여) 이내다.
 subprocess timeout 및 사후 monotonic 검사로 늦은 완료를 거부한다. 실행 중 메모리에 잡힌 출력의
@@ -119,7 +120,7 @@ close 후 public closed 값을 다시 False로 바꾸더라도 token()과 remain
 삭제된 token 참조를 재사용할 수 없다. 로컬 참조 해제는 서버 취소/파일·Secret 삭제/물리적
 zeroization을 의미하지 않는다.
 
-26개 신규 시험은 private POSIX 파일·변경/링크/권한 거부, 명령 scope, token stdin·오류 비노출,
+27개 신규 시험은 private POSIX 파일·변경/링크/권한 거부, 명령 scope, token stdin·오류 비노출,
 config TLS/인증/선택 거부, fresh UID, timeout/중단, 실패 dry-run projection·spec 변화,
 Runner TLS Mock과 TTY/local cleanup을 확인한다. credential 재사용 회귀 시험 1개도 추가한다.
 전체 CI 수/결과와 리뷰 상태는 이 변경 PR에 기록한다.

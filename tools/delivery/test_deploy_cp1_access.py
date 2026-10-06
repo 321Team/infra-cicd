@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import warnings
 from unittest.mock import MagicMock, Mock, patch
 
 import capture_deploy_access as cli
@@ -382,3 +383,15 @@ class PrecheckTests(unittest.TestCase):
         self.assertFalse(result['TOKEN_ISSUED'])
         self.assertNotIn(token, json.dumps(result))
 
+    def test_getpass_echo_fallback_warning_aborts_before_tokenreview(self):
+        backend = Mock()
+        backend.service_account_uid.return_value = SA_UID
+        def fallback(_):
+            warnings.warn('PRIVATE_PROMPT', cli.getpass.GetPassWarning)
+            raise AssertionError('Must stop before fallback input')
+        with patch.object(cli.sys, 'stdin', Mock(isatty=lambda: True)), \
+             patch.object(cli.sys, 'stderr', Mock(isatty=lambda: True)), \
+             patch.object(cli.getpass, 'getpass', side_effect=fallback):
+            with self.assertRaises(cli.getpass.GetPassWarning):
+                cli.cp1_review(backend)
+        backend.review.assert_not_called()
