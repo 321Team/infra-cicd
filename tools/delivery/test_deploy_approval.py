@@ -112,6 +112,22 @@ class ApprovalTests(unittest.TestCase):
                 self.verify()
         self.assertEqual(len(self.source.calls), 4)
 
+    def test_lf_with_one_final_newline_matches_exact_bytes(self):
+        obj = json.loads(self.raw)
+        raw = (json.dumps(obj, sort_keys=True, indent=2) + '\n').encode()
+        self.source.obj['body'] = raw.decode()
+        self.assertEqual(self.verify(raw=raw, hash=b.sha(raw))['status'], 'MATCHED_CURRENT_COMMENT')
+
+    def test_crlf_or_final_newline_change_is_not_normalized(self):
+        raw = (json.dumps(json.loads(self.raw), sort_keys=True, indent=2) + '\n').encode()
+        fence = chr(96) * 3
+        for body in (raw.decode().replace('\n', '\r\n'), raw.decode().rstrip('\n'),
+                     raw.decode() + '\n', fence + 'json\n' + raw.decode() + fence):
+            self.source.obj['body'] = body
+            with self.subTest(body=body[:10]), self.assertRaisesRegex(
+                    a.ApprovalError, 'APPROVAL_REFERENCE_CHANGED'):
+                self.verify(raw=raw, hash=b.sha(raw))
+
     def test_missing_deleted_or_forbidden_comment_is_sanitized(self):
         self.source.hook = lambda: (_ for _ in ()).throw(PermissionError('PRIVATE_TOKEN'))
         with self.assertRaisesRegex(a.ApprovalError, '^APPROVAL_LOOKUP_FAILED$'):
