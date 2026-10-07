@@ -1,0 +1,13 @@
+{
+  "status": "STAGED_FILES_VERIFIED_NOT_RUNTIME",
+  "source": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+  "archive_sha256": "2eaed6486b68f9260f735e362b45a167d7f01aa0fa819accf751ea8d74951ad6",
+  "manifest_sha256": "f4d55db6ecbefe2057cdb7ca6539b6818549744eb8bfc127ba12dcfa4eb6143b",
+  "files_verified": 126,
+  "uid": 1000,
+  "host": "cicd-runner01",
+  "finished_at": "2026-10-07T09:09:21.210236+00:00",
+  "image_load": "NOT_RUN",
+  "test_build_scan": "NOT_RUN",
+  "active_config_changed": false
+}

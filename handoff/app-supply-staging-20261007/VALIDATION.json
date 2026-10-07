@@ -1,0 +1,36 @@
+{
+  "schema": "P1-CICD-STAGING-VALIDATION-1",
+  "source": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+  "tool_sha256": "c333246fd676b9ee26f56d5face876cd7562f1f4c012db027b8df044b9aeaa3a",
+  "test_sha256": "db6ec282352edfcb0208d7dbd80c3d76eca467172fdc23695304e2fb51f01b83",
+  "linux_mock": {
+    "host": "ansible01",
+    "account": "server01_ansible",
+    "command": "python3 test_stage_supply.py",
+    "cases": 6,
+    "exit_code": 0
+  },
+  "archive_inspection": {
+    "host": "ansible01",
+    "command": "python3 stage_supply.py artifact-11466476253.zip",
+    "exit_code": 0,
+    "files": 126
+  },
+  "host_staging": {
+    "host": "cicd-runner01",
+    "uid": 1000,
+    "account": "server01_cicd-runner",
+    "command": "python3 stage_supply.py artifact-11466476253.zip --stage",
+    "exit_code": 0,
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.adc90410f99cb.f4d55db6ecbe",
+    "receipt": "STAGED_FILES_RECEIPT.json",
+    "receipt_sha256": "072eb533486fc46d3e66233611f14c886145c01e0000c45b83c2ac6b24c8a64e"
+  },
+  "ci_runner_supply": "NOT_RUN_SUDO_REQUIRES_INTERACTIVE_AUTHENTICATION",
+  "source_review": "NOT_PERFORMED_IN_THIS_SESSION",
+  "merge": "NOT_PERFORMED",
+  "image_load": "NOT_RUN",
+  "test_build_scan": "NOT_RUN",
+  "push": "NOT_RUN",
+  "deploy": "NOT_RUN"
+}
