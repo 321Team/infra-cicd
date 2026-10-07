@@ -1,0 +1,78 @@
+{
+  "checked_at": "2026-10-07T08:52:59.783296+00:00",
+  "source": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+  "artifact_id": 11466476253,
+  "archive_sha256": "2eaed6486b68f9260f735e362b45a167d7f01aa0fa819accf751ea8d74951ad6",
+  "size_bytes": 109786891,
+  "zip_entries": 126,
+  "manifest_files_matched": 125,
+  "mismatch_count": 0,
+  "supply_manifest_sha256": "f4d55db6ecbefe2057cdb7ca6539b6818549744eb8bfc127ba12dcfa4eb6143b",
+  "source_files_matched": 12,
+  "images": {
+    "builder": {
+      "format": "docker-archive",
+      "archive_sha256": "f1c484da1e5de89197a54484bb4a28d3cc0f42f2894993e5b78ecb3587206a25",
+      "manifest_json_sha256": "bbb77ed2d303097c03abe29cc0c000def496ffb06daa4a7e1c312a4f627512b4",
+      "index_json_sha256": "33945a54149de6bc558421b154cf3e352a6f3e97dc0a224e194b47e57ca06c89",
+      "config_digest": "sha256:76cfebb7af7d22c528da8cda75aa8e3f35cb9bbcdcdfc1f70e71be4aaa350b4a",
+      "diff_ids": [
+        "sha256:02eae2f3f119386c5c0e4b7ff85ea44ae89bd9ce26776364c35c853335e2896b"
+      ],
+      "layer_count": 1,
+      "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:adc90410f99cb7af5b40bc8ff92c45272e9f8bee-amd64",
+      "platform": "linux/amd64"
+    },
+    "runtime": {
+      "format": "docker-archive",
+      "archive_sha256": "94db72ba9a03fa1ed1e133bbbcd0e07911d568920f5d8af18f57bca00c1f0c15",
+      "manifest_json_sha256": "7c32f5d656222653267be9957cf70d4543819beac03e90cef117821a3b6a9b38",
+      "index_json_sha256": "11b29d6f432406a8b6db281a99da157c36ace7b0cadc9421f0ce781ed2229cfc",
+      "config_digest": "sha256:091b5d0ef47fc56e4769531697565bbb2d06cd93725b75469fe0a84bc63d774d",
+      "diff_ids": [
+        "sha256:9ca35cc8280600086da4e2f423b8f51fb6f6cba568410d968299b236ebfc1a30"
+      ],
+      "layer_count": 1,
+      "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:adc90410f99cb7af5b40bc8ff92c45272e9f8bee-amd64",
+      "platform": "linux/amd64"
+    }
+  },
+  "profiles": {
+    "fds-engine-runtime": {
+      "inventory_sha256": "f202a2cc3c3cc6785facafc7e9aa4a126c387281fc0b8c8e7d2ebbdcd0229eeb",
+      "lock_sha256": "88e45719485bdeb8c3ea2c70f8f3303127c7136fe465e1330f45775a9e163fc8",
+      "roots_sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c"
+    },
+    "fds-engine-test": {
+      "inventory_sha256": "675e625721fe8ef0edb69f15359467151f5d7c9dbd485fdfe5665e5abd7f7ac8",
+      "lock_sha256": "6568bb9c1cf014c229c66579b89c589eb74fdac4749625861e50f1d56bc3f560",
+      "roots_sha256": "ed2c667809886aba216e9953d026f15a3be4d624214ac0d48739c3d7ad192c99"
+    },
+    "transaction-api-runtime": {
+      "inventory_sha256": "2f6bc210cd47a6f8de6bc87b93aef6440676a1c8957d5e25cd127cf868b12177",
+      "lock_sha256": "1b6c12a68a3bdbe4f2d56f0d9ce31054937d17fb46708566d795041c4a153187",
+      "roots_sha256": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
+    },
+    "transaction-api-test": {
+      "inventory_sha256": "56914c6a5c5e53dca23a04f8858054fda1a13abdf0ed6f1bde87f60e8c030f7b",
+      "lock_sha256": "9a047257be36385144d698d81889f707a032a11142c63409189cf944e0fbfc88",
+      "roots_sha256": "bb82768573d677bf8d4a6cb592f9a82950c0d85b25f9c927e28a3b955880ed03"
+    }
+  },
+  "wheel_counts": {
+    "fds-engine-runtime": 20,
+    "fds-engine-test": 28,
+    "transaction-api-runtime": 27,
+    "transaction-api-test": 31
+  },
+  "wheel_total": 106,
+  "checker_sha256": "6a139c2453f663e91e3c9d5e1af2f1ef47bc1389747e020be0a6cb6875755fc8",
+  "scope": "LOCAL_BYTES_SOURCE_HASH_PROFILE_WHEEL_METADATA_IMAGE_CONFIG_AND_LAYER_DIFF_IDS",
+  "limitations": [
+    "NO_PACKAGE_INSTALL_OR_DEPENDENCY_RESOLUTION",
+    "NO_IMAGE_LOAD_OR_RUNTIME",
+    "NO_VULNERABILITY_SCAN",
+    "NO_INDEPENDENT_APPROVAL",
+    "NO_DELIVERY_AUTHORIZATION"
+  ]
+}
