@@ -1,0 +1,12 @@
+test_v3_handoff_binds_exact_two_stage_dockerfiles (test_offline_supply_v3.FlowV3Tests.test_v3_handoff_binds_exact_two_stage_dockerfiles) ... ok
+test_v3_rejects_mutable_dockerfile_before_podman (test_offline_supply_v3.FlowV3Tests.test_v3_rejects_mutable_dockerfile_before_podman) ... ok
+test_v3_runs_tests_in_builder_and_builds_with_two_local_images (test_offline_supply_v3.FlowV3Tests.test_v3_runs_tests_in_builder_and_builds_with_two_local_images) ... ok
+test_exact_operating_dockerfiles_and_source_locks (test_offline_supply_v3.OfflineSupplyV3Tests.test_exact_operating_dockerfiles_and_source_locks) ... ok
+test_record_shape_requires_exact_builder_and_runtime (test_offline_supply_v3.OfflineSupplyV3Tests.test_record_shape_requires_exact_builder_and_runtime) ... ok
+test_two_images_profiles_and_wheels_stage_fail_closed (test_offline_supply_v3.OfflineSupplyV3Tests.test_two_images_profiles_and_wheels_stage_fail_closed) ... ok
+test_v3_probe_imports_both_images_and_builds_without_network_pull (test_offline_supply_v3.ProbeV3Tests.test_v3_probe_imports_both_images_and_builds_without_network_pull) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.303s
+
+OK
