@@ -1,0 +1,77 @@
+{
+  "schema": "P1-CICD-supply-consumer-preparation-1",
+  "purpose": "REVIEW_RECORD_ONLY_NOT_RUNTIME_INPUT",
+  "created_at": "2026-10-07T05:07:18.927Z",
+  "consumer_repository": "321Team/infra-cicd",
+  "consumer_main_sha": "1320e17e9d7dd66455e65276267dc2b92517c4b5",
+  "responsibility": {
+    "consumer_lead": "이권욱",
+    "application_owner": "이재환",
+    "technical_support": "이하영"
+  },
+  "status": "PRODUCER_READY_CONSUMER_CONFIRMATION_AND_STAGING_PENDING",
+  "current_active_source_sha": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+  "proposed_source": {
+    "repository": "321Team/fds-msa",
+    "commit": "0494ca279882d4e0cab24fb5a25a136a2e8f46c1",
+    "reviewed_commit": "eea60c7099af36cb1b787ab3668ef8645855552b",
+    "source_specific_app_owner_confirmation": "PENDING",
+    "test_scope": "PROPOSE_UNCHANGED_APP_SUBTREE_DELTA_ZERO",
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "producer": {
+    "source_run_id": 37569632325,
+    "supply_run_id": 37569632028,
+    "job_id": 112625094511,
+    "source_conclusion": "success",
+    "supply_conclusion": "success",
+    "artifact_id": 11460655012,
+    "artifact_name": "apko-offline-supply-0494ca279882d4e0cab24fb5a25a136a2e8f46c1-1",
+    "size_bytes": 109784510,
+    "archive_sha256": "348020907b8bed2dea34c886af0807ccd18a7d847bf4dd9b8fe5bf56d889b64d",
+    "artifact_expires_at": "2026-10-14T04:03:34Z",
+    "builder_archive_sha256_from_job_log": "1d0466d4d58df9d790ab43d7e060c84b63a8d53527d49486bad630fd584aaa60",
+    "runtime_archive_sha256_from_job_log": "d0c613c310b0493d64271b2aa5b1414d445db343004d15f213e15c41bda63360",
+    "supply_manifest_sha256": null,
+    "full_image_identities": null,
+    "profile_inventories": null
+  },
+  "verification": {
+    "current_session": "RUN_JOB_AND_ARTIFACT_METADATA_AND_LOG_CONFIRMED",
+    "archive_bytes": "NOT_LOCALLY_MATERIALIZED_IN_THIS_SESSION_NETWORK_RESTRICTED",
+    "prior_intake": "https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-6030778504",
+    "prior_counts": {
+      "manifest": 125,
+      "wheels": 106,
+      "oci_closure": 2
+    },
+    "prior_counts_scope": "EXISTING_RECORDED_VERIFICATION_NOT_REPEATED_THIS_SESSION",
+    "runner_staging": "NOT_RUN",
+    "runner_test_build_scan": "NOT_RUN",
+    "harbor_digest": "NOT_PRODUCED",
+    "pod_image_id": "NOT_VERIFIED"
+  },
+  "freshness": {
+    "decision": "https://github.com/321Team/fds-project-baseline/issues/110#issuecomment-6030324603",
+    "scope": "REPO_LOCK_DRIFT_AGE_NOT_ARTIFACT_RETENTION",
+    "reported_current_lock_boundary_kst": "2026-10-09T22:52:07+09:00",
+    "source": "https://github.com/321Team/fds-project-baseline/issues/110#issuecomment-6030557822",
+    "required_before_consumption": "RECHECK_EXACT_SOURCE_LOCK_HISTORY_CURRENT_PRODUCER_GATE_AND_FRESH_TRIVY_DB; ARTIFACT_RETENTION_DOES_NOT_EXTEND_LOCK_APPROVAL"
+  },
+  "execution_authorization": {
+    "test_build_scan": false,
+    "harbor_push": false,
+    "kubernetes_token_issuance": false,
+    "kubernetes_deploy": false,
+    "rollback": false
+  },
+  "next_gates": [
+    "APP_OWNER_EXACT_SOURCE_AND_TEST_SCOPE_CONFIRMATION",
+    "EXACT_ARTIFACT_MANIFEST_AND_IDENTITIES_TEXT_INTAKE",
+    "INDEPENDENT_CONSUMER_CONFIG_REVIEW_AND_MERGE",
+    "RUNNER_STAGING_HASH_IDENTITY_AND_SPACE_CHECK",
+    "NONOVERLAPPING_LEAD_RUNTIME_WINDOW_AND_NEW_TEST_BUILD_SCAN",
+    "SEPARATE_PUSH_DIGEST_HANDOFF_AND_NATIVE_DEPLOY_GATES"
+  ]
+}
