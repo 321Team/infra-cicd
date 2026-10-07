@@ -1,0 +1,77 @@
+{
+  "schema": "P2-CICD-intake-1",
+  "template_only": true,
+  "environment": "ROSA",
+  "target": {
+    "cluster_reference": null,
+    "api_url": null,
+    "ca_reference": null,
+    "context": null,
+    "namespace": null,
+    "health_url": null
+  },
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": null,
+    "manifest_repository": null,
+    "manifest_commit": null,
+    "base_path": null,
+    "overlay_path": null,
+    "rendered_sha256": null
+  },
+  "registry": {
+    "endpoint": null,
+    "decision_reference": null
+  },
+  "credential": {
+    "reference": null,
+    "policy_reference": null
+  },
+  "entry": {
+    "platform_reference": null,
+    "app_reference": null,
+    "runtime_scope_reference": null
+  },
+  "workloads": {
+    "transaction-api": {
+      "deployment": null,
+      "container": null,
+      "approved_image": null,
+      "pushed_image": null,
+      "previous_approved_image": null,
+      "health_contract_reference": null,
+      "test_result": null,
+      "scan_result": null,
+      "scan_evidence_reference": null,
+      "rollback_reference": null
+    },
+    "fds-engine": {
+      "deployment": null,
+      "container": null,
+      "approved_image": null,
+      "pushed_image": null,
+      "previous_approved_image": null,
+      "health_contract_reference": null,
+      "test_result": null,
+      "scan_result": null,
+      "scan_evidence_reference": null,
+      "rollback_reference": null
+    }
+  },
+  "build": {
+    "source_commit": null,
+    "workflow_commit": null,
+    "run_id": null,
+    "attempt": null,
+    "evidence_reference": null,
+    "result": null
+  },
+  "push": {
+    "source_commit": null,
+    "workflow_commit": null,
+    "run_id": null,
+    "attempt": null,
+    "evidence_reference": null,
+    "result": null
+  }
+}
