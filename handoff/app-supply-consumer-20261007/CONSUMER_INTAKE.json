@@ -1,0 +1,202 @@
+{
+  "schema": "P1-CICD-supply-consumer-preparation-2",
+  "purpose": "REVIEW_RECORD_ONLY_NOT_RUNTIME_INPUT",
+  "created_at": "2026-10-07T05:07:18.927Z",
+  "consumer_repository": "321Team/infra-cicd",
+  "consumer_main_sha": "1320e17e9d7dd66455e65276267dc2b92517c4b5",
+  "responsibility": {
+    "consumer_lead": "이권욱",
+    "application_owner": "이재환",
+    "technical_support": "이하영"
+  },
+  "status": "LOCAL_SUPPLY_INTEGRITY_VERIFIED_APP_CONFIRMATION_AND_CONSUMER_CONFIG_REVIEW_PENDING",
+  "current_active_source_sha": "9658255ce9e39167cc8876a38b98aeb1f0311694",
+  "proposed_source": {
+    "repository": "321Team/fds-msa",
+    "commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+    "source_specific_app_owner_confirmation": "PENDING",
+    "test_scope": "PROPOSE_UNCHANGED_APP_AND_TEST_SUBTREES_DELTA_ZERO_IMAGE_CONTENT_CHANGED_BY_LOCK_REFRESH",
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "producer": {
+    "source_run_id": 37585637220,
+    "supply_run_id": 37585636640,
+    "job_id": 112674987468,
+    "source_tool_commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+    "source_conclusion": "success",
+    "supply_conclusion": "success",
+    "artifact_id": 11466476253,
+    "artifact_name": "apko-offline-supply-adc90410f99cb7af5b40bc8ff92c45272e9f8bee-1",
+    "size_bytes": 109786891,
+    "archive_sha256": "2eaed6486b68f9260f735e362b45a167d7f01aa0fa819accf751ea8d74951ad6",
+    "archive_digest_scope": "LOCAL_RECEIVED_BYTES_SHA256_EQUALS_GITHUB_API_DIGEST",
+    "artifact_expires_at": "2026-10-14T07:09:38Z",
+    "offline_supply_contract_from_job_log": "PASS",
+    "builder_archive_sha256_from_job_log": null,
+    "runtime_archive_sha256_from_job_log": null,
+    "supply_manifest_sha256": "f4d55db6ecbefe2057cdb7ca6539b6818549744eb8bfc127ba12dcfa4eb6143b",
+    "full_image_identities": {
+      "builder": {
+        "format": "docker-archive",
+        "archive_sha256": "f1c484da1e5de89197a54484bb4a28d3cc0f42f2894993e5b78ecb3587206a25",
+        "manifest_json_sha256": "bbb77ed2d303097c03abe29cc0c000def496ffb06daa4a7e1c312a4f627512b4",
+        "index_json_sha256": "33945a54149de6bc558421b154cf3e352a6f3e97dc0a224e194b47e57ca06c89",
+        "config_digest": "sha256:76cfebb7af7d22c528da8cda75aa8e3f35cb9bbcdcdfc1f70e71be4aaa350b4a",
+        "diff_ids": [
+          "sha256:02eae2f3f119386c5c0e4b7ff85ea44ae89bd9ce26776364c35c853335e2896b"
+        ],
+        "layer_count": 1,
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:adc90410f99cb7af5b40bc8ff92c45272e9f8bee-amd64",
+        "platform": "linux/amd64"
+      },
+      "runtime": {
+        "format": "docker-archive",
+        "archive_sha256": "94db72ba9a03fa1ed1e133bbbcd0e07911d568920f5d8af18f57bca00c1f0c15",
+        "manifest_json_sha256": "7c32f5d656222653267be9957cf70d4543819beac03e90cef117821a3b6a9b38",
+        "index_json_sha256": "11b29d6f432406a8b6db281a99da157c36ace7b0cadc9421f0ce781ed2229cfc",
+        "config_digest": "sha256:091b5d0ef47fc56e4769531697565bbb2d06cd93725b75469fe0a84bc63d774d",
+        "diff_ids": [
+          "sha256:9ca35cc8280600086da4e2f423b8f51fb6f6cba568410d968299b236ebfc1a30"
+        ],
+        "layer_count": 1,
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:adc90410f99cb7af5b40bc8ff92c45272e9f8bee-amd64",
+        "platform": "linux/amd64"
+      }
+    },
+    "profile_inventories": {
+      "fds-engine-runtime": {
+        "inventory_sha256": "f202a2cc3c3cc6785facafc7e9aa4a126c387281fc0b8c8e7d2ebbdcd0229eeb",
+        "lock_sha256": "88e45719485bdeb8c3ea2c70f8f3303127c7136fe465e1330f45775a9e163fc8",
+        "roots_sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c",
+        "wheel_count": 20
+      },
+      "fds-engine-test": {
+        "inventory_sha256": "675e625721fe8ef0edb69f15359467151f5d7c9dbd485fdfe5665e5abd7f7ac8",
+        "lock_sha256": "6568bb9c1cf014c229c66579b89c589eb74fdac4749625861e50f1d56bc3f560",
+        "roots_sha256": "ed2c667809886aba216e9953d026f15a3be4d624214ac0d48739c3d7ad192c99",
+        "wheel_count": 28
+      },
+      "transaction-api-runtime": {
+        "inventory_sha256": "2f6bc210cd47a6f8de6bc87b93aef6440676a1c8957d5e25cd127cf868b12177",
+        "lock_sha256": "1b6c12a68a3bdbe4f2d56f0d9ce31054937d17fb46708566d795041c4a153187",
+        "roots_sha256": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc",
+        "wheel_count": 27
+      },
+      "transaction-api-test": {
+        "inventory_sha256": "56914c6a5c5e53dca23a04f8858054fda1a13abdf0ed6f1bde87f60e8c030f7b",
+        "lock_sha256": "9a047257be36385144d698d81889f707a032a11142c63409189cf944e0fbfc88",
+        "roots_sha256": "bb82768573d677bf8d4a6cb592f9a82950c0d85b25f9c927e28a3b955880ed03",
+        "wheel_count": 31
+      }
+    }
+  },
+  "verification": {
+    "current_session": "LOCAL_ARCHIVE_MANIFEST_SOURCE_PROFILE_WHEEL_AND_IMAGE_IDENTITY_VERIFIED",
+    "producer_source_and_tool_sha_from_job_log": "CONFIRMED",
+    "archive_bytes": "RECEIVED_REHASHED_SIZE_AND_GITHUB_API_DIGEST_MATCH",
+    "previous_source_counts": "HISTORICAL_0494CA_ONLY_NOT_ADOPTED_FOR_ADC90410",
+    "runner_staging": "NOT_RUN",
+    "runner_test_build_scan": "NOT_RUN",
+    "harbor_digest": "NOT_PRODUCED",
+    "pod_image_id": "NOT_VERIFIED",
+    "local_intake_report": "LOCAL_INTAKE_REPORT.json",
+    "manifest_files_matched": 125,
+    "source_files_matched": 12,
+    "wheel_total": 106,
+    "image_archives_verified": 2,
+    "independent_review": "PENDING",
+    "checked_at": "2026-10-07T08:52:59.783296+00:00"
+  },
+  "freshness": {
+    "decision": "https://github.com/321Team/fds-project-baseline/issues/110#issuecomment-6030324603",
+    "scope": "REPO_LOCK_DRIFT_AGE_NOT_ARTIFACT_RETENTION",
+    "reported_current_lock_boundary_kst": null,
+    "source_lock_history": "7bb1309e179c7f5cb42816bcf1ac8b3fd363f842",
+    "previous_source_boundary_reference": "previous_preparation.freshness applies only to 0494ca source",
+    "required_before_consumption": "RECHECK_EXACT_SOURCE_PER_LOCK_HISTORY_CURRENT_PRODUCER_GATE_AND_FRESH_TRIVY_DB; ARTIFACT_RETENTION_DOES_NOT_EXTEND_LOCK_APPROVAL"
+  },
+  "execution_authorization": {
+    "test_build_scan": false,
+    "harbor_push": false,
+    "kubernetes_token_issuance": false,
+    "kubernetes_deploy": false,
+    "rollback": false
+  },
+  "next_gates": [
+    "APP_OWNER_EXACT_SOURCE_AND_TEST_SCOPE_CONFIRMATION",
+    "INDEPENDENT_CONSUMER_CONFIG_REVIEW_AND_MERGE",
+    "RUNNER_STAGING_HASH_IDENTITY_AND_SPACE_CHECK",
+    "NONOVERLAPPING_LEAD_RUNTIME_WINDOW_AND_NEW_TEST_BUILD_SCAN",
+    "SEPARATE_PUSH_DIGEST_HANDOFF_AND_NATIVE_DEPLOY_GATES"
+  ],
+  "updated_at": "2026-10-07T08:52:59.783296+00:00",
+  "previous_preparation": {
+    "observed_source": {
+      "repository": "321Team/fds-msa",
+      "commit": "0494ca279882d4e0cab24fb5a25a136a2e8f46c1",
+      "reviewed_commit": "eea60c7099af36cb1b787ab3668ef8645855552b",
+      "source_specific_app_owner_confirmation": "PENDING",
+      "test_scope": "PROPOSE_UNCHANGED_APP_SUBTREE_DELTA_ZERO",
+      "approved_by": null,
+      "approval_reference": null
+    },
+    "producer": {
+      "source_run_id": 37569632325,
+      "supply_run_id": 37569632028,
+      "job_id": 112625094511,
+      "source_conclusion": "success",
+      "supply_conclusion": "success",
+      "artifact_id": 11460655012,
+      "artifact_name": "apko-offline-supply-0494ca279882d4e0cab24fb5a25a136a2e8f46c1-1",
+      "size_bytes": 109784510,
+      "archive_sha256": "348020907b8bed2dea34c886af0807ccd18a7d847bf4dd9b8fe5bf56d889b64d",
+      "artifact_expires_at": "2026-10-14T04:03:34Z",
+      "builder_archive_sha256_from_job_log": "1d0466d4d58df9d790ab43d7e060c84b63a8d53527d49486bad630fd584aaa60",
+      "runtime_archive_sha256_from_job_log": "d0c613c310b0493d64271b2aa5b1414d445db343004d15f213e15c41bda63360",
+      "supply_manifest_sha256": null,
+      "full_image_identities": null,
+      "profile_inventories": null
+    },
+    "verification": {
+      "current_session": "RUN_JOB_AND_ARTIFACT_METADATA_AND_LOG_CONFIRMED",
+      "archive_bytes": "NOT_LOCALLY_MATERIALIZED_IN_THIS_SESSION_NETWORK_RESTRICTED",
+      "prior_intake": "https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-6030778504",
+      "prior_counts": {
+        "manifest": 125,
+        "wheels": 106,
+        "oci_closure": 2
+      },
+      "prior_counts_scope": "EXISTING_RECORDED_VERIFICATION_NOT_REPEATED_THIS_SESSION",
+      "runner_staging": "NOT_RUN",
+      "runner_test_build_scan": "NOT_RUN",
+      "harbor_digest": "NOT_PRODUCED",
+      "pod_image_id": "NOT_VERIFIED"
+    },
+    "freshness": {
+      "decision": "https://github.com/321Team/fds-project-baseline/issues/110#issuecomment-6030324603",
+      "scope": "REPO_LOCK_DRIFT_AGE_NOT_ARTIFACT_RETENTION",
+      "reported_current_lock_boundary_kst": "2026-10-09T22:52:07+09:00",
+      "source": "https://github.com/321Team/fds-project-baseline/issues/110#issuecomment-6030557822",
+      "required_before_consumption": "RECHECK_EXACT_SOURCE_LOCK_HISTORY_CURRENT_PRODUCER_GATE_AND_FRESH_TRIVY_DB; ARTIFACT_RETENTION_DOES_NOT_EXTEND_LOCK_APPROVAL"
+    },
+    "recorded_at": "2026-10-07T05:07:18.927Z",
+    "scope": "HISTORICAL_0494CA_SUPPLY_NOT_REUSED_AS_ADC90410_IMAGE_EVIDENCE"
+  },
+  "source_delta": {
+    "from": "0494ca279882d4e0cab24fb5a25a136a2e8f46c1",
+    "to": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+    "changed_files": [
+      ".github/workflows/apko-offline-supply.yml",
+      "ci/apko/LOCK_REFRESH_20261007_R4R8.md",
+      "ci/apko/wolfi-python313-builder.apko.lock.json",
+      "ci/apko/wolfi-python313-runtime.apko.lock.json"
+    ],
+    "application_directory_changes": 0,
+    "test_directory_changes": 0,
+    "lock_refresh_commit": "7bb1309e179c7f5cb42816bcf1ac8b3fd363f842",
+    "lock_author_at_utc": "2026-10-07T06:13:51Z",
+    "locked_os_packages_changed": true,
+    "new_build_scan_identity_required": true
+  }
+}
