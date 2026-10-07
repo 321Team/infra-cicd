@@ -1,0 +1,60 @@
+{
+  "schema": "fds.cicd.config-validation.v1",
+  "consumer_base": "3f3e27d5612fb20f1478174195ddcc9be633c807",
+  "source_commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+  "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6036043243",
+  "config_sha256": "f0524401e33bde7fd4e9687de9eb3a06dd42681d5c4a524a073892f65c16abe9",
+  "supply_manifest_sha256": "f4d55db6ecbefe2057cdb7ca6539b6818549744eb8bfc127ba12dcfa4eb6143b",
+  "supply_identity_comparison": "MATCH",
+  "test_commands_unchanged": true,
+  "host": "ansible01",
+  "account": "server01_ansible",
+  "python": "3.12",
+  "workspace": "/home/server01_ansible/p1-offline-validation.bHRqcUbI",
+  "exact_config_revalidated_at_kst": "2026-10-07T19:40:04+09:00",
+  "input_validation": {
+    "rc": 0,
+    "input_shape": "VALID",
+    "scope": "NO_EXECUTE"
+  },
+  "tests": [
+    {
+      "name": "test_build_scan.py",
+      "count": 28,
+      "rc": 0
+    },
+    {
+      "name": "test_offline_supply_v3.py",
+      "count": 7,
+      "rc": 0
+    }
+  ],
+  "runtime": "NOT_RUN",
+  "delivery_gate": "NOT_VERIFIED",
+  "logs": [
+    {
+      "path": "config.stdout.txt",
+      "sha256": "fd4641bab2c28db1f3818f7f51a4cfeb121e87c021894e152157e1558731d272"
+    },
+    {
+      "path": "config.stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build-scan-test.stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "build-scan-test.stderr.txt",
+      "sha256": "75996560cf43a92a9fc9bf5d4721e2f05e8d9b8bb46e3619917eb2ed5bbb26c2"
+    },
+    {
+      "path": "supply-test.stdout.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "supply-test.stderr.txt",
+      "sha256": "e5c7759fb2990cbc86b2a63147b2b4eb44ac48d1bd21dc8a568c2c94fdab443d"
+    }
+  ]
+}

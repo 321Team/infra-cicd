@@ -1,0 +1,33 @@
+test_duplicate_json_keys_are_rejected (test_build_scan.CommandAndInputTests.test_duplicate_json_keys_are_rejected) ... ok
+test_no_shell_interpolation (test_build_scan.CommandAndInputTests.test_no_shell_interpolation) ... ok
+test_paths_cannot_escape_source_snapshot (test_build_scan.CommandAndInputTests.test_paths_cannot_escape_source_snapshot) ... ok
+test_process_timeout_terminates_process_group (test_build_scan.CommandAndInputTests.test_process_timeout_terminates_process_group) ... ok
+test_block_requires_vulnerability_and_stops_at_first_blocked_service (test_build_scan.FlowTests.test_block_requires_vulnerability_and_stops_at_first_blocked_service) ... ok
+test_builder_failure_stops_before_scan (test_build_scan.FlowTests.test_builder_failure_stops_before_scan) ... ok
+test_built_archives_rechecked_even_when_second_service_is_not_scanned (test_build_scan.FlowTests.test_built_archives_rechecked_even_when_second_service_is_not_scanned) ... ok
+test_default_pending_input_runs_nothing (test_build_scan.FlowTests.test_default_pending_input_runs_nothing) ... ok
+test_exact_commit_snapshot_and_test_build_scan_order (test_build_scan.FlowTests.test_exact_commit_snapshot_and_test_build_scan_order) ... ok
+test_explicit_unit_scope_runs_remaining_tests_without_fabricating_pass (test_build_scan.FlowTests.test_explicit_unit_scope_runs_remaining_tests_without_fabricating_pass) ... ok
+test_first_or_second_image_vulnerability_records_only_actual_scans (test_build_scan.FlowTests.test_first_or_second_image_vulnerability_records_only_actual_scans) ... ok
+test_git_replace_cannot_substitute_the_approved_commit (test_build_scan.FlowTests.test_git_replace_cannot_substitute_the_approved_commit) ... ok
+test_incomplete_or_invalid_unit_scope_and_missing_phases_run_nothing (test_build_scan.FlowTests.test_incomplete_or_invalid_unit_scope_and_missing_phases_run_nothing) ... ok
+test_local_approved_input_cannot_replace_workflow_commit_input (test_build_scan.FlowTests.test_local_approved_input_cannot_replace_workflow_commit_input) ... ok
+test_missing_approval_source_test_or_base_blocks_before_commands (test_build_scan.FlowTests.test_missing_approval_source_test_or_base_blocks_before_commands) ... ok
+test_mutable_from_is_not_silently_rewritten (test_build_scan.FlowTests.test_mutable_from_is_not_silently_rewritten) ... ok
+test_pass_and_block_receipts_must_match_source_context_and_build_identity (test_build_scan.FlowTests.test_pass_and_block_receipts_must_match_source_context_and_build_identity) ... ok
+test_pending_cli_is_nonzero_and_does_not_enter_runtime (test_build_scan.FlowTests.test_pending_cli_is_nonzero_and_does_not_enter_runtime) ... ok
+test_private_source_origin_passes_the_existing_build_path (test_build_scan.FlowTests.test_private_source_origin_passes_the_existing_build_path) ... ok
+test_receipt_service_coverage_and_status_must_match_exit_code (test_build_scan.FlowTests.test_receipt_service_coverage_and_status_must_match_exit_code) ... ok
+test_same_sha_from_old_origin_does_not_satisfy_private_source_input (test_build_scan.FlowTests.test_same_sha_from_old_origin_does_not_satisfy_private_source_input) ... ok
+test_source_sha_mismatch_blocks_before_podman_and_tests (test_build_scan.FlowTests.test_source_sha_mismatch_blocks_before_podman_and_tests) ... ok
+test_test_failure_or_interruption_stops_before_build_and_scan (test_build_scan.FlowTests.test_test_failure_or_interruption_stops_before_build_and_scan) ... ok
+test_tracked_symlink_rejected_before_tests (test_build_scan.FlowTests.test_tracked_symlink_rejected_before_tests) ... ok
+test_unit_scope_does_not_hide_required_test_failure_or_interruption (test_build_scan.FlowTests.test_unit_scope_does_not_hide_required_test_failure_or_interruption) ... ok
+test_unit_scope_preserves_required_source_directory_checks (test_build_scan.FlowTests.test_unit_scope_preserves_required_source_directory_checks) ... ok
+test_vulnerability_and_scanner_error_preserve_nonzero (test_build_scan.FlowTests.test_vulnerability_and_scanner_error_preserve_nonzero) ... ok
+test_wrong_remote_repository_blocks (test_build_scan.FlowTests.test_wrong_remote_repository_blocks) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 2.254s
+
+OK
