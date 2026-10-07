@@ -1,0 +1,56 @@
+{
+  "verified_at": "2026-10-07T10:13:34.760667+00:00",
+  "source": {
+    "commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+    "repository": "321Team/fds-msa",
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "consumer_validator_main": "1320e17e9d7dd66455e65276267dc2b92517c4b5",
+  "proposal_status": "PENDING_APP_OWNER_CONFIRMATION",
+  "proposal_sha256": "ce05d0953f002d19320ff2c37b2f5518ab9e093f4e836b1a11ac11e5c2591508",
+  "active_config_modified": false,
+  "test_commands_unchanged": true,
+  "supply_identities_bound_to_original_manifest": true,
+  "expected_rejection": {
+    "host": "ansible01",
+    "account": "server01_ansible",
+    "python": "3.12.14",
+    "rc": 1,
+    "error_code": "APP_HANDOFF_PENDING",
+    "command": "cd /home/server01_ansible/cicd-config-precheck.7wL9Zofm && tar -xzf input.tar.gz && python3.12 -B tools/delivery/build_scan.py",
+    "stdout_sha256": "b41720a824d79575659cf44f204fd96523a4849146c12d3204569a7e73c2ee47",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "runtime": "NOT_RUN",
+  "validator_files": [
+    {
+      "path": "tools/delivery/build_scan.py",
+      "sha256": "2a0ea060161b3aacfe01f61040e087d855c148a299e9aa43b72f5d3e5dc8c586"
+    },
+    {
+      "path": "tools/delivery/offline_supply.py",
+      "sha256": "433fca01ede1b1903d4b8302e7423b9db3649a9c4a0cf7d6faf197b25bf2e3ea"
+    },
+    {
+      "path": "tools/delivery/offline_supply_v3.py",
+      "sha256": "555f7c6a0f535dc882028513ffaea6f2ea72e43ed214d97c1fe6bf062b628613"
+    },
+    {
+      "path": "tools/trivy/oci_archive.py",
+      "sha256": "1518708335eac693c8564ae00bc1f88ba4ad562b5779e4a35f7d3f481e837602"
+    },
+    {
+      "path": "tools/trivy/prepare_db.py",
+      "sha256": "8001c623a96acb3535e752843dedb31d2dc8f4ec17218ba5746c2bb38773abd9"
+    },
+    {
+      "path": "tools/trivy/scan_images.py",
+      "sha256": "3c8701df879f1fc02494d1400515fef58f79adb1dbab32b4196f961c0fad3168"
+    },
+    {
+      "path": "tools/trivy/verify_runner.py",
+      "sha256": "228cfbf9604ea67cafa751107b7f98b69002ff5b862737ed2bc64f44960948b5"
+    }
+  ]
+}
