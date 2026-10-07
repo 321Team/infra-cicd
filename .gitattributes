@@ -2,3 +2,6 @@
 *.sh text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+
+# Review handoff hashes bind LF delivery bytes.
+handoff/push-review-37642123031/* text eol=lf

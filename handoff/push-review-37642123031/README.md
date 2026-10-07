@@ -6,7 +6,7 @@ Push/Deploy Runtime 코드·Workflow·활성 config는 변경하지 않는다.
 
 ## 사실과 확인 범위
 
-- 실제 Test/Build/Scan PASS 원본: [증적147](https://github.com/321Team/fds-project-evidence/pull/147), exact HEAD d54512ec4f7959e17b7cdc719d249196417369e7. 현재 독립 리뷰 대기.
+- 실제 Test/Build/Scan PASS 원본: [증적147](https://github.com/321Team/fds-project-evidence/pull/147), exact HEAD d54512ec4f7959e17b7cdc719d249196417369e7. APP Owner 독립 승인 완료(리뷰 5444509383). 충돌 정리 후 최신 HEAD 재검토 및 지정 리뷰어 검토가 남아 있다.
 - [실행 종료 기록](https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-6041006145). 원본은 cicd-runner01 정상 계정 HOME/FDS_CICD_AppWorkflow._6zedcc5에 보존.
 - BUILD_SCAN_HANDOFF.json은 수신 receipt에서 연결한 index다. 새 실행 증적이나 raw payload 대체본이 아니다. OCI/report/DB 실제 바이트는 서버 collector가 검증했고 수신 archive에는 포함되지 않는다.
 - push.draft.json은 실제 source/config/Run/Attempt, 두 이미지 archive/manifest/config와 report hash를 입력에 연결한다. template_only=true, 승인 상태는 PENDING, credential·실행 승인·만료는 null이다. Harbor AC-02/현재 TLS·인계 reference도 최종 입력 확정 때 기존 근거와 실행 시점 확인을 연결하도록 null로 둔다. 기존 AC-02 실패 선언이나 재시험 요구가 아니다.
@@ -31,3 +31,7 @@ Push/Deploy Runtime 코드·Workflow·활성 config는 변경하지 않는다.
 현재 코드/원본 불일치, 승인 만료, fresh Scan HIGH/CRITICAL, TLS/인증 이상, 다른 Runtime과 중첩 시 STOP. 부분 Push 실패 시 원격 잔여와 claim을 보존하고 자동 재시도/claim 삭제/tag 삭제 없이 대조·처분 판단으로 넘긴다. credential 정리 실패 시 정상 완료로 보고하지 않는다.
 
 STATIC_INPUT=EXPECTED_BLOCK / ADAPTER_VALIDATION=NOT_RUN / PUSH=NOT_EXECUTED / DEPLOY=NOT_EXECUTED / DELIVERY_GATE=NOT_VERIFIED.
+
+## LF 전달 형식 보완
+
+리뷰 5444577699에 따라 이 인계 폴더의 CRLF를 LF로 정규화하고 최종 바이트 기준 SHA256SUMS와 INPUT_CHECK.draft_sha256을 재생성했다. 이전 바이트는 commit df2e3ed96f5f908183d6afdee52542e59034c583에 보존된다. 수신본의 전달 형식 보완이며 서버 실행 원본을 새로 수집하거나 Runtime을 재실행한 것이 아니다. 순수 로컬 Gate는 같은 6개 미확정 사유로 BLOCK을 유지한다.
