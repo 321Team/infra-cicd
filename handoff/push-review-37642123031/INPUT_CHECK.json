@@ -1,0 +1,29 @@
+{
+  "checked_at": "2026-10-07T15:28:43.208107+00:00",
+  "code_commit": "4e9324cd8acf0ba67b35f950b4c952db8064540e",
+  "code_path": "tools/delivery/delivery_gate.py",
+  "code_sha256": "ddd78aac6ef9e9d89fc9b8308e8d9e179ee663de9078b3e930027270e85086f5",
+  "draft_sha256": "61a2fc1dac04d8c8269454eea6880d0c1ca1a6b45944f19f2c28f53f41cb8f6c",
+  "receipt_chain": "MATCH",
+  "draft_gate": {
+    "decision": "BLOCK",
+    "reasons": [
+      "TEMPLATE_OR_UNCONFIRMED_INPUT",
+      "DELIVERY_INPUT_NOT_APPROVED",
+      "RUNNER_TLS_TRUST_NOT_PASS",
+      "HARBOR_IF09_AC02_NOT_PASS",
+      "HARBOR_HANDOFF_REFERENCE_INVALID",
+      "HARBOR_CREDENTIAL_REFERENCE_INVALID"
+    ],
+    "plan": null,
+    "basis": "DECLARED_REVIEWED_INPUTS_ONLY",
+    "runtime_enforcement": "NOT_INTEGRATED",
+    "delivery_gate": "NOT_VERIFIED",
+    "token_audience_validation": "PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE"
+  },
+  "expected_block": true,
+  "validation_scope": "LOCAL_PURE_GATE_ONLY",
+  "push_adapter_execute_false": "NOT_RUN",
+  "runtime_push": "NOT_EXECUTED",
+  "runtime_deploy": "NOT_EXECUTED"
+}
