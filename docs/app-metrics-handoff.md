@@ -2,7 +2,7 @@
 
 ## 현재 후보와 승인 경계 — 2026-10-09
 
-CODEX_ASSISTED · 이권욱. **PREPARATION / PENDING_APP_HANDOFF**. 이 절은 [fds-msa#27](https://github.com/321Team/fds-msa/pull/27) 후보 `aeb9995d626ffdc24454477038eb82d5d9e4744e`의 검토 자료다. 활성 `config/app-build-scan.json`은 CICD main `04e49811e46ffcd3f35183c2cfb9493901f84dc5` 기준으로 과거 승인 Source `adc90410f99cb7af5b40bc8ff92c45272e9f8bee`를 유지한다. 아래 후보를 그 파일에 적용하거나 새 Source/Unit 예외를 승인한 상태가 아니다.
+CODEX_ASSISTED · 이권욱. **PREPARATION / PENDING_APP_HANDOFF**. 이 절은 [fds-msa#27](https://github.com/321Team/fds-msa/pull/27) 후보 `affbc69beef9967f7977d09a6fec14f7fb6c0e94`의 검토 자료다. 이전 aeb9995에서 앱 코드/시험은 같고 후보 CI의 실제 TCP listener 검사·도구 회귀가 추가됐다. 활성 `config/app-build-scan.json`은 CICD main `04e49811e46ffcd3f35183c2cfb9493901f84dc5` 기준으로 과거 승인 Source `adc90410f99cb7af5b40bc8ff92c45272e9f8bee`를 유지한다. 아래 후보를 그 파일에 적용하거나 새 Source/Unit 예외를 승인한 상태가 아니다.
 
 ### 새 Source를 선택할 때의 시험 매핑
 
@@ -13,15 +13,15 @@ CODEX_ASSISTED · 이권욱. **PREPARATION / PENDING_APP_HANDOFF**. 이 절은 [
 | transaction-api | Contract | `tests/test_dependency_upgrade_contract.py tests/test_health.py tests/test_metrics.py tests/test_listener_logging.py` | 20 |
 | transaction-api | Unit | 기존 NOT_APPLICABLE은 adc90410의 승인에 한정. 새 Source에도 적용할지는 APP Lead 재확인 필요 | 별도 판정 |
 
-각 명령은 기존 `.venv/bin/python -m pytest -q`에 위 파일 목록을 붙이며 cwd/timeout300초는 기존 consumer 매핑을 재사용하는 제안이다. 중복 실행 없이 engine31+API20=51건이며, [Source validation Run37802774812](https://github.com/321Team/fds-msa/actions/runs/37802774812)의 전체 앱 suite 결과와 대조했다. parametrization이 포함된 실행 건수이며 단순 AST 함수 개수와 다르다. 해당 CI의 도구109건은 앱51건에 합산하지 않는다.
+각 명령은 기존 `.venv/bin/python -m pytest -q`에 위 파일 목록을 붙이며 cwd/timeout300초는 기존 consumer 매핑을 재사용하는 제안이다. 중복 실행 없이 engine31+API20=51건이며, [Source validation Run37808461629](https://github.com/321Team/fds-msa/actions/runs/37808461629)의 전체 앱 suite 결과와 대조했다. parametrization이 포함된 실행 건수이며 단순 AST 함수 개수와 다르다. 해당 CI의 도구115건은 앱51건에 합산하지 않는다.
 
 **기존 API contract 명령은 logging 시험1건을 빠뜨린다.** 후보 Source의 전체 test 파일 목록과 대조하면 위 마지막 `test_listener_logging.py`가 유일한 추가 파일이다. 이 시험은 실제 Uvicorn 설정을 읽되 Server를 대체해 소켓을 열지 않는 로그 회귀 시험이다. 실제 두 listener TCP 검증으로 표시하지 않는다. 기존 명령만 후보에 사용하면 앱50건이며, 기존 adc90410 회차의 수행 오류로 소급 판정하지 않는다.
 
 ### 이미 확인한 후보 결과와 공급물 경계
 
-[Build/Scan Run37803786426 / attempt1](https://github.com/321Team/fds-msa/actions/runs/37803786426), [증적#176](https://github.com/321Team/fds-project-evidence/pull/176)에서 같은 aeb9995 Source의 두 이미지 빌드·실제 컨테이너 livez200·Trivy HIGH/CRITICAL 각각0/0을 확인했다. artifact11561454052는 원본 manifest50/50 검증된 결과 파일이며 **이미지 tar와 offline 공급용 SUPPLY_MANIFEST가 없는 후보 검사 artifact**다. 기존 consumer의 공급 입력으로 대체하지 않는다. image config digest를 remote manifest digest나 Pod imageID로 사용하지 않는다.
+[Build/Scan Run37808457843 / attempt1](https://github.com/321Team/fds-msa/actions/runs/37808457843), [증적#178](https://github.com/321Team/fds-project-evidence/pull/178)에서 같은 affbc69 Source의 두 이미지 빌드·컨테이너 loopback TCP16건(livez200·전용metrics200/앱 counter·업무metrics12건404)·Trivy HIGH/CRITICAL 각각0/0을 확인했다. artifact11563449559는 원본 manifest53/53 검증된 결과 파일이며 **이미지 tar와 offline 공급용 SUPPLY_MANIFEST가 없는 후보 검사 artifact**다. 기존 consumer의 공급 입력으로 대체하지 않는다. image config digest를 remote manifest digest나 Pod imageID로 사용하지 않는다. 이전 aeb9995/livez-only Run37803786426과 [증적#176](https://github.com/321Team/fds-project-evidence/pull/176)은 이력으로 보존한다.
 
-Wolfi index drift는 이번 실행에서33시간/기존 한도3일 이내였다. 새 실행은 freshness를 다시 판단하며, lock 재생성이나 날짜 갱신만으로 검사를 우회하지 않는다. 업무metrics404/전용metrics200 TCP, 실제 DB·Rule E2E, 현장 Runner Test/Build/Scan, Push/Deploy는 별도다.
+Wolfi index drift는 이번 실행에서34시간/기존 한도3일 이내였다. 새 실행은 freshness를 다시 판단하며, lock 재생성이나 날짜 갱신만으로 검사를 우회하지 않는다. CI loopback TCP는 실제 운영 Service/NodePort/NetworkPolicy·replica·DB/Rule E2E를 입증하지 않는다. 현장 Runner Test/Build/Scan·Push/Deploy는 별도다.
 
 ### 승인 후 연결 순서·중단 기준
 
