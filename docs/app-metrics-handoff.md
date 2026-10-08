@@ -1,4 +1,45 @@
-# Metrics 시험 추가에 따른 CICD 매핑 후보 — 2026-09-16
+# Metrics 시험 매핑 인계 — 2026-10-09 갱신
+
+## 현재 후보와 승인 경계 — 2026-10-09
+
+CODEX_ASSISTED · 이권욱. **PREPARATION / PENDING_APP_HANDOFF**. 이 절은 [fds-msa#27](https://github.com/321Team/fds-msa/pull/27) 후보 `aeb9995d626ffdc24454477038eb82d5d9e4744e`의 검토 자료다. 활성 `config/app-build-scan.json`은 CICD main `04e49811e46ffcd3f35183c2cfb9493901f84dc5` 기준으로 과거 승인 Source `adc90410f99cb7af5b40bc8ff92c45272e9f8bee`를 유지한다. 아래 후보를 그 파일에 적용하거나 새 Source/Unit 예외를 승인한 상태가 아니다.
+
+### 새 Source를 선택할 때의 시험 매핑
+
+| 서비스 | 단계 | 서비스 디렉터리 기준 pytest 파일 | 후보 시험 건수 |
+|---|---|---|---:|
+| fds-engine | Unit | `tests/test_rules.py` | 16 |
+| fds-engine | Contract | `tests/test_dependency_upgrade_contract.py tests/test_health.py tests/test_metrics.py` | 15 |
+| transaction-api | Contract | `tests/test_dependency_upgrade_contract.py tests/test_health.py tests/test_metrics.py tests/test_listener_logging.py` | 20 |
+| transaction-api | Unit | 기존 NOT_APPLICABLE은 adc90410의 승인에 한정. 새 Source에도 적용할지는 APP Lead 재확인 필요 | 별도 판정 |
+
+각 명령은 기존 `.venv/bin/python -m pytest -q`에 위 파일 목록을 붙이며 cwd/timeout300초는 기존 consumer 매핑을 재사용하는 제안이다. 중복 실행 없이 engine31+API20=51건이며, [Source validation Run37802774812](https://github.com/321Team/fds-msa/actions/runs/37802774812)의 전체 앱 suite 결과와 대조했다. parametrization이 포함된 실행 건수이며 단순 AST 함수 개수와 다르다. 해당 CI의 도구109건은 앱51건에 합산하지 않는다.
+
+**기존 API contract 명령은 logging 시험1건을 빠뜨린다.** 후보 Source의 전체 test 파일 목록과 대조하면 위 마지막 `test_listener_logging.py`가 유일한 추가 파일이다. 이 시험은 실제 Uvicorn 설정을 읽되 Server를 대체해 소켓을 열지 않는 로그 회귀 시험이다. 실제 두 listener TCP 검증으로 표시하지 않는다. 기존 명령만 후보에 사용하면 앱50건이며, 기존 adc90410 회차의 수행 오류로 소급 판정하지 않는다.
+
+### 이미 확인한 후보 결과와 공급물 경계
+
+[Build/Scan Run37803786426 / attempt1](https://github.com/321Team/fds-msa/actions/runs/37803786426), [증적#176](https://github.com/321Team/fds-project-evidence/pull/176)에서 같은 aeb9995 Source의 두 이미지 빌드·실제 컨테이너 livez200·Trivy HIGH/CRITICAL 각각0/0을 확인했다. artifact11561454052는 원본 manifest50/50 검증된 결과 파일이며 **이미지 tar와 offline 공급용 SUPPLY_MANIFEST가 없는 후보 검사 artifact**다. 기존 consumer의 공급 입력으로 대체하지 않는다. image config digest를 remote manifest digest나 Pod imageID로 사용하지 않는다.
+
+Wolfi index drift는 이번 실행에서33시간/기존 한도3일 이내였다. 새 실행은 freshness를 다시 판단하며, lock 재생성이나 날짜 갱신만으로 검사를 우회하지 않는다. 업무metrics404/전용metrics200 TCP, 실제 DB·Rule E2E, 현장 Runner Test/Build/Scan, Push/Deploy는 별도다.
+
+### 승인 후 연결 순서·중단 기준
+
+1. APP Lead가 최종40자리 Source, 승인자·참조, 위 Unit/Contract 매핑과 API Unit 처분을 확정한다. 후보 HEAD가 바뀌면 source·시험·공급 입력 차이를 대조하고 영향받은 검증을 다시 연결한다. 이번 문서의 병합이 해당 APP 승인을 대신하지 않는다.
+2. 기존 `tools/delivery/materialize_app_build_scan_v3.py`와 [이전 config 인계 절차](../handoff/app-config-adc90410-20261007/README.md)를 재사용한다. 새 Source에 결속된 공급 생산자·승인 tool SHA·Run/Attempt·artifact ID/만료·ZIP/SUPPLY_MANIFEST hash·이미지 archives·wheels/profiles/requirements/source_inputs를 대조한다. 옛 공급 디렉터리·digest·승인 참조를 새 회차 값으로 복사하지 않는다.
+3. 확정된 APP 인계와 공급 bytes로 만든 config diff를 별도 리뷰한다. Source 승인, 설정 형식 검증, consumer 독립 리뷰/병합은 구분한다. 준비 문서를 서버 활성 입력에 배치하지 않는다.
+4. 정상 Runner 계정, reviewed main/workflow/config SHA, 최신 scan DB/CA/freshness, 비중첩 및 복구 인수를 확인한 뒤 승인된 회차에서 Test/Build/Scan을 실행한다. 현장 결과가 나온 뒤 별도 Robot/TokenRequest 정책·Push/Deploy GO와 연결한다.
+5. Source·시험 범위·hash·만료·승인 불일치면 STOP하고 입력/실패 증적을 보존한다. 현재 문서 변경은 Runtime 원복이 없다. 향후 config 전환 실패 시 검토된 변경만 되돌리며, 과거 설정 복귀를 오래된 공급물 재실행 승인으로 보지 않는다.
+
+새 adapter·worksheet·실행 record는 생성하지 않았다. 활성 config, Workflow, 승인 상태와 Runtime은 그대로다.
+
+---
+
+## 아래는 2026-09-16 당시 기록
+
+이하의32건·Python3.12·PENDING config 설명은 당시 상태다. 현재 config나 후보 Source의 사실로 재사용하지 않는다. 원래 매핑·담당 회신·한계를 이력으로 보존한다.
+
+### Metrics 시험 추가에 따른 CICD 매핑 후보 — 2026-09-16
 
 상태: **PREPARATION / PENDING_APP_HANDOFF**.
 이 문서는 기존 [앱 시험 매핑](app-handoff-mapping.md)의 26개 시험 관측 이후 변경을 기록한다.

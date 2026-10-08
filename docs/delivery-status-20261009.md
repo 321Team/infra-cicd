@@ -15,6 +15,8 @@ CODEX_ASSISTED · 이권욱. 조회한 main `de59c91a5c45966b50e173d370f13828e0a
 
 ## 남은 입력과 책임
 
+10/9 후속 후보: [fds-msa#27](https://github.com/321Team/fds-msa/pull/27) `aeb9995d626ffdc24454477038eb82d5d9e4744e`의 GitHub hosted Build/Scan과 [증적#176](https://github.com/321Team/fds-project-evidence/pull/176)을 [기존 metrics 시험 인계 문서](app-metrics-handoff.md#현재-후보와-승인-경계--2026-10-09)에 연결했다. 새 API logging1건을 포함한 전체51건 매핑은 준비안이며 APP Source/Unit 예외 재확인·새 공급물·consumer config 리뷰가 필요하다. 현재 활성 config는 adc90410을 유지하고 후보 CI 결과를 현장 Test/Build/Scan으로 대체하지 않는다.
+
 | 항목 | 생산/결정 | 소비/실행 | 현재 상태·근거 |
 |---|---|---|---|
 | 사용할 CI Robot의 ID/세대·권한·만료·disabled·사용 가능성 | HBR 이하영 | CICD 이권욱 | [기존 인계 요청](https://github.com/321Team/fds-project-baseline/issues/13#issuecomment-6041140607). #165 목록/만료 화면만으로 현재 credential 사용과 권한 확인을 대신하지 않음 |
