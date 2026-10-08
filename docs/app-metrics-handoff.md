@@ -36,6 +36,8 @@ Wolfi index drift는 이번 실행에서34시간/기존 한도3일 이내였다.
 
 08:44 consumer 보완: [증적183의 consumer-check](https://github.com/321Team/fds-project-evidence/tree/115cc4387e1c0ed722c6abc2e3d3fe1bf507e591/evidence/P1-CICD-01/app-offline-supply-37859961937/consumer-check)에서 CICD main `04e49811e46ffcd3f35183c2cfb9493901f84dc5`의 실제 `validate_record/stage/verify_staged/validate_source`를 기존 ansible01 정상 계정·새 임시 폴더에서 호출했다. 실제 공급 bytes/Source Dockerfile·입력에 대해 PASS, 잘못된 예상 hash3건 모두 거부, 원 입력 재검증 PASS다.08:45 임시270파일을 hash/정확한 집합 확인 후 정리했다. 이는 별도 consumer 함수의 파일 호환성 검증이며 전체APP config/정상 Runner 경로·권한·SELinux·이미지 load·앱 테스트를 검증한 것이 아니다. 사전 준비용 임시 전송과 현장 Runner 공급 인수를 구분한다.
 
+08:51~52 [Runner 관측](https://github.com/321Team/fds-project-evidence/tree/16731c8ce8832d7e63e168da446dbd6aa35f7bd1/evidence/P1-CICD-01/app-offline-supply-37859961937/runner-readonly): 정상계정 UID1000·홈/Runtime/기존공급0700·여유52.6GiB·Python3.12.14/Git2.52.0/Podman6.1.0·subuid/subgid 및 SELinux enforcing 확인. Trivy168,456,354bytes 파일 SHA는 main 지정d89bcc65…와 일치했다. 초기64MiB 조회 상한초과 결과를 보존하고 해당 파일만 별도 스트리밍으로 대조했다. 기존공급 manifest f4d55db6…/Source adc90410 유지, 조회main config도 adc90410이다. 이는 현재 실행중인 Job의 config·등록/병렬실행·DB신선도·rootless 실행 확인이 아니며 후보 공급전달·실행GO를 뜻하지 않는다. 향후 실행직전 다시 확인한다.
+
 ### 승인 후 연결 순서·중단 기준
 
 1. APP Lead가 최종40자리 Source, 승인자·참조, 위 Unit/Contract 매핑과 API Unit 처분을 확정한다. 후보 HEAD가 바뀌면 source·시험·공급 입력 차이를 대조하고 영향받은 검증을 다시 연결한다. 이번 문서의 병합이 해당 APP 승인을 대신하지 않는다.
