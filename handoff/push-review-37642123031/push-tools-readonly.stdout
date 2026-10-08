@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-10-07T15:26:57.690658+00:00",
+  "host": "cicd-runner01",
+  "uid": 1000,
+  "home_mode": "0o700",
+  "runtime_push": "NOT_EXECUTED",
+  "skopeo_version": {
+    "rc": 0,
+    "stdout": "skopeo version 1.24.0 commit: 3a672ff8fb506c5975aaca259dbf0c06b9e415c6\n",
+    "stderr": ""
+  },
+  "skopeo_rpm": {
+    "rc": 0,
+    "stdout": "skopeo-1.24.0-2.el10.x86_64\n",
+    "stderr": ""
+  },
+  "skopeo_rpm_verify": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "copy_options": {
+    "rc": 0,
+    "found": {
+      "--preserve-digests": true,
+      "--dest-authfile": true,
+      "--dest-tls-verify": true
+    }
+  },
+  "inspect_options": {
+    "rc": 0,
+    "found": {
+      "--raw": true,
+      "--authfile": true,
+      "--tls-verify": true
+    }
+  }
+}

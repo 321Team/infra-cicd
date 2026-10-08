@@ -1,0 +1,79 @@
+{
+  "schema": "P1-CICD-delivery-gate-1",
+  "template_only": true,
+  "status": "PENDING_REVIEW_AND_NEW_PUSH_AUTHORIZATION",
+  "source": {
+    "repository": "321Team/fds-msa",
+    "commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+    "approved_by": "이재환 (supreme33-kr)",
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6036043243"
+  },
+  "workflow": {
+    "repository": "321Team/infra-cicd",
+    "ref": "refs/heads/main",
+    "commit": "4e9324cd8acf0ba67b35f950b4c952db8064540e",
+    "run_id": 37642123031,
+    "run_attempt": 1
+  },
+  "build_scan": {
+    "result": "PASS",
+    "source_commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
+    "workflow_commit": "4e9324cd8acf0ba67b35f950b4c952db8064540e",
+    "run_id": 37642123031,
+    "run_attempt": 1,
+    "input_sha256": "f0524401e33bde7fd4e9687de9eb3a06dd42681d5c4a524a073892f65c16abe9",
+    "scan_result_sha256": "138dcb02d1ad3629f51da8c0e63e31ce277451ada334be48e2a4b3fab39b2de5",
+    "images": {
+      "transaction-api": {
+        "archive_sha256": "ba4e937d15f756fee8499cc74cd26cfd0d1df35b5af9e2f7cd91b8a30044fb1e",
+        "manifest_digest": "sha256:1d5325089674343f6777751310f124b0dd59049dd1dd5a35c15f6e528b532c71",
+        "config_digest": "sha256:a23dfb86a3d0341bc3d0beacdfda960f1c5298f4bc5185a42e70ed6c7be49911"
+      },
+      "fds-engine": {
+        "archive_sha256": "12a17b51d5a23f90ef25631d3bfb7d580ec7bd06a5aaa0025ad3e8657e3feb46",
+        "manifest_digest": "sha256:f531dedff9d5a23182abc305d5aad0e017118adb63b79da2ca8ec8354c6de8d7",
+        "config_digest": "sha256:55722bae61c4d4cb0a5014a95025de2f83f033a2534434a26dd2a94ebd10ffa6"
+      }
+    },
+    "scan": {
+      "transaction-api": {
+        "scan": "PASS",
+        "exit_code": 0,
+        "counts": {
+          "HIGH": 0,
+          "CRITICAL": 0
+        },
+        "manifest_digest": "sha256:1d5325089674343f6777751310f124b0dd59049dd1dd5a35c15f6e528b532c71",
+        "report_sha256": "5b9aaeb8f9b81756ade7aa849b379aa17daef72ae40bd1b8eefbb494f4810821"
+      },
+      "fds-engine": {
+        "scan": "PASS",
+        "exit_code": 0,
+        "counts": {
+          "HIGH": 0,
+          "CRITICAL": 0
+        },
+        "manifest_digest": "sha256:f531dedff9d5a23182abc305d5aad0e017118adb63b79da2ca8ec8354c6de8d7",
+        "report_sha256": "a938a9d5e6c603e11ccf202dc9ceae9bdc4c77b03176282398e6921e2be40035"
+      }
+    }
+  },
+  "harbor": {
+    "endpoint": "https://10.1.93.54",
+    "runner_tls_trust": null,
+    "if09_ac02": null,
+    "handoff_reference": null,
+    "credential_reference": null,
+    "repositories": {
+      "transaction-api": "10.1.93.54/fds/transaction-api",
+      "fds-engine": "10.1.93.54/fds/fds-engine"
+    }
+  },
+  "app_result_sha256": "b7eec2392847b99662952af3223707a6abf9dab68d46c8ce501c5b1df99898ce",
+  "source_evidence_directory": "FDS_CICD_AppWorkflow._6zedcc5",
+  "push_authorization": {
+    "workflow_sha": "4e9324cd8acf0ba67b35f950b4c952db8064540e",
+    "reference": null,
+    "expires_at": null
+  }
+}
