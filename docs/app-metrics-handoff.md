@@ -23,6 +23,17 @@ CODEX_ASSISTED · 이권욱. **PREPARATION / PENDING_APP_HANDOFF**. 이 절은 [
 
 Wolfi index drift는 이번 실행에서34시간/기존 한도3일 이내였다. 새 실행은 freshness를 다시 판단하며, lock 재생성이나 날짜 갱신만으로 검사를 우회하지 않는다. CI loopback TCP는 실제 운영 Service/NodePort/NetworkPolicy·replica·DB/Rule E2E를 입증하지 않는다. 현장 Runner Test/Build/Scan·Push/Deploy는 별도다.
 
+### 08:32 별도 오프라인 공급 준비 — Source 승인 대기 유지
+
+[공급 Run37859961937 / attempt1](https://github.com/321Team/fds-msa/actions/runs/37859961937) SUCCESS, [증적183](https://github.com/321Team/fds-project-evidence/pull/183) HEAD `8ad3321a68879b7a92c85ba60967eb913f53e344`로 실제 공급 bytes를 추가 확보했다. Source는 위 `affbc69` 그대로이며 공급 tool/workflow는 main `8eac4c982076e3c219840a13686b15c46879981f`다. 기존 후보 Scan artifact178을 공급물로 바꿔 부른 것이 아니다.
+
+- [공급 artifact11585741989](https://github.com/321Team/fds-msa/actions/runs/37859961937/artifacts/11585741989): 원 ZIP109,786,915bytes, SHA256 `2f13771909415439bc5a4c83036284e665b47d023b6447b37e3e18c24ea2e3fd`.
+- SUPPLY_MANIFEST SHA256 `6ab02000437a7b5f7d3c99e5202d40b663056a998018a1894360c58de68b73d4`. 내부125파일, Source입력12개,4프로필 wheel106개(프로필 간 중복 포함), 베이스2종 manifest/config/계층 해시를 로컬에서 대조했다.
+- workflow는 베이스 각2회 byte재현·runtime UID/GID smoke·잠긴 wheels 생성만 수행했다. 새 앱 Test/Build/Scan 결과가 아니다. 이번 실제 drift age41시간/기존3일 한도 이내이며 로컬 원본 진단을 보존했다. 새 현장 회차에서는 freshness를 다시 판단한다.
+- API 표기 artifact 만료는 **2026-10-16 08:32:03 KST**. 실행자 비공개 PC에 재압축하지 않은 원 ZIP을 보존했고, 현장 Runner 전송·다른 담당자 수신·장기 보관 인수는 아직 하지 않았다.
+
+**APP Source/Unit 승인, 공급 tool 승인 연결 및 consumer config 검토는 계속 필요하다.** step 명칭의 approved를 실제 Source 승인으로 쓰지 않는다. `delivery_authorization=false` 유지, materialize 도구 미실행, APPROVED config/승인 참조 미생성. 위 산출물이 승인 입력을 대신하거나 활성 config를 변경하지 않는다. 후보 SHA·입력·tool이 바뀌면 영향 범위를 대조한 뒤 이번 공급의 재사용 가능성을 판단한다.
+
 ### 승인 후 연결 순서·중단 기준
 
 1. APP Lead가 최종40자리 Source, 승인자·참조, 위 Unit/Contract 매핑과 API Unit 처분을 확정한다. 후보 HEAD가 바뀌면 source·시험·공급 입력 차이를 대조하고 영향받은 검증을 다시 연결한다. 이번 문서의 병합이 해당 APP 승인을 대신하지 않는다.

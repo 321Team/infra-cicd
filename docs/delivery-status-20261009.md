@@ -15,7 +15,7 @@ CODEX_ASSISTED · 이권욱. 조회한 main `de59c91a5c45966b50e173d370f13828e0a
 
 ## 남은 입력과 책임
 
-10/9 후속 후보: [fds-msa#27](https://github.com/321Team/fds-msa/pull/27) `affbc69beef9967f7977d09a6fec14f7fb6c0e94`의 GitHub hosted Build/Scan·컨테이너 TCP 분리 결과와 [증적#178](https://github.com/321Team/fds-project-evidence/pull/178)을 [기존 metrics 시험 인계 문서](app-metrics-handoff.md#현재-후보와-승인-경계--2026-10-09)에 연결했다. 새 API logging1건을 포함한 전체51건 매핑은 준비안이며 APP Source/Unit 예외 재확인·새 공급물·consumer config 리뷰가 필요하다. 현재 활성 config는 adc90410을 유지하고 후보 CI 결과를 현장 Test/Build/Scan으로 대체하지 않는다. aeb9995의 이전 증적#176은 보존한다.
+10/9 후속 후보: [fds-msa#27](https://github.com/321Team/fds-msa/pull/27) `affbc69beef9967f7977d09a6fec14f7fb6c0e94`의 GitHub hosted Build/Scan·컨테이너 TCP 분리 결과와 [증적#178](https://github.com/321Team/fds-project-evidence/pull/178)을 [기존 metrics 시험 인계 문서](app-metrics-handoff.md#현재-후보와-승인-경계--2026-10-09)에 연결했다. 새 API logging1건을 포함한 전체51건 매핑은 준비안이며 APP Source/Unit 예외 재확인·공급 인수·consumer config 리뷰가 필요하다. 08:32 별도 [공급 Run37859961937](https://github.com/321Team/fds-msa/actions/runs/37859961937)로 후보 공급 bytes를 생성하고 [증적183](https://github.com/321Team/fds-project-evidence/pull/183)에 ZIP/125파일·Source12입력·wheel106파일 및 베이스 계층 검증을 연결했다. artifact11585741989는10/16 08:32 KST 만료이며 실행자 로컬에 보존했다. 현장 전달·Source 승인·config 생성은 미실행이다. 현재 활성 config는 adc90410을 유지하고 후보 CI 결과를 현장 Test/Build/Scan으로 대체하지 않는다. aeb9995의 이전 증적#176은 보존한다.
 
 | 항목 | 생산/결정 | 소비/실행 | 현재 상태·근거 |
 |---|---|---|---|
