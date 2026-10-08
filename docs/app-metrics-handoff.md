@@ -34,6 +34,8 @@ Wolfi index drift는 이번 실행에서34시간/기존 한도3일 이내였다.
 
 **APP Source/Unit 승인, 공급 tool 승인 연결 및 consumer config 검토는 계속 필요하다.** step 명칭의 approved를 실제 Source 승인으로 쓰지 않는다. `delivery_authorization=false` 유지, materialize 도구 미실행, APPROVED config/승인 참조 미생성. 위 산출물이 승인 입력을 대신하거나 활성 config를 변경하지 않는다. 후보 SHA·입력·tool이 바뀌면 영향 범위를 대조한 뒤 이번 공급의 재사용 가능성을 판단한다.
 
+08:44 consumer 보완: [증적183의 consumer-check](https://github.com/321Team/fds-project-evidence/tree/115cc4387e1c0ed722c6abc2e3d3fe1bf507e591/evidence/P1-CICD-01/app-offline-supply-37859961937/consumer-check)에서 CICD main `04e49811e46ffcd3f35183c2cfb9493901f84dc5`의 실제 `validate_record/stage/verify_staged/validate_source`를 기존 ansible01 정상 계정·새 임시 폴더에서 호출했다. 실제 공급 bytes/Source Dockerfile·입력에 대해 PASS, 잘못된 예상 hash3건 모두 거부, 원 입력 재검증 PASS다.08:45 임시270파일을 hash/정확한 집합 확인 후 정리했다. 이는 별도 consumer 함수의 파일 호환성 검증이며 전체APP config/정상 Runner 경로·권한·SELinux·이미지 load·앱 테스트를 검증한 것이 아니다. 사전 준비용 임시 전송과 현장 Runner 공급 인수를 구분한다.
+
 ### 승인 후 연결 순서·중단 기준
 
 1. APP Lead가 최종40자리 Source, 승인자·참조, 위 Unit/Contract 매핑과 API Unit 처분을 확정한다. 후보 HEAD가 바뀌면 source·시험·공급 입력 차이를 대조하고 영향받은 검증을 다시 연결한다. 이번 문서의 병합이 해당 APP 승인을 대신하지 않는다.
