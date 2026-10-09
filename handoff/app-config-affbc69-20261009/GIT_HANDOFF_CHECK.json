@@ -1,0 +1,120 @@
+{
+  "APP_TEST_BUILD_SCAN": "NOT_EXECUTED",
+  "HANDOFF": "PASS",
+  "SOURCE_APPROVAL": "DECLARED_NOT_INDEPENDENTLY_VERIFIED",
+  "files": {
+    "ci/apko/wolfi-python313-builder.apko.lock.json": {
+      "mode": "100644",
+      "sha256": "58888fd8e05517805bc66661ba2d41055093e006d7d11043e2b4f65efbc0cd55"
+    },
+    "ci/apko/wolfi-python313-builder.apko.yaml": {
+      "mode": "100644",
+      "sha256": "c2c0d81ec4a20fb06417b66c5a1d1a1c04a068f1c0c76d37a35f2c12bab264b2"
+    },
+    "ci/apko/wolfi-python313-runtime.apko.lock.json": {
+      "mode": "100644",
+      "sha256": "bfa66e14097be03d6db42b3ebd479aa68d5db802faa2d00cdc72f7b80e3541b3"
+    },
+    "ci/apko/wolfi-python313-runtime.apko.yaml": {
+      "mode": "100644",
+      "sha256": "dc32de753d5b78501fc4654f79f17a285a0d523aaf6f28e6cfcad9ab2cc8c070"
+    },
+    "fds-engine/Dockerfile": {
+      "mode": "100644",
+      "sha256": "a7528a71c284cea12eeda38e47e5a7c6c7ef3b16aaea97badb0593d54aa2a515"
+    },
+    "fds-engine/requirements-runtime.lock": {
+      "mode": "100644",
+      "sha256": "88e45719485bdeb8c3ea2c70f8f3303127c7136fe465e1330f45775a9e163fc8"
+    },
+    "fds-engine/requirements-test.lock": {
+      "mode": "100644",
+      "sha256": "6568bb9c1cf014c229c66579b89c589eb74fdac4749625861e50f1d56bc3f560"
+    },
+    "fds-engine/requirements-test.txt": {
+      "mode": "100644",
+      "sha256": "2f41764074d9ca19782db366262c28015930c16e2e0b135a8b615f5d15dbae78"
+    },
+    "fds-engine/requirements.txt": {
+      "mode": "100644",
+      "sha256": "3a349859f5027154610e2e4160075dfa00eb0cb28e1c37600a8a2ea9c36b378c"
+    },
+    "transaction-api/Dockerfile": {
+      "mode": "100644",
+      "sha256": "7a9eaca1212dd29cd2359d58ff5ce12bb0823684a75e529d66f796701f4569ef"
+    },
+    "transaction-api/requirements-runtime.lock": {
+      "mode": "100644",
+      "sha256": "1b6c12a68a3bdbe4f2d56f0d9ce31054937d17fb46708566d795041c4a153187"
+    },
+    "transaction-api/requirements-test.lock": {
+      "mode": "100644",
+      "sha256": "9a047257be36385144d698d81889f707a032a11142c63409189cf944e0fbfc88"
+    },
+    "transaction-api/requirements-test.txt": {
+      "mode": "100644",
+      "sha256": "b0a7d247aa0d498de1e71fd299c79d5022874cf1b36347697f52ba88b194f5f2"
+    },
+    "transaction-api/requirements.txt": {
+      "mode": "100644",
+      "sha256": "edcf9db9a6d2278565eb2a12ddd72434336864758de91cbf8e9aa49903b80bdc"
+    }
+  },
+  "schema": "P1-CICD-app-build-scan-3",
+  "source": {
+    "approval_reference": "https://github.com/321Team/fds-msa/pull/27#pullrequestreview-5465278143",
+    "approved_by": "supreme33-kr",
+    "commit": "affbc69beef9967f7977d09a6fec14f7fb6c0e94",
+    "repository": "321Team/fds-msa"
+  },
+  "test_scope": {
+    "fds-engine": {
+      "contract": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "cwd": "fds-engine",
+        "timeout_seconds": 300
+      },
+      "unit": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_rules.py"
+        ],
+        "cwd": "fds-engine",
+        "timeout_seconds": 300
+      }
+    },
+    "transaction-api": {
+      "contract": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py",
+          "tests/test_listener_logging.py"
+        ],
+        "cwd": "transaction-api",
+        "timeout_seconds": 300
+      },
+      "unit": {
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6074515472",
+        "approved_by": "supreme33-kr",
+        "reason": "affbc69b의 transaction-api/tests에는 Contract 4파일과 __init__.py만 있으며, DB·engine 없이 실행하는 별도 Unit 파일이 없다. 네 파일은 모두 Contract로 실행하고 저장·FDS 호출 업무 로직은 배포 회차 #20의 R01/R02/R04/R07·DB 저장으로 검증한다. APP Lead의 이번 Source 기준 확정이며 이전 Source 예외 승계가 아니다.",
+        "status": "NOT_APPLICABLE"
+      }
+    }
+  }
+}
