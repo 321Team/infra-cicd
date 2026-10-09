@@ -20,10 +20,11 @@
   "mapping": "all 8 app test files assigned once across proposed non-null steps; API Unit undecided",
   "pending_api_unit": null,
   "input_sha256": {
-    "SUPPLY_SOURCE.pending.json": "6e138c5731faf6eb17867640541ced8d8a0c01a77a495559fb11d021c4c216d3",
-    "TEST_SCOPE.pending.json": "d17a7173877d105add46558a3baf36c957da12373d750fdad0a1f42ad914f9f8"
+    "SUPPLY_SOURCE.pending.json": "a2415d26210a60888e306c3b6b70b50e4eb434ad8ea8b96bff71224f2a2961e6",
+    "TEST_SCOPE.pending.json": "48d06cb2fdd14b0fd5089ddfc4421df5c83ae779bdd977c7c798a22a7ac5f460"
   },
   "environment": "Windows Python; pwd import-only stub raises on access; existing validators called without main(), extraction, config generation or execution",
   "runtime": "NOT_RUN",
-  "ci": "SEPARATE_GENERAL_SOURCE_REGRESSION_NOT_VALIDATION_OF_PENDING_RECORDS"
+  "ci": "SEPARATE_GENERAL_SOURCE_REGRESSION_NOT_VALIDATION_OF_PENDING_RECORDS",
+  "input_hash_scope": "Committed Git blob bytes after checkout line-ending normalization; validators read equivalent parsed JSON"
 }
