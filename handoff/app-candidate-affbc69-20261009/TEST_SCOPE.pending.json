@@ -1,0 +1,54 @@
+{
+  "schema": "P1-CICD-test-scope-proposal-1",
+  "status": "PENDING_APP_LEAD_CONFIRMATION",
+  "source_commit": "affbc69beef9967f7977d09a6fec14f7fb6c0e94",
+  "approval": {
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "services": {
+    "transaction-api": {
+      "unit": null,
+      "contract": {
+        "cwd": "transaction-api",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py",
+          "tests/test_listener_logging.py"
+        ],
+        "timeout_seconds": 300
+      }
+    },
+    "fds-engine": {
+      "unit": {
+        "cwd": "fds-engine",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_rules.py"
+        ],
+        "timeout_seconds": 300
+      },
+      "contract": {
+        "cwd": "fds-engine",
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "timeout_seconds": 300
+      }
+    }
+  }
+}
