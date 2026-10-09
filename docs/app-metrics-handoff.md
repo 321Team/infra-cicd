@@ -40,6 +40,8 @@ Wolfi index drift는 이번 실행에서34시간/기존 한도3일 이내였다.
 
 ### 승인 후 연결 순서·중단 기준
 
+09:10~12:00 연장 창의 [현장 실행 준비 문서](app-candidate-execution-preparation-20261009.md)에 승인 입력별 미확정 항목, materializer 실패 시 남을 수 있는 공급 폴더, main-only 실행 결속, 180분 Job 제한과170분 창의 차이, Run별 중단·증적 보존 순서를 구체화했다. 실행 config나 새 승인 record는 아니다.
+
 1. APP Lead가 최종40자리 Source, 승인자·참조, 위 Unit/Contract 매핑과 API Unit 처분을 확정한다. 후보 HEAD가 바뀌면 source·시험·공급 입력 차이를 대조하고 영향받은 검증을 다시 연결한다. 이번 문서의 병합이 해당 APP 승인을 대신하지 않는다.
 2. 기존 `tools/delivery/materialize_app_build_scan_v3.py`와 [이전 config 인계 절차](../handoff/app-config-adc90410-20261007/README.md)를 재사용한다. 새 Source에 결속된 공급 생산자·승인 tool SHA·Run/Attempt·artifact ID/만료·ZIP/SUPPLY_MANIFEST hash·이미지 archives·wheels/profiles/requirements/source_inputs를 대조한다. 옛 공급 디렉터리·digest·승인 참조를 새 회차 값으로 복사하지 않는다.
 3. 확정된 APP 인계와 공급 bytes로 만든 config diff를 별도 리뷰한다. Source 승인, 설정 형식 검증, consumer 독립 리뷰/병합은 구분한다. 준비 문서를 서버 활성 입력에 배치하지 않는다.
