@@ -1,0 +1,57 @@
+{
+  "approval": {
+    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6074515472",
+    "approved_by": "supreme33-kr"
+  },
+  "schema": "P1-CICD-test-scope-proposal-1",
+  "services": {
+    "fds-engine": {
+      "contract": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py"
+        ],
+        "cwd": "fds-engine",
+        "timeout_seconds": 300
+      },
+      "unit": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_rules.py"
+        ],
+        "cwd": "fds-engine",
+        "timeout_seconds": 300
+      }
+    },
+    "transaction-api": {
+      "contract": {
+        "argv": [
+          ".venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_dependency_upgrade_contract.py",
+          "tests/test_health.py",
+          "tests/test_metrics.py",
+          "tests/test_listener_logging.py"
+        ],
+        "cwd": "transaction-api",
+        "timeout_seconds": 300
+      },
+      "unit": {
+        "reason": "affbc69b의 transaction-api/tests에는 Contract 4파일과 __init__.py만 있으며, DB·engine 없이 실행하는 별도 Unit 파일이 없다. 네 파일은 모두 Contract로 실행하고 저장·FDS 호출 업무 로직은 배포 회차 #20의 R01/R02/R04/R07·DB 저장으로 검증한다. APP Lead의 이번 Source 기준 확정이며 이전 Source 예외 승계가 아니다.",
+        "status": "NOT_APPLICABLE"
+      }
+    }
+  },
+  "source_commit": "affbc69beef9967f7977d09a6fec14f7fb6c0e94",
+  "status": "APPROVED"
+}

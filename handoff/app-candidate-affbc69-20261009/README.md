@@ -2,6 +2,8 @@
 
 CODEX_ASSISTED · 이권욱 · 2026-10-09. **PREPARATION / PENDING_APP_HANDOFF**.
 
+후속: [APP Lead 입력 확정](https://github.com/321Team/infra-cicd/issues/11#issuecomment-6074515472)을 반영한 [consumer config 검토안](../app-config-affbc69-20261009/README.md)을 추가했다. 이 폴더의 null/PENDING 및 검사 결과는 확정 전 이력으로 보존하며 새 입력으로 소비하지 않는다.
+
 기존 [실행 준비안](../../docs/app-candidate-execution-preparation-20261009.md)과 [시험 매핑](../../docs/app-metrics-handoff.md)을 실제 검토 가능한 입력으로 구체화했다. `config/app-build-scan.json`은 변경하지 않았다. 이 폴더는 workflow에서 참조하지 않으며 여기 있는 파일을 승인된 실행 입력으로 사용하지 않는다.
 
 ## 파일과 확인 범위

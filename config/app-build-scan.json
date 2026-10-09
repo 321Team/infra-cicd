@@ -1,32 +1,32 @@
 {
   "offline_supply": {
-    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.adc90410f99cb.f4d55db6ecbe",
+    "directory": "/home/server01_cicd-runner/FDS_CICD_Runtime/FDS_CICD_ApkoSupply.affbc69beef9.6ab02000437a",
     "images": {
       "builder": {
-        "archive_sha256": "f1c484da1e5de89197a54484bb4a28d3cc0f42f2894993e5b78ecb3587206a25",
+        "archive_sha256": "e30bd4788d4a9b446cd91107dfe8597ee7ded9cbdc05414d6db8dcd42a456266",
         "config_digest": "sha256:76cfebb7af7d22c528da8cda75aa8e3f35cb9bbcdcdfc1f70e71be4aaa350b4a",
         "diff_ids": [
           "sha256:02eae2f3f119386c5c0e4b7ff85ea44ae89bd9ce26776364c35c853335e2896b"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "33945a54149de6bc558421b154cf3e352a6f3e97dc0a224e194b47e57ca06c89",
+        "index_json_sha256": "7984ffbf7d9136b9cc495fff7725e5ebe11518ce18b13e6e45216a84ef3cfc7a",
         "layer_count": 1,
-        "manifest_json_sha256": "bbb77ed2d303097c03abe29cc0c000def496ffb06daa4a7e1c312a4f627512b4",
+        "manifest_json_sha256": "d70d9216f93c6ae53826de8efe3dae00470fcd589360859eb5f23f118825e79d",
         "platform": "linux/amd64",
-        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:adc90410f99cb7af5b40bc8ff92c45272e9f8bee-amd64"
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-builder:affbc69beef9967f7977d09a6fec14f7fb6c0e94-amd64"
       },
       "runtime": {
-        "archive_sha256": "94db72ba9a03fa1ed1e133bbbcd0e07911d568920f5d8af18f57bca00c1f0c15",
+        "archive_sha256": "021cdaae7610376475daec6b7748a32e0e6b361331a961a5e2fd0ec0d92f63aa",
         "config_digest": "sha256:091b5d0ef47fc56e4769531697565bbb2d06cd93725b75469fe0a84bc63d774d",
         "diff_ids": [
           "sha256:9ca35cc8280600086da4e2f423b8f51fb6f6cba568410d968299b236ebfc1a30"
         ],
         "format": "docker-archive",
-        "index_json_sha256": "11b29d6f432406a8b6db281a99da157c36ace7b0cadc9421f0ce781ed2229cfc",
+        "index_json_sha256": "52ca8f2a56544da895b950fed82a54999c77c2fe129e91c24acc9f58f2c73556",
         "layer_count": 1,
-        "manifest_json_sha256": "7c32f5d656222653267be9957cf70d4543819beac03e90cef117821a3b6a9b38",
+        "manifest_json_sha256": "7973a59593e826e482edc00ba8e8b7b4cc5b860deb7336b6392c66632a7e962b",
         "platform": "linux/amd64",
-        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:adc90410f99cb7af5b40bc8ff92c45272e9f8bee-amd64"
+        "repo_tag": "index.docker.io/library/fds-apko-wolfi-runtime:affbc69beef9967f7977d09a6fec14f7fb6c0e94-amd64"
       }
     },
     "profiles": {
@@ -105,7 +105,8 @@
           "-q",
           "tests/test_dependency_upgrade_contract.py",
           "tests/test_health.py",
-          "tests/test_metrics.py"
+          "tests/test_metrics.py",
+          "tests/test_listener_logging.py"
         ],
         "cwd": "transaction-api",
         "timeout_seconds": 300
@@ -113,18 +114,18 @@
       "dockerfile": "transaction-api/Dockerfile",
       "setup": [],
       "unit": {
-        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6036043243",
-        "approved_by": "이재환 (supreme33-kr)",
-        "reason": "APP Owner 이재환이 exact source adc90410f99cb7af5b40bc8ff92c45272e9f8bee와 새 lock 기반 이미지의 기존 test scope를 재확인했다. transaction-api는 자체 판정 로직이 없는 라우팅·영속성 계층이며 판정은 fds-engine tests/test_rules.py가 담당한다. API 동작은 contract 3파일로 검증한다. 새 이미지의 Test/Scan 결과는 새로 판정하며 consumer config 리뷰·병합·실행창·Push/Deploy는 별도다.",
+        "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6074515472",
+        "approved_by": "supreme33-kr",
+        "reason": "affbc69b의 transaction-api/tests에는 Contract 4파일과 __init__.py만 있으며, DB·engine 없이 실행하는 별도 Unit 파일이 없다. 네 파일은 모두 Contract로 실행하고 저장·FDS 호출 업무 로직은 배포 회차 #20의 R01/R02/R04/R07·DB 저장으로 검증한다. APP Lead의 이번 Source 기준 확정이며 이전 Source 예외 승계가 아니다.",
         "status": "NOT_APPLICABLE"
       }
     }
   },
   "source": {
-    "repository": "321Team/fds-msa",
-    "commit": "adc90410f99cb7af5b40bc8ff92c45272e9f8bee",
-    "approved_by": "이재환 (supreme33-kr)",
-    "approval_reference": "https://github.com/321Team/infra-cicd/issues/11#issuecomment-6036043243"
+    "approval_reference": "https://github.com/321Team/fds-msa/pull/27#pullrequestreview-5465278143",
+    "approved_by": "supreme33-kr",
+    "commit": "affbc69beef9967f7977d09a6fec14f7fb6c0e94",
+    "repository": "321Team/fds-msa"
   },
   "status": "APPROVED_FOR_TEST_BUILD_SCAN"
 }
