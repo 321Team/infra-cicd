@@ -1,0 +1,30 @@
+{
+  "schema": "P1-CICD-apko-supply-handoff-1",
+  "artifact": {
+    "id": 11585741989,
+    "name": "apko-offline-supply-affbc69beef9967f7977d09a6fec14f7fb6c0e94-1",
+    "size_bytes": 109786915,
+    "archive_sha256": "2f13771909415439bc5a4c83036284e665b47d023b6447b37e3e18c24ea2e3fd",
+    "manifest_sha256": "6ab02000437a7b5f7d3c99e5202d40b663056a998018a1894360c58de68b73d4",
+    "workflow_run_id": 37859961937,
+    "expires_on": "2026-10-15T23:32:03Z"
+  },
+  "source": {
+    "commit": "affbc69beef9967f7977d09a6fec14f7fb6c0e94",
+    "repository": "321Team/fds-msa",
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "supply_tool": {
+    "commit": "8eac4c982076e3c219840a13686b15c46879981f",
+    "repository": "321Team/fds-msa",
+    "approved_by": null,
+    "approval_reference": null
+  },
+  "policy": {
+    "purpose": "ON_PREM_TEST_BUILD_SCAN_SUPPLY_ONLY",
+    "delivery_authorization": false,
+    "harbor_push": "NOT_EXECUTED",
+    "kubernetes_deploy": "NOT_EXECUTED"
+  }
+}

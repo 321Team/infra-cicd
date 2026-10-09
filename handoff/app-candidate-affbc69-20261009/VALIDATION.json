@@ -1,0 +1,29 @@
+{
+  "status": "STATIC_PENDING_INPUTS_REJECTED",
+  "checked_at_kst": "2026-10-09T11:39:36.920188+09:00",
+  "consumer_sha": "9617817e7c15a033259309922aedb675f3fceb8e",
+  "source_sha": "affbc69beef9967f7977d09a6fec14f7fb6c0e94",
+  "expected_rejections": {
+    "handoff": "HANDOFF_APPROVAL_INVALID",
+    "scope": "TEST_SCOPE_NOT_APPROVED"
+  },
+  "test_file_sha256": {
+    "transaction-api/tests/test_dependency_upgrade_contract.py": "a46f616b4253eea53822fbc06867d341ab044d7bfcd05a6651fd97c04a637004",
+    "transaction-api/tests/test_health.py": "aaa54ef6894a3cca5b3dd2a1fed49f20f120dabbe13c51c567f31367c8c9e5e1",
+    "transaction-api/tests/test_metrics.py": "d84e0acc2f9642cdf472421c21b6f30cec4515123f44b85019d86381e349098e",
+    "transaction-api/tests/test_listener_logging.py": "e40fbae2a211cc6334971a3bf9200b5e0cc38f7bea5a883405f776e0588d54a9",
+    "fds-engine/tests/test_rules.py": "0472694be6479ade8ac849ad0d038b9cd83d7b986f10993d7e3320e268dd7bd9",
+    "fds-engine/tests/test_dependency_upgrade_contract.py": "b4023f72bbc45b0a596b489e3ce9fdf4dc10e570f987e883bfc6771f1dd23aee",
+    "fds-engine/tests/test_health.py": "9de840fc48ba11f2b007ae1310e0dcbcf329344b457ca8c9b22d13eb3b3ae721",
+    "fds-engine/tests/test_metrics.py": "bdac52325a8c9437678c0e045c23de37b1fa74e9fe3465d819c06138448b3458"
+  },
+  "mapping": "all 8 app test files assigned once across proposed non-null steps; API Unit undecided",
+  "pending_api_unit": null,
+  "input_sha256": {
+    "SUPPLY_SOURCE.pending.json": "6e138c5731faf6eb17867640541ced8d8a0c01a77a495559fb11d021c4c216d3",
+    "TEST_SCOPE.pending.json": "d17a7173877d105add46558a3baf36c957da12373d750fdad0a1f42ad914f9f8"
+  },
+  "environment": "Windows Python; pwd import-only stub raises on access; existing validators called without main(), extraction, config generation or execution",
+  "runtime": "NOT_RUN",
+  "ci": "SEPARATE_GENERAL_SOURCE_REGRESSION_NOT_VALIDATION_OF_PENDING_RECORDS"
+}
