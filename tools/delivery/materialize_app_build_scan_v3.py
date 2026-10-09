@@ -279,11 +279,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     os.umask(0o077)
     try:
+        # Check the supplied leaf before resolve() removes its link identity.
+        flow.require(not args.target_parent.is_symlink(), "TARGET_PARENT_INVALID")
         parent = args.target_parent.resolve(strict=True)
         flow.require(parent.is_dir() and not parent.is_symlink(), "TARGET_PARENT_INVALID")
         handoff = validate_handoff(read_json(args.handoff))
         scope = validate_scope(read_json(args.test_scope), handoff["source"]["commit"])
-        supply_dir, manifest = extract_verified(args.artifact_zip.resolve(strict=True), parent, handoff)
+        # extract_verified must see the original path to enforce its no-link gate.
+        supply_dir, manifest = extract_verified(args.artifact_zip, parent, handoff)
         config = make_config(supply_dir, manifest, handoff, scope)
         raw = (json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
         write_private(args.output, raw)

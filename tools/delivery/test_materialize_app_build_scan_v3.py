@@ -1,10 +1,14 @@
 """Tests for fail-closed apko artifact intake and schema-v3 config materialization."""
 import copy
+import contextlib
 import hashlib
+import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 import build_scan as flow
@@ -190,6 +194,70 @@ class MaterializeTests(unittest.TestCase):
         self.assertEqual(self.run_tool(), 1)
         self.assertFalse(self.output.exists())
         self.assertEqual(list(self.parent.iterdir()), [])
+
+    def assert_cli_rejects_link(self, expected_error):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(self.run_tool(), 1)
+        self.assertIn("ERROR_CODE=" + expected_error, stdout.getvalue())
+        self.assertFalse(self.output.exists())
+
+    def test_parent_link_rejected_before_input_reads(self):
+        # Cross-platform boundary test; real filesystem links are covered below.
+        original = Path.is_symlink
+        resolve = Path.resolve
+        target = self.root / "actual-home"
+        target.mkdir()
+        with patch.object(Path, "is_symlink", lambda p: p == self.parent or original(p)), \
+                patch.object(Path, "resolve", lambda p, **kw: target if p == self.parent else resolve(p, **kw)), \
+                patch.object(tool, "read_json") as read:
+            self.assert_cli_rejects_link("TARGET_PARENT_INVALID")
+        read.assert_not_called()
+        self.assertEqual(list(self.parent.iterdir()), [])
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_artifact_link_rejected_before_archive_reads(self):
+        self.build_artifact_and_handoff()
+        self.scope_path.write_text(json.dumps(approved_scope()))
+        link = self.root / "artifact-link.zip"
+        self.artifact = link
+        original = Path.is_symlink
+        with patch.object(Path, "is_symlink", lambda p: p == link or original(p)), \
+                patch.object(tool, "sha256") as digest:
+            self.assert_cli_rejects_link("ARTIFACT_FILE_INVALID")
+        digest.assert_not_called()
+        self.assertEqual(list(self.parent.iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "Real symlink fixtures require Linux CI")
+    def test_real_parent_links_leave_target_untouched(self):
+        self.build_artifact_and_handoff()
+        self.scope_path.write_text(json.dumps(approved_scope()))
+        target = self.parent
+        for dangling in (False, True):
+            with self.subTest(dangling=dangling):
+                link = self.root / ("missing-home-link" if dangling else "home-link")
+                link.symlink_to(self.root / "missing-home" if dangling else target,
+                                target_is_directory=True)
+                self.parent = link
+                self.assert_cli_rejects_link("TARGET_PARENT_INVALID")
+                self.assertEqual(list(target.iterdir()), [])
+                self.assertFalse((self.root / "missing-home").exists())
+
+    @unittest.skipIf(os.name == "nt", "Real symlink fixtures require Linux CI")
+    def test_real_artifact_links_leave_supply_untouched(self):
+        self.build_artifact_and_handoff()
+        self.scope_path.write_text(json.dumps(approved_scope()))
+        target = self.artifact
+        before = target.read_bytes()
+        for dangling in (False, True):
+            with self.subTest(dangling=dangling):
+                link = self.root / ("missing-artifact-link" if dangling else "artifact-link")
+                link.symlink_to(self.root / "missing.zip" if dangling else target)
+                self.artifact = link
+                self.assert_cli_rejects_link("ARTIFACT_FILE_INVALID")
+                self.assertEqual(list(self.parent.iterdir()), [])
+                self.assertEqual(target.read_bytes(), before)
+                self.assertFalse((self.root / "missing.zip").exists())
 
     def test_exact_artifact_and_approved_scope_materialize_valid_v3_config(self):
         handoff = self.build_artifact_and_handoff()
