@@ -115,6 +115,27 @@ class NativeAccessTests(unittest.TestCase):
         with self.assertRaises(n.ProbeError):
             obj.arguments_checked(n.TOKEN_ARGS, body, 0, False)
 
+    def test_overlong_actual_jwt_is_rejected_even_when_request_echo_is_900(self):
+        for lifetime in (901, 3600):
+            claims, _, _, response = native_fixture()
+            claims['exp'] = claims['iat'] + lifetime
+            response['status']['token'] = jwt(claims)
+            response['status']['expirationTimestamp'] = dt.datetime.fromtimestamp(
+                claims['exp'], dt.timezone.utc).isoformat()
+            with self.subTest(lifetime=lifetime), self.assertRaisesRegex(
+                    n.c.CredentialError, '^JWT_LIFETIME_INVALID$'):
+                access(response).issue(SA_UID, lambda: 600)
+
+    def test_shorter_actual_token_is_not_extended_to_request_lifetime(self):
+        claims, _, _, response = native_fixture()
+        claims['exp'] = claims['iat'] + 640
+        response['status']['token'] = jwt(claims)
+        stamp = dt.datetime.fromtimestamp(claims['exp'] - 1, dt.timezone.utc).isoformat()
+        response['status']['expirationTimestamp'] = stamp
+        result = access(response).issue(SA_UID, lambda: 600)
+        self.assertEqual(result['status_expires_at'], stamp)
+        self.assertEqual(n.c.claims_checked(result['token'], SA_UID)['exp'], claims['exp'])
+
     def test_old_backend_does_not_gain_token_request_permission(self):
         obj = object.__new__(n.a.CP1Access)
         with self.assertRaises(n.a.AccessError):

@@ -61,7 +61,7 @@ class WorkflowTests(unittest.TestCase):
     def candidate(self, uid):
         self.assertEqual(uid, SA_UID)
         return dict(stage='candidate', token=self.fixture.token, sa_uid=uid,
-                    status_expires_at=(NOW + dt.timedelta(seconds=900)).isoformat())
+                    status_expires_at=self.fixture.inputs['token_request_expires_at'])
 
     def review(self, token, audience, timeout):
         return self.fixture.reviewer.review(token, audience, timeout)

@@ -37,7 +37,7 @@ TokenReview spec에 candidate token 자체가 포함될 수 있으므로 요청�
    kubernetes.io namespace/SA명/**새로 확인한 SA UID**를 검사한다.
    다른 알고리즘은 현재 구현 범위 밖이며 필요 시 근거와 독립 코드 검토로 확장한다.
 2. exp/iat/nbf는 실제 JWT의 유효한 정수 시각이어야 한다. 미래 iat/nbf와 만료 token,
-   exp-iat>3600초는 거부한다. TTL3600 요청값으로 실제 exp를 합성하지 않는다.
+   exp-iat>900초는 거부한다. [요청 TTL900](token-policy-900-20261010.md)으로 실제 exp를 합성하지 않는다.
 3. reviewer를 새로 호출한다. 인증 결과 true, exact token/spec audience,
    status의 명시적인 동일 audience, SA username/UID와 정상 SA groups를 대조한다.
    empty status.audiences의 API 기본 audience 의미가 있더라도 이 실행 계약에서는
@@ -50,7 +50,7 @@ TokenReview spec에 candidate token 자체가 포함될 수 있으므로 요청�
    역행/clock 실패는 로컬 token 참조를 버리고 중단한다. 현재 시각 신뢰/chrony도 실제 확인 대상이다.
 6. 만료나 close() 후 remaining()=0이고 token()은 거부한다. public closed=False로 바꾸어도
    삭제된 참조가 있으면 remaining()=0, token/context 재진입은 거부한다. 자동 refresh·재발급은 없다.
-7. exp-iat≤3600은 직접 TokenRequest로 받은 단기 주입 token의 제한이며 kubelet projected token의
+7. exp-iat≤900은 직접 TokenRequest로 받은 단기 주입 token의 제한이며 kubelet projected token의
    연장된 expiry를 수용하는 계약이 아니다. CREDENTIAL_NOT_YET_VALID 시 CP1/Runner의 UTC·chrony
    offset을 먼저 확인하고 근거 없이 clock skew 허용치를 늘리지 않는다.
 

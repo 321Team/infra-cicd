@@ -59,6 +59,24 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(self.check()['execution']['run_id'], 1000)
         self.assertEqual(self.check()['claim'], 'NOT_ACQUIRED')
 
+    def test_old_token_policy_plan_cannot_be_reused_or_reapproved(self):
+        for ttl in (901, 3600):
+            self.plan['kubernetes']['token_ttl_seconds'] = ttl
+            with self.subTest(ttl=ttl), self.assertRaisesRegex(
+                    b.Invalid, 'KUBERNETES_SCOPE_INVALID'):
+                self.check()
+            self.reapprove_fixture()
+            with self.subTest(ttl=ttl), self.assertRaisesRegex(
+                    b.Invalid, 'KUBERNETES_SCOPE_INVALID'):
+                self.check()
+
+    def test_token_policy_correction_does_not_rebind_old_approval_bytes(self):
+        self.plan['kubernetes']['token_ttl_seconds'] = 3600
+        self.reapprove_fixture()
+        self.plan['kubernetes']['token_ttl_seconds'] = 900
+        with self.assertRaisesRegex(b.Invalid, 'APPROVAL_PLAN_MISMATCH'):
+            self.check()
+
     def test_retry_attempt_and_bool_attempt_rejected(self):
         for attempt in (2, True, 0, '1'):
             with self.subTest(attempt=attempt), self.assertRaises(b.Invalid):

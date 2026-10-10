@@ -29,7 +29,7 @@ CP1_PERMISSIONS = (
      'subresource': 'token', 'name': 'cicd-runner-sa', 'namespace': 'ci-cd'},
     {'verb': 'create', 'group': 'authentication.k8s.io', 'version': 'v1', 'resource': 'tokenreviews'},
 )
-TTL = 900
+TTL = b.gate.TOKEN_REQUEST_SECONDS
 MAX_FRAME = 1024 * 1024
 
 

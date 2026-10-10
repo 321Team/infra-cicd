@@ -58,7 +58,7 @@ class Socket:
 class TransportTests(unittest.TestCase):
     def setUp(self):
         self.targets, self.objects = fixtures()
-        self.mono, self.approval, self.credential = 0, 3600, 3600
+        self.mono, self.approval, self.credential = 0, 3600, 900
         self.sock = Socket(wire(self.objects['transaction-api']))
         self.context = Mock()
         self.context.wrap_socket.return_value = self.sock
@@ -239,7 +239,7 @@ class TransportTests(unittest.TestCase):
         receipts = []
         adapter = core.Adapter(self.client(), lambda _: True, receipts.append,
                                remaining_seconds=lambda: 3600,
-                               credential_remaining_seconds=lambda: 3600,
+                               credential_remaining_seconds=lambda: 900,
                                timeout=3, interval=1, clock=lambda: self.mono)
         result = adapter.run(self.targets, rollback_on_failure=True)
         self.assertEqual(result['error_code'], 'PATCH_OUTCOME_UNKNOWN')

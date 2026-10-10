@@ -24,7 +24,7 @@ from test_deploy_plan import plan_inputs
 def receipt_for(claim):
     result = copy.deepcopy(core.Adapter(
         None, lambda _: True, lambda _: None, remaining_seconds=lambda: 3600,
-        credential_remaining_seconds=lambda: 3600).receipt)
+        credential_remaining_seconds=lambda: 900).receipt)
     result.update({
         'schema': 'P1-CICD-deploy-execution-2', 'execution': claim.record['execution'],
         'plan_sha256': claim.record['plan_sha256'],
@@ -242,7 +242,7 @@ class ConnectionCheckpointTests(unittest.TestCase):
         self.checkpoint = j.BoundCheckpoint(lambda: self.execution.claim)
         self.execution = e.Execution(
             self.client, self.verifier, self.checkpoint, self.root,
-            credential_remaining_seconds=lambda: 3600, now=lambda: NOW,
+            credential_remaining_seconds=lambda: 900, now=lambda: NOW,
             clock=lambda: 0, timeout=3, interval=1)
 
     def tearDown(self):

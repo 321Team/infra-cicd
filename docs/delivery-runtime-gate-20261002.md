@@ -47,7 +47,7 @@ pre_push 조건에 추가하여:
 - 배포 직전 실제 이전 digest를 rollback input으로 요구하며 **새 manifest digest와 동일한 값은 차단**
 - API `https://10.1.93.109:6443`, SA `ci-cd/cicd-runner-sa`
 - RBAC scope/Worker Pull/deployment lock PASS
-- P1-SEC-01 승인 정책의 `--duration=1h`를 그대로 소비해 Token TTL=3600초를 요구한다. 정책 reference는 `infra-kubernetes@7329bf2.../scripts/create-secrets-safe.sh`의 **고정 SHA blob URL만** 허용한다. 3600초는 이 PR의 신규 결정이 아니라 P1-SEC 인계값이다.
+- 2026-10-10 정합화: TokenRequest 요청은 900초, 실제 Token 수명 상한도 900초다. `token_policy_reference`는 [채택된 R1 회신](https://github.com/321Team/fds-project-baseline/pull/160#issuecomment-6084886811)과 exact match해야 한다. 기존 3600초 및 과거 발급 스크립트 reference는 현행 계약으로 수용하지 않는다. [현재 정책과 기존 입력 처리](token-policy-900-20261010.md)를 따른다.
 - GitHub approval/handoff reference는 `https://github.com/321Team/...` 범위만 허용한다.
 - **Token audience 한계:** 승인된 `create-secrets-safe.sh`는 `--audience`를 호출 인자로 요구하지만 특정 기대 audience 값을 정본으로 고정하지 않는다. 따라서 현재 Gate는 non-empty 실제 audience의 기록 여부만 검사하며 반환값에 `PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE`를 명시한다. 이 상태를 audience 검증 PASS로 해석하지 않으며, 운영 adapter가 Token을 실제 사용하기 전에는 승인된 기대 audience를 별도 고정해 비교하거나 동등한 Runtime 검증 근거를 추가해야 한다.
 - 배포 승인 기록을 동일 Workflow SHA/Run/Attempt에 결합
@@ -80,7 +80,7 @@ pre_push 조건에 추가하여:
 
 1. rollback `previous_manifest_digest`가 신규 manifest와 같으면 fail-closed 차단하고 누락/형식 오류/동일값 negative test를 추가한다.
 2. Token audience는 승인 정본에 기대값이 고정되지 않았음을 명시하고, 현재 검증 수준을 machine-visible한 `PRESENCE_ONLY_NO_PINNED_APPROVED_VALUE`로 반환한다. 이 한계가 해소되기 전 audience 검증 PASS를 주장하지 않는다.
-3. GitHub reference를 `321Team` org로 제한하고, `token_policy_reference`는 승인된 infra-kubernetes 고정 SHA blob URL과 exact match해야 한다.
+3. 당시 GitHub reference를 `321Team` org로 제한하고, `token_policy_reference`는 infra-kubernetes 고정 SHA blob URL과 exact match하도록 보강했다. 이 reference의 현행값은 위 2026-10-10 R1 정합화로 대체되며, 당시 기록은 과거 변경 설명이다.
 
 추가 방어로 bool이 integer 필드를 통과하지 못하게 하고, 두 서비스 manifest digest 재사용을 차단하며 workflow ref/API/SA/approval drift 테스트를 추가한다.
 

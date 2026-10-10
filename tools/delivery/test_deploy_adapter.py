@@ -80,7 +80,7 @@ class AdapterTests(unittest.TestCase):
     def adapter(self, **kwargs):
         return d.Adapter(self.client, kwargs.pop('authorize', self.auth),
                          kwargs.pop('checkpoint', self.receipts.append), timeout=3,
-                         credential_remaining_seconds=kwargs.pop('credential_remaining_seconds', lambda: 3600),
+                         credential_remaining_seconds=kwargs.pop('credential_remaining_seconds', lambda: 900),
                          remaining_seconds=kwargs.pop('remaining_seconds', lambda: 3600),
                          interval=1, clock=lambda: self.now, sleep=self.sleep, **kwargs)
 
@@ -396,7 +396,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_token_expiry_during_polling_stops_without_rollback(self):
         def lifetime():
-            return 0 if self.client.patches else 3600
+            return 0 if self.client.patches else 900
         result = self.run_adapter(True, credential_remaining_seconds=lifetime)
         self.assertEqual(result['error_code'], 'AUTHORIZATION_DENIED')
         self.assertEqual(result['ROLLBACK'], 'MANUAL_RECONCILIATION_REQUIRED')
@@ -409,7 +409,7 @@ class AdapterTests(unittest.TestCase):
             self.receipts.append(receipt)
             expired = any(x['deploy'] == 'PATCH_PENDING' for x in receipt['images'].values())
         result = self.run_adapter(checkpoint=checkpoint,
-                                  credential_remaining_seconds=lambda: 0 if expired else 3600)
+                                  credential_remaining_seconds=lambda: 0 if expired else 900)
         self.assertEqual(result['images'][d.SERVICES[0]]['deploy'], 'NOT_SENT_AUTH_DENIED')
         self.assertEqual(self.client.patches, [])
 
@@ -430,14 +430,14 @@ class AdapterTests(unittest.TestCase):
 
     def test_token_does_not_replace_short_approval(self):
         result = self.run_adapter(remaining_seconds=lambda: 35,
-                                  credential_remaining_seconds=lambda: 3600)
+                                  credential_remaining_seconds=lambda: 900)
         self.assertEqual(result['error_code'], 'AUTH_WINDOW_TOO_SHORT')
         self.assertEqual(self.client.patches, [])
 
     def test_rollback_requires_live_credential(self):
         self.fail_second()
         result = self.run_adapter(True, credential_remaining_seconds=lambda:
-                                  0 if len(self.client.patches) >= 2 else 3600)
+                                  0 if len(self.client.patches) >= 2 else 900)
         self.assertEqual(result['rollback_error_code'], 'AUTHORIZATION_DENIED')
         self.assertEqual(len(self.client.patches), 2)
 

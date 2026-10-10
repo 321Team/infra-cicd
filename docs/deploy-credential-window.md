@@ -5,7 +5,7 @@ AI usage: CODEX_ASSISTED. 실제 Runtime 연결·토큰 발급·배포 없음.
 
 Adapter의 remaining_seconds는 검증된 Deploy 승인 만료에서 계산하고,
 신규 필수 credential_remaining_seconds는 검증된 실제 자격증명 만료에서 계산한다.
-요청한 TTL3600이나 발급 요청 시각만으로 실제 남은 수명을 가정하지 않는다.
+[현행 정책의 요청 TTL900](token-policy-900-20261010.md)이나 발급 요청 시각만으로 실제 남은 수명을 가정하지 않는다.
 JWT payload decode만으로 검증된 발급자/서명/SA/audience를 증명하지 않는다.
 metadata 검증과 실제 API 인증은 향후 transport/Runtime 호출자의 책임이다.
 

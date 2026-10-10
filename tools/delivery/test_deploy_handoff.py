@@ -39,9 +39,9 @@ class Endpoint:
 
 class RelayTests(unittest.TestCase):
     def setUp(self):
-        _, token, response = fixture()
+        claims, token, response = fixture()
         self.token = token
-        self.expiry = (NOW + dt.timedelta(seconds=900)).isoformat()
+        self.expiry = dt.datetime.fromtimestamp(claims['exp'] - 1, dt.timezone.utc).isoformat()
         self.binding = scope()
         credential = n.c.Credential(token, SA_UID, Reviewer(response), now=lambda: NOW)
         credential.close()
@@ -93,6 +93,12 @@ class RelayTests(unittest.TestCase):
         with self.assertRaises(b.Invalid):
             h.relay(self.cp1, self.runner, self.binding, self.window)
         self.assertEqual(self.cp1.sent, [{'action': 'issue-once'}])
+
+    def test_native_status_cannot_extend_the_actual_900_second_token(self):
+        self.cp1.messages[0]['status_expires_at'] = (NOW + dt.timedelta(seconds=900)).isoformat()
+        with self.assertRaisesRegex(b.Invalid, '^HANDOFF_EXPIRY_INVALID$'):
+            h.relay(self.cp1, self.runner, self.binding, self.window)
+        self.assertEqual(self.runner.sent, [])
 
     def test_denied_cp1_response_is_not_forwarded(self):
         self.cp1.messages[1]['response']['status']['authenticated'] = False

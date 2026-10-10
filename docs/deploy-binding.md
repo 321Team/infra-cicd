@@ -32,7 +32,7 @@ raw 문서의 필드:
   기존 Push 산출물과 맞춰 run_id는 숫자로 된 문자열, attempt는 양의 정수다.
 - kubernetes: API/SA/audience/TTL/policy_reference.
   API=https://10.1.93.109:6443, SA=ci-cd/cicd-runner-sa,
-  audience=https://kubernetes.default.svc.cluster.local, 기존 TTL3600 및 pinned policy.
+  audience=https://kubernetes.default.svc.cluster.local, 요청 TTL900 및 [현행 R1 policy reference](token-policy-900-20261010.md) exact match.
 - targets: 정확히 transaction-api/fds-engine. 각 namespace/deployment/container/uid/previous_image.
   previous_image는 승인된 registry의 전체 digest 참조이며 임의 정규화하지 않는다.
 - approval: approved_by/reference/execution/push_receipt_sha256/targets/images/

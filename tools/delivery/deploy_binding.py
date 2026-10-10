@@ -115,7 +115,7 @@ def payload_checked(record, push_raw, actual):
          kubernetes['service_account'] == gate.SERVICE_ACCOUNT and
          kubernetes['token_audience'] == AUDIENCE and
          type(kubernetes['token_ttl_seconds']) is int and
-         kubernetes['token_ttl_seconds'] == 3600 and
+         kubernetes['token_ttl_seconds'] == gate.TOKEN_REQUEST_SECONDS and
          kubernetes['token_policy_reference'] == gate.TOKEN_POLICY_REFERENCE,
          'KUBERNETES_SCOPE_INVALID')
     need(set(record['targets']) == set(gate.SERVICES) and
