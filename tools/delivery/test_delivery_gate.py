@@ -94,9 +94,9 @@ def fixture():
             'rbac_scope': 'PASS',
             'worker_pull': 'PASS',
             'deployment_lock': 'PASS',
-            'token_ttl_seconds': 3600,
+            'token_ttl_seconds': gate.TOKEN_REQUEST_SECONDS,
             'token_audience': 'https://kubernetes.default.svc',
-            'token_policy_reference': 'https://github.com/321Team/infra-kubernetes/blob/7329bf2eb988b552483af48ff660d6a3f1f1d4f5/scripts/create-secrets-safe.sh',
+            'token_policy_reference': gate.TOKEN_POLICY_REFERENCE,
         },
         'deployment_approval': {
             'approved_by': 'fixture reviewer',
@@ -109,6 +109,22 @@ def fixture():
 
 
 class DeliveryGateTests(unittest.TestCase):
+    def test_requested_token_lifetime_is_exactly_the_adopted_900_second_policy(self):
+        self.assertEqual(gate.TOKEN_REQUEST_SECONDS, 900)
+        self.assertEqual(gate.TOKEN_MAX_SECONDS, 900)
+        self.assertEqual(gate.TOKEN_POLICY_REFERENCE,
+                         'https://github.com/321Team/fds-project-baseline/pull/160'
+                         '#issuecomment-6084886811')
+        self.assertEqual(gate.evaluate(fixture(), 'pre_deploy')['decision'], 'CONDITIONS_MATCH')
+        for ttl in (899, 901, 3600, True, '900'):
+            record = fixture()
+            record['kubernetes']['token_ttl_seconds'] = ttl
+            with self.subTest(ttl=ttl):
+                result = gate.evaluate(record, 'pre_deploy')
+                self.assertEqual(result['decision'], 'BLOCK')
+                self.assertIn('TOKEN_TTL_POLICY_MISMATCH', result['reasons'])
+                self.assertIsNone(result['plan'])
+
     def test_pre_push_matches_only_after_build_scan_and_harbor_handoff(self):
         result = gate.evaluate(fixture(), 'pre_push')
         self.assertEqual(result['decision'], 'CONDITIONS_MATCH')

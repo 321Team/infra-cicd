@@ -129,7 +129,9 @@ class BindingTests(unittest.TestCase):
 
     def test_audience_endpoint_and_ttl_must_match(self):
         for key, value in [('token_audience', 'other'), ('api_server', 'https://other'),
-                           ('token_ttl_seconds', 7200), ('service_account', 'default')]:
+                           ('token_ttl_seconds', 901), ('token_ttl_seconds', 3600),
+                           ('token_ttl_seconds', 7200), ('token_ttl_seconds', True),
+                           ('service_account', 'default')]:
             old = self.record['kubernetes'][key]
             self.record['kubernetes'][key] = value
             with self.assertRaisesRegex(b.Invalid, 'KUBERNETES_SCOPE_INVALID'):

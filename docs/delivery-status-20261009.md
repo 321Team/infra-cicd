@@ -21,7 +21,7 @@ CODEX_ASSISTED · 이권욱. 조회한 main `de59c91a5c45966b50e173d370f13828e0a
 |---|---|---|---|
 | 사용할 CI Robot의 ID/세대·권한·만료·disabled·사용 가능성 | HBR 이하영 | CICD 이권욱 | [기존 인계 요청](https://github.com/321Team/fds-project-baseline/issues/13#issuecomment-6041140607). #165 목록/만료 화면만으로 현재 credential 사용과 권한 확인을 대신하지 않음 |
 | 안전한 credential 전달·회수·실패 시 인수 | HBR/SEC | CICD | 비밀값·token 해시를 GitHub에 넣지 않음. 재발급 HOLD는 기존 계정 불가 판정과 다름 |
-| TokenRequest 발급 주체·audience·최대 만료·갱신 정책 | SEC 이하영 | CICD 이권욱 | [소유/소비 경계](https://github.com/321Team/fds-project-baseline/issues/19#issuecomment-6035815364). 코드 기본1h 또는 broker TTL900을 일반 정책 승인값으로 확정하지 않음 |
+| TokenRequest 발급 주체·audience·최대 만료·갱신 정책 | SEC 이하영 | CICD 이권욱 | [소유/소비 경계](https://github.com/321Team/fds-project-baseline/issues/19#issuecomment-6035815364). 2026-10-10 [R1](https://github.com/321Team/fds-project-baseline/pull/160#issuecomment-6084886811)에 따라 요청·최대 수명 900초로 정합화. [현행 구현 계약](token-policy-900-20261010.md); 이 코드 변경의 Runtime은 미실행 |
 | 최종 Source/Workflow·Run/Attempt·두 이미지·현장 CA/상태 | 각 원본 생산자 / CICD | CICD | 기존 인계 index와 보존 bytes 재사용. 새 실행 시 현재 상태와 결속 |
 | 새 Push 및 Deploy 입력/승인·유효기간·복구 범위 | 기존 Lead/검토 책임 | CICD | 과거 승인5997038348은 다른 회차이며 만료됨. 초안의 null/PENDING을 임의 채우지 않음 |
 | 비중첩 작업창 | 사용자·관련 운영자 | CICD | 사용자가 10/9 00:00~09:00 단독 창을 확인함([기록](https://github.com/321Team/fds-project-baseline/issues/19#issuecomment-6062332401)). Harbor 타 세션과 공유 자원 사용은 실제 실행 직전 별도 대조. 개별 GO를 대신하지 않음 |

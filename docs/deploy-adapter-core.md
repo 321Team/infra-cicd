@@ -52,7 +52,7 @@ ROLLBACK=READY_HEALTH_NOT_VERIFIED도 앱·DB 호환성이나 E2E 복구 성공�
    요청 제한시간, 응답 크기/JSON 검증, no PATCH retry, 승인 만료시간 내 요청을 적용한다.
    Rejected는 mutation이 없다는 확정 응답에만 매핑한다. timeout/5xx/통신 실패는
    일반 예외로 처리해 UNKNOWN으로 남겨야 한다.
-3. **실제 인증**: ci-cd/cicd-runner-sa, 기존 TTL 정책3600,
+3. **실제 인증**: ci-cd/cicd-runner-sa, [현행 정책](token-policy-900-20261010.md)의 요청900초·실제 수명 상한900초,
    기대 audience https://kubernetes.default.svc.cluster.local,
    토큰 발급/유효기간/인계 및 API 인증 확인. JWT payload decode를 서명 검증으로
    표시하지 않는다. 현재 cp1 impersonation 결과는 Runner token auth가 아니다.

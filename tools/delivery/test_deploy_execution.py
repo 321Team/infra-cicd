@@ -28,7 +28,7 @@ class ExecutionTests(unittest.TestCase):
         self.verifier = approval.Verifier(self.source)
         _, objects = fixtures()
         self.client = Fake(objects)
-        self.wall, self.mono, self.credential = NOW, 0, 3600
+        self.wall, self.mono, self.credential = NOW, 0, 900
         self.receipts = []
 
     def tearDown(self):
@@ -80,7 +80,7 @@ class ExecutionTests(unittest.TestCase):
         result = self.run_execution()
         self.assertEqual(result['error_code'], 'CREDENTIAL_WINDOW_TOO_SHORT')
         self.assertEqual(list(self.root.iterdir()), [])
-        self.credential = 3600
+        self.credential = 900
         self.change_approval(expires_at=(NOW + dt.timedelta(seconds=35)).isoformat())
         result = self.run_execution()
         self.assertEqual(result['error_code'], 'AUTH_WINDOW_TOO_SHORT')

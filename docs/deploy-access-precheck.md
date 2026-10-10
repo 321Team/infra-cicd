@@ -218,7 +218,7 @@ Runner와 CP1은 각자 해당 호스트의 명령만 실행한다. stdout의 sa
 
 PR58 리뷰의 clock skew 기준은 그대로다. CREDENTIAL_NOT_YET_VALID가 나오면 CP1/Runner의 UTC와
 기존 chronyc tracking/sources 관측으로 iat/nbf와 offset을 확인한다. 증거 없이 허용 오차를 늘리지 않는다.
-exp-iat≤3600은 검토된 직접 TokenRequest 단기 주입 경로의 제한이다.
+exp-iat≤900은 [현행 R1 정책](token-policy-900-20261010.md)에 따른 직접 TokenRequest 단기 주입 경로의 제한이다.
 kubelet projected token의 연장된 exp나 요청 TTL만으로 계산한 expiry를 대신 쓰지 않는다.
 backend는 native SA 발급 경로/actual exp/Runner 인증을 스스로 증명하지 않는다.
 

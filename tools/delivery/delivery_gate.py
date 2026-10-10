@@ -17,9 +17,11 @@ REGISTRY_PREFIX = '10.1.93.54/fds/'
 KUBERNETES_API = 'https://10.1.93.109:6443'
 NAMESPACE = 'fds-app'
 SERVICE_ACCOUNT = 'ci-cd/cicd-runner-sa'
+TOKEN_REQUEST_SECONDS = 900
+TOKEN_MAX_SECONDS = 900
 TOKEN_POLICY_REFERENCE = (
-    'https://github.com/321Team/infra-kubernetes/blob/'
-    '7329bf2eb988b552483af48ff660d6a3f1f1d4f5/scripts/create-secrets-safe.sh')
+    'https://github.com/321Team/fds-project-baseline/pull/160'
+    '#issuecomment-6084886811')
 
 SHA = re.compile(r'[0-9a-f]{40}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
@@ -168,7 +170,8 @@ def evaluate(record, phase):
         need(kubernetes.get('worker_pull') == 'PASS', 'WORKER_PULL_NOT_PASS')
         need(kubernetes.get('deployment_lock') == 'PASS', 'DEPLOYMENT_LOCK_NOT_PASS')
         ttl = kubernetes.get('token_ttl_seconds')
-        need(type(ttl) is int and ttl == 3600, 'TOKEN_TTL_POLICY_MISMATCH')
+        need(type(ttl) is int and ttl == TOKEN_REQUEST_SECONDS,
+             'TOKEN_TTL_POLICY_MISMATCH')
         need(_text(kubernetes.get('token_audience'), 500), 'TOKEN_AUDIENCE_REQUIRED')
         need(kubernetes.get('token_policy_reference') == TOKEN_POLICY_REFERENCE,
              'TOKEN_POLICY_REFERENCE_INVALID')

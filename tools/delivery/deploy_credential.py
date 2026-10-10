@@ -57,7 +57,8 @@ def claims_checked(token, expected_uid):
             need(type(claims.get(field)) is int and 0 < claims[field] <= 253402300799,
                  'JWT_TIME_INVALID')
         need(claims['nbf'] <= claims['iat'] < claims['exp']
-             and claims['exp'] - claims['iat'] <= 3600, 'JWT_LIFETIME_INVALID')
+             and claims['exp'] - claims['iat'] <= b.gate.TOKEN_MAX_SECONDS,
+             'JWT_LIFETIME_INVALID')
         kubernetes = claims['kubernetes.io']
         account = kubernetes['serviceaccount']
         need(kubernetes['namespace'] == 'ci-cd' and account['name'] == 'cicd-runner-sa'

@@ -23,7 +23,7 @@ def fixture():
     issued = int(NOW.timestamp()) - 10
     claims = {
         'iss': b.AUDIENCE, 'sub': c.SUBJECT, 'aud': [b.AUDIENCE],
-        'iat': issued, 'nbf': issued, 'exp': issued + 3600,
+        'iat': issued, 'nbf': issued, 'exp': issued + b.gate.TOKEN_MAX_SECONDS,
         'kubernetes.io': {'namespace': 'ci-cd',
                           'serviceaccount': {'name': 'cicd-runner-sa', 'uid': SA_UID}},
     }
@@ -69,7 +69,7 @@ class CredentialTests(unittest.TestCase):
     def test_fresh_token_review_binds_exact_credential_subject_uid_and_audience(self):
         credential = self.credential()
         self.assertEqual(credential.token(), self.raw)
-        self.assertEqual(credential.remaining(), 3590)
+        self.assertEqual(credential.remaining(), 890)
         self.assertEqual(self.reviewer.calls, [(self.raw, b.AUDIENCE, 10)])
         observed = credential.observation()
         self.assertEqual(observed['service_account_uid'], SA_UID)
@@ -165,9 +165,11 @@ class CredentialTests(unittest.TestCase):
         self.assertEqual(self.reviewer.calls, [])
 
     def test_requested_ttl_does_not_replace_expiry_and_overlong_actual_token_is_rejected(self):
-        self.change_claims(exp=self.claims['iat'] + 3601)
-        with self.assertRaisesRegex(c.CredentialError, '^JWT_LIFETIME_INVALID$'):
-            self.credential()
+        for lifetime in (901, 3600):
+            self.change_claims(exp=self.claims['iat'] + lifetime)
+            with self.subTest(lifetime=lifetime), self.assertRaisesRegex(
+                    c.CredentialError, '^JWT_LIFETIME_INVALID$'):
+                self.credential()
         self.change_claims(exp=int(NOW.timestamp()) - 1)
         with self.assertRaisesRegex(c.CredentialError, '^CREDENTIAL_EXPIRED$'):
             self.credential()
@@ -175,10 +177,17 @@ class CredentialTests(unittest.TestCase):
 
     def test_not_yet_valid_claims_block_without_remote_review(self):
         future = int(NOW.timestamp()) + 1
-        self.change_claims(iat=future, nbf=future, exp=future + 3600)
+        self.change_claims(iat=future, nbf=future, exp=future + b.gate.TOKEN_MAX_SECONDS)
         with self.assertRaisesRegex(c.CredentialError, '^CREDENTIAL_NOT_YET_VALID$'):
             self.credential()
         self.assertEqual(self.reviewer.calls, [])
+
+    def test_shorter_actual_lifetime_is_used_without_padding_to_requested_ttl(self):
+        self.change_claims(exp=self.claims['iat'] + 640)
+        credential = self.credential()
+        self.assertEqual(credential.remaining(), 630)
+        self.mono = 1
+        self.assertEqual(credential.remaining(), 629)
 
     def test_unsigned_malformed_noncanonical_and_duplicate_jwt_are_rejected(self):
         for token in ('a.b', 'a.b.c', self.raw + '\n', None,
@@ -195,7 +204,7 @@ class CredentialTests(unittest.TestCase):
     def test_time_spent_in_review_is_not_added_back_to_lifetime(self):
         self.reviewer.hook = lambda: setattr(self, 'mono', 9)
         credential = self.credential()
-        self.assertEqual(credential.remaining(), 3581)
+        self.assertEqual(credential.remaining(), 881)
 
     def test_review_overruns_budget_or_expires_before_completion(self):
         self.reviewer.hook = lambda: setattr(self, 'mono', 11)
@@ -210,8 +219,8 @@ class CredentialTests(unittest.TestCase):
         credential = self.credential()
         self.mono = 20
         self.wall = NOW - dt.timedelta(hours=2)
-        self.assertEqual(credential.remaining(), 3570)
-        self.mono = 3590
+        self.assertEqual(credential.remaining(), 870)
+        self.mono = 890
         self.assertEqual(credential.remaining(), 0)
         with self.assertRaisesRegex(c.CredentialError, '^CREDENTIAL_UNAVAILABLE$'):
             credential.token()
@@ -265,6 +274,27 @@ class CredentialTests(unittest.TestCase):
 
 
 class AdapterCredentialTests(unittest.TestCase):
+    def test_default_deploy_budget_requires_630_actual_seconds_not_requested_ttl(self):
+        for lifetime, remaining in ((900, 890), (640, 630), (639, 629)):
+            claims, _, response = fixture()
+            claims['exp'] = claims['iat'] + lifetime
+            raw = jwt(claims)
+            response['spec']['token'] = raw
+            credential = c.Credential(raw, SA_UID, Reviewer(response),
+                                      now=lambda: NOW, clock=lambda: 0)
+            adapter = core.Adapter(None, lambda _: True, lambda _: None,
+                                   remaining_seconds=lambda: 3600,
+                                   credential_remaining_seconds=credential.remaining)
+            with self.subTest(lifetime=lifetime):
+                self.assertEqual(credential.remaining(), remaining)
+                self.assertEqual(adapter.required_window, 630)
+                if remaining >= 630:
+                    adapter.check_start_window()
+                else:
+                    with self.assertRaisesRegex(core.Stop, '^CREDENTIAL_WINDOW_TOO_SHORT$'):
+                        adapter.check_start_window()
+                credential.close()
+
     def setUp(self):
         _, token, result = fixture()
         self.mono = 0
@@ -290,7 +320,7 @@ class AdapterCredentialTests(unittest.TestCase):
         self.assertEqual(result['ROLLBACK'], 'MANUAL_RECONCILIATION_REQUIRED')
 
     def test_actual_expiry_after_first_patch_stops_second_patch_and_rollback(self):
-        self.client.patch_hook = lambda *_: setattr(self, 'mono', 3590)
+        self.client.patch_hook = lambda *_: setattr(self, 'mono', 890)
         result = self.adapter(lambda _: None).run(self.targets, rollback_on_failure=True)
         self.assertEqual(len(self.client.patches), 1)
         self.assertEqual(result['error_code'], 'AUTHORIZATION_DENIED')
