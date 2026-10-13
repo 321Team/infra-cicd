@@ -100,6 +100,10 @@ python tools/phase2/verify_producer_compatibility.py --producer <fds-msa-checkou
 
 Runtime 연결 후에는 어떤 STOP도 자동 재시작·token 갱신·force apply의 근거가 아니다. 확인된 적용 목록과 pending intent를 실제 API 상태·field ownership·source 및 claim/checkpoint에 대조한 뒤 승인된 새 회차나 복구를 판단한다. 토큰이 만료되면 복구 쓰기도 하지 않는다. 이전 렌더에 없는 자원 정리는 이 코어의 범위 밖이다.
 
+## 중단 RUN의 복구 검토 인계
+
+[복구 검토 준비표](recovery-review.md)에 파일별 의미, ack 없는 pending·부분 tail·complete와 active 공존 등 중단 상태별 해석과 담당자/완료조건을 연결했다. 현재 store는 재시작 후 이전 journal을 재구성하거나 active를 수동 조정하는 운영 API가 없다. 그 기능의 미구현을 실제 배포 연결 전 잔여로 유지하며, 이 문서가 자동 해제·재개·복구를 허용하지 않는다. 기존 실패/복구 MOCK을 재사용하고 실제 상태 대조·조정 구현/시험은 후속이다.
+
 ## 후속과 현재 단계
 
 - 권욱: 구현된 producer bridge·POSIX store·TLS sender의 운영 연결, clean render 생성/승인 검증, store의 실제 경로/수명주기, Runner CA 사용 출처와 Build/Push 원본 결속. 네 모듈의 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
