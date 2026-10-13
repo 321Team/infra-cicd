@@ -2,7 +2,7 @@
 
 2026-10-13 KST · Lead 이권욱 · CODEX_ASSISTED.
 
-`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal, `delivery_transport.py`는 CA·hostname 검증과 전체 I/O 제한시간을 적용하는 TLS sender 라이브러리다. 실제 인증/권한 검증기, 운영 CLI/Workflow와 이 모듈들의 실제 연결은 없다. 배포 및 socket 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
+`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal, `delivery_transport.py`는 CA·hostname 검증과 전체 I/O 제한시간을 적용하는 TLS sender 라이브러리다. `producer_bridge.py`는 지정 커밋의 계약·검사기 원본을 읽어 같은 raw 렌더를 검사한다. 실제 인증/권한·승인 검증기, 운영 CLI/Workflow와 이 모듈들의 실제 연결은 없다. 배포 및 socket 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
 
 ## 기준과 Phase 1 경계
 
@@ -17,7 +17,7 @@
 | 단계 | 코어의 검사·동작 | 시험의 한계 |
 |---|---|---|
 | 입력 | source·raw contract/render SHA·platform/supply receipt SHA·cluster/API·namespace UID·CA·승인 host·두 이미지·run/action을 하나의 Binding으로 결속 | 해시는 무결성이다. 출처 진위·clean checkout·승인은 외부 검증기의 책임 |
-| 렌더 | 주입한 생산자 검사기를 동일 raw bytes에 호출. app PASS, placeholder 허용=false, 계약/렌더 hash와 승인 host 일치 필요. 자원 누락/추가/중복 거부 | 저장된 PASS JSON만 읽는 함수를 연결하면 안 됨. 생산자 검사·파싱 bridge의 운영 연결은 잔여 |
+| 렌더 | 지정 source commit의 검토된 검사기와 계약 원본을 동일 raw bytes에 결속. app PASS, placeholder 허용=false, 계약/렌더 hash와 승인 host 일치 필요. 자원 누락/추가/중복 거부 | 저장된 PASS JSON은 소비하지 않음. 렌더가 해당 clean source에서 생성됐는지·승인 진위·운영 연결은 잔여 |
 | 범위 | `fds-app` Service2·Deployment2·Route2. SA/NP/Secret/권한·삭제 불가. 앱 이름·SA·이미지·onprem-egress 라벨·두 Route host/TLS 고정 | CI 경로의 제한이며 Kubernetes admission 통제가 아님 |
 | 첫 쓰기 | 요청 TTL=900초, **실제 token 및 실행 승인 잔여시간 모두 660초 이상**인지 durable intent 저장 이후 재확인 | 실제 issuer/audience/TokenRequest·RBAC는 코어가 검증하거나 발급하지 않음 |
 | 통신 요청 | 대상 origin·CA hash·credential fingerprint를 요청에 결속. Server-Side Apply PATCH, fieldManager=fds-deployer, 강제 덮어쓰기/자동 재시도 없음 | TLS sender 라이브러리와 socket MOCK 추가. actual API/CA/credential 검증·연결은 미실행 |
@@ -39,6 +39,17 @@
 `Binding.key`와 `Lease.binding_key` 일치는 위 외부 검증을 대체하지 않는다. 배포 MOCK은 합성 authorizer/sender를 주입하므로 **실제 IAM/RBAC·TLS 검증이 아니다**. POSIX store 시험은 CI 임시 로컬 경로의 실제 파일 연산·실패 주입이며 운영 Runner 저장장치의 내구성 인수가 아니다. 운영 함수를 연결하려면 해당 구현까지 포함한 독립 코드 리뷰가 필요하다.
 
 동일 Adapter 인스턴스는 재사용을 거부한다. 프로세스 재시작/새 인스턴스의 중복 실행에는 아래 store 연결이 필요하며, 다른 Runner를 포함한 분산 잠금은 구현하지 않았다. `ROLLOUT_OBSERVED`도 `delivery_gate/health_e2e/pod_image_id=NOT_VERIFIED`를 유지한다.
+
+## 생산자 원본 bridge — 원본 결속과 승인 검증의 경계
+
+`CommittedProducerBridge(producer_repository, binding)`을 Adapter의 validator로 주입할 수 있다. 설치된 Git/Python과 소비자 Python 환경은 신뢰된 준비 환경이어야 한다.
+
+- full source commit의 `tools/check_delivery_render.py`와 `deploy/delivery/rosa.yaml` 두 Git 객체만 읽는다. working tree·HEAD 변경, Git replace ref, ambient GIT_DIR를 원본으로 소비하지 않는다. Git protocol·lazy fetch를 금지하여 local object가 없으면 차단한다.
+- 실행할 검사기는 fds-msa `6e7acf1053b1e44164d38851e477a2d2d64b9c3a`의 원본 SHA256 `b889d6123fe0d566424a17ab88a6e41e49696bb1bb572b16ed88f22a654df2e1`에 고정했다. 다른 검사기 코드는 새 소스 검토·소비자 변경 없이 실행하지 않는다.
+- 전달 계약은 해당 commit의 계약과 일치해야 한다. CRLF/LF 차이만 허용하며 receipt hash는 전달된 원본 bytes 기준으로 유지한다. 승인 host를 Handoff 2 후 PR로 기록한다는 생산 계약 §4의 조건을 따른다. 현재 저장소의 `PENDING` 값을 메모리에서 운영 승인값으로 덮어쓰지 않는다.
+- 입력당 1MiB와 YAML 깊이/토큰 수를 제한하고, 중복/non-string key·alias/anchor/tag/merge·비 JSON scalar·추가/누락 문서를 먼저 거부한다. 이후 검토된 원본 checker를 `app`, `allow_placeholders=False`로 다시 실행한다. 오류에는 YAML 원문·생산자 상세 오류·Git stderr를 노출하지 않는다.
+- 소비자 parser는 별도 시험한 **PyYAML 6.0.3**에 고정한다. 생산자의 현재 source CI는 6.0.2를 사용하므로 동일 환경이라고 주장하지 않는다. 6.0.3에서 실제 checker의 합성 정상/PENDING 차단 호환성을 별도 확인했다. 버전 불일치/미설치 시 bridge는 차단한다.
+- 이 기능은 두 원본 파일·raw 입력의 결속이다. **렌더 생성 이력과 source 승인 진위를 증명하지 않는다.** 결과도 `render_generation=NOT_VERIFIED`, `source_approval=NOT_VERIFIED`로 남긴다. 이 항목은 authorize가 실제 clean source/build·전달 회차·승인 증적에 연결해야 한다.
 
 ## POSIX 실행 저장소 — 준비 구현, 운영 경로 미연결
 
@@ -75,7 +86,7 @@
 python -m unittest discover -s tools/phase2 -p "test_*.py" -v
 ```
 
-정상 판정은 unittest의 테스트 수·실패/오류/skip과 RC를 함께 확인한다. 새 adapter 시험과 기존 intake 회귀를 포함한다. 기존 P2 CI가 이 경로를 자동 탐색하므로 운영 Workflow 수정은 없다. 실패하면 코드/합성 입력을 수정하고 영향 시험을 재실행한다. 운영 원복 대상은 없다.
+정상 판정은 unittest의 테스트 수·실패/오류/skip과 RC를 함께 확인한다. 새 adapter 시험과 기존 intake 회귀를 포함한다. 기존 P2 CI가 이 경로를 자동 탐색하므로 운영 Workflow 수정은 없다. bridge parser 시험 9건은 PyYAML 6.0.3을 별도로 준비한 Python 환경에서 실행하며, 기본 환경에 없으면 명시적으로 SKIP한다. Git snapshot 시험 6건은 표준 라이브러리와 Git으로 실행한다. 실패하면 코드/합성 입력을 수정하고 영향 시험을 재실행한다. 운영 원복 대상은 없다.
 
 생산자 호환 시험은 별도 명령이다. 고정된 clean fds-msa checkout과 **시험용 Python 환경의 PyYAML 6.0.3**이 있을 때 실행한다. 서버 패키지를 설치하지 않는다. 검사기는 import 전에 위 producer HEAD와 tracked/untracked 변경 없음을 확인한다.
 
@@ -83,13 +94,13 @@ python -m unittest discover -s tools/phase2 -p "test_*.py" -v
 python tools/phase2/verify_producer_compatibility.py --producer <fds-msa-checkout>
 ```
 
-동일 생산자 검사기에 합성 승인 host/registry를 메모리로 주입한 정상 경로와 실제 저장소의 `PENDING` 계약 차단 경로를 확인한다. producer 파일을 변경하지 않으며 실제 값/승인을 만들지 않는다. 이 별도 시험은 표준 라이브러리만 사용하는 기본 CI에 포함하지 않는다. 실행 결과 `MOCK_ONLY`, `actual_pending_sender_calls=0`, RC0을 확인하며 실제 ROSA 호환성으로 확대하지 않는다. 기본 suite의 POSIX filesystem 시험은 Windows에서 skip이며 Linux CI의 실제 성공 수와 구분한다.
+검토된 실제 checker와 합성 host/registry·계약을 **임시 합성 Git commit**으로 만들어 bridge의 정상 경로를 확인한다. checker pin은 시험에서도 원래 값이다. 이어 실제 source commit의 `PENDING` 계약 차단 경로를 확인한다. producer 파일을 변경하지 않으며 실제 값/승인을 만들지 않는다. 이 별도 시험은 표준 라이브러리만 사용하는 기본 CI에 포함하지 않는다. 실행 결과 `MOCK_ONLY`, `positive_fixture_is_synthetic=true`, `actual_pending_sender_calls=0`, RC0을 확인하며 실제 ROSA 호환성으로 확대하지 않는다. 기본 suite의 POSIX filesystem 시험은 Windows에서 skip이며 Linux CI의 실제 성공 수와 구분한다.
 
 Runtime 연결 후에는 어떤 STOP도 자동 재시작·token 갱신·force apply의 근거가 아니다. 확인된 적용 목록과 pending intent를 실제 API 상태·field ownership·source 및 claim/checkpoint에 대조한 뒤 승인된 새 회차나 복구를 판단한다. 토큰이 만료되면 복구 쓰기도 하지 않는다. 이전 렌더에 없는 자원 정리는 이 코어의 범위 밖이다.
 
 ## 후속과 현재 단계
 
-- 권욱: 실제 producer bridge, 원본/승인 검증·구현된 POSIX store의 실제 경로/수명주기·TLS sender 연결, Runner CA 사용 출처와 Build/Push 원본 결속. 코어/store/transport 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
+- 권욱: 구현된 producer bridge·POSIX store·TLS sender의 운영 연결, clean render 생성/승인 검증, store의 실제 경로/수명주기, Runner CA 사용 출처와 Build/Push 원본 결속. 네 모듈의 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
 - 하영: actual ROSA/API/namespace UID/CA/승인 host 및 플랫폼·권한 receipt.
 - 재환: 승인 Registry/current·previous digest, clean source·app/prereq 렌더 결속과 복구 입력.
 - 그 뒤 별도 허용된 RUN-A/RUN-B/복구 및 Pod imageID/health 증적을 검증한다. 이미 완료한 P1 Push 시험을 이 준비를 위해 반복하지 않는다.

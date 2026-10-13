@@ -1,17 +1,21 @@
 """Optional offline MOCK compatibility test against an exact, clean #43 checkout.
 
 Requires PyYAML 6.0.3 and the existing producer repository. No API/credentials.
-This test imports reviewed producer Python only AFTER checking source identity.
-It does not implement the future production validator bridge.
+This test imports reviewed producer fixtures only AFTER checking source identity.
+The real bridge reads the pinned checker from Git objects. The positive path uses
+a temporary, explicitly synthetic commit; the real source keeps its PENDING host.
 """
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import delivery_adapter as core
+from producer_bridge import CHECKER_PATH, CONTRACT_PATH, CommittedProducerBridge, GitSnapshot
 from test_delivery_adapter import Harness
 
 PRODUCER_SHA = '6e7acf1053b1e44164d38851e477a2d2d64b9c3a'
@@ -41,14 +45,9 @@ def main():
     if yaml.__version__ != '6.0.3':
         print('PYYAML_VERSION_MISMATCH')
         return 2
-    producer = module_at('check_delivery_render', root / 'tools/check_delivery_render.py')
+    module_at('check_delivery_render', root / 'tools/check_delivery_render.py')
     fixtures = module_at('producer_contract_test_fixtures', root / 'tools/tests/test_deploy_rosa_delivery.py')
-
-    def bridge(raw, contract_raw):
-        contract = yaml.safe_load(contract_raw)
-        report = producer.check(raw.decode('utf-8'), 'app', contract, allow_placeholders=False)
-        report.update(rendered_sha256=core.digest(raw), contract_sha256=core.digest(contract_raw))
-        return report, list(yaml.safe_load_all(raw))
+    snapshot = GitSnapshot(root, PRODUCER_SHA)
 
     docs = fixtures.synthetic_app_render()
     images = []
@@ -64,25 +63,55 @@ def main():
     harness.rebind(images=tuple(sorted(images, key=lambda p: core.SERVICES.index(p[0]))),
                    route_host=fixtures.APPROVED_HOST, rendered_sha256=core.digest(raw),
                    contract_sha256=core.digest(contract_raw))
-    result = harness.run(bridge)
+    # A synthetic approved contract is NOT committed into the real repository.
+    # The checker blob is original and its production pin is never patched.
+    with tempfile.TemporaryDirectory(prefix='p2-compat-synthetic-') as directory:
+        synthetic = Path(directory).resolve()
+        for name, content in ((CHECKER_PATH, snapshot.blob(CHECKER_PATH)),
+                              (CONTRACT_PATH, contract_raw)):
+            path = synthetic / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        env = {k: v for k, v in os.environ.items() if not k.upper().startswith('GIT_')}
+        env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
+                   GIT_TERMINAL_PROMPT='0')
+        def git(*args):
+            return subprocess.run(
+                ['git', '-C', str(synthetic), '-c', 'core.autocrlf=false',
+                 '-c', 'commit.gpgsign=false', '-c', 'user.name=P2 Synthetic',
+                 '-c', 'user.email=p2-synthetic@example.invalid', *args],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+                timeout=15, check=True).stdout.decode().strip()
+        git('init', '-q')
+        git('add', '--', CHECKER_PATH, CONTRACT_PATH)
+        git('commit', '-qm', 'Synthetic offline compatibility input only')
+        synthetic_commit = git('rev-parse', 'HEAD')
+        harness.rebind(source_commit=synthetic_commit)
+        result = harness.run(CommittedProducerBridge(synthetic, harness.binding))
     if result['status'] != 'ROLLOUT_OBSERVED' or len(harness.requests) != 8:
         print('SYNTHETIC_PRODUCER_COMPATIBILITY_FAILED')
         return 1
 
     # Real checked-in contract has PENDING host: no sender call is permitted.
-    pending = (root / 'deploy/delivery/rosa.yaml').read_bytes()
+    pending = snapshot.blob(CONTRACT_PATH)
     blocked_harness = Harness()
     blocked_harness.render, blocked_harness.contract = raw, pending
-    blocked_harness.rebind(images=harness.binding.images, route_host=fixtures.APPROVED_HOST,
+    blocked_harness.rebind(source_commit=PRODUCER_SHA,
+                           images=harness.binding.images, route_host=fixtures.APPROVED_HOST,
                            rendered_sha256=core.digest(raw), contract_sha256=core.digest(pending))
-    blocked = blocked_harness.run(bridge)
+    blocked = blocked_harness.run(CommittedProducerBridge(root, blocked_harness.binding))
     if (blocked['error_code'] != 'RENDER_CHECK_FAILED' or blocked_harness.requests):
         print('PENDING_PRODUCER_CONTRACT_NOT_BLOCKED')
         return 1
     print(json.dumps({'scope': 'MOCK_ONLY', 'producer': PRODUCER_SHA,
+                      'positive_fixture_commit': synthetic_commit,
+                      'positive_fixture_is_synthetic': True,
+                      'bridge': 'CommittedProducerBridge',
                       'synthetic_approved_render': result['status'],
                       'actual_pending_contract': blocked['error_code'],
-                      'actual_pending_sender_calls': 0, 'runtime': 'NOT_RUN'}, indent=2))
+                      'actual_pending_sender_calls': 0,
+                      'render_generation': 'NOT_VERIFIED', 'source_approval': 'NOT_VERIFIED',
+                      'runtime': 'NOT_RUN'}, indent=2))
     return 0
 
 
