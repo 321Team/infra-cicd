@@ -524,7 +524,7 @@ class CommandAndInputTests(unittest.TestCase):
             self.assertEqual((root / 'log').read_text().strip(), '$(touch forbidden)')
 
     def test_paths_cannot_escape_source_snapshot(self):
-        for value in ('../x', '/tmp', 'a/../../b', '.git', 'a//b', 'a\\b', 'a/./b'):
+        for value in ('.', './', '../x', '/tmp', 'a/../../b', '.git', 'a//b', 'a\\b', 'a/./b'):
             with self.subTest(value=value), self.assertRaises(flow.PreflightError):
                 flow.relative(value)
 

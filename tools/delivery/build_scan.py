@@ -172,6 +172,16 @@ def read_output(path):
 def unpack_source(archive_path, target, *, for_image=False):
     """Narrow source profile: regular files/directories, no symlinks/gitlinks."""
     target.mkdir(mode=0o700)
+
+    def private_directory(path):
+        # Create each ancestor explicitly; mkdir(parents=True) ignores mode
+        # for implicit parents. The new target contains no accepted symlinks.
+        current = target
+        for part in path.relative_to(target).parts:
+            current = current / part
+            current.mkdir(mode=0o700, exist_ok=True)
+            current.chmod(0o700)
+
     seen, total = set(), 0
     with tarfile.open(archive_path, 'r:') as archive:
         for member in archive:
@@ -184,9 +194,9 @@ def unpack_source(archive_path, target, *, for_image=False):
             require(total <= 512 * 1024 * 1024, 'SOURCE_ARCHIVE_TOO_LARGE')
             path = target / name
             if member.isdir():
-                path.mkdir(mode=0o700, parents=True, exist_ok=True)
+                private_directory(path)
             else:
-                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                private_directory(path.parent)
                 with archive.extractfile(member) as src, path.open('xb') as dst:
                     shutil.copyfileobj(src, dst)
                 path.chmod(0o700 if member.mode & 0o111 else 0o600)

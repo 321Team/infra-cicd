@@ -79,6 +79,31 @@ class SourcePermissionTests(unittest.TestCase):
                     self.assertEqual(self.mode(path) & 0o077, 0)
         self.assertFalse((self.root / 'escape').exists())
 
+    def test_private_implicit_parents_do_not_depend_on_umask(self):
+        for mask in (0o000, 0o022, 0o077):
+            for invalid in (None, 'transaction-api/link', '../escape'):
+                with self.subTest(umask=oct(mask), invalid=invalid):
+                    self.fixture(invalid)
+                    target = self.root / ('private-' + str(mask) + '-' +
+                                          str((None, 'transaction-api/link', '../escape').index(invalid)))
+                    previous = os.umask(mask)
+                    try:
+                        if invalid:
+                            with self.assertRaises(flow.PreflightError):
+                                flow.unpack_source(self.archive, target, for_image=True)
+                        else:
+                            flow.unpack_source(self.archive, target)
+                    finally:
+                        os.umask(previous)
+                    self.assertEqual(self.mode(target), 0o700)
+                    for path in target.rglob('*'):
+                        self.assertEqual(self.mode(path) & 0o077, 0)
+                        if path.is_dir():
+                            self.assertEqual(self.mode(path), 0o700)
+                    self.assertEqual(self.mode(target / 'transaction-api/run.py'), 0o600)
+                    self.assertEqual(self.mode(target / 'fds-engine/bin/start'), 0o700)
+        self.assertFalse((self.root / 'escape').exists())
+
     def test_existing_context_is_not_modified(self):
         self.fixture()
         self.target.mkdir(mode=0o700)

@@ -19,7 +19,7 @@ python3 -m unittest discover -s tools/delivery -p 'test_source_permissions.py' -
 python3 -m unittest discover -s tools/delivery -p 'test_build_scan.py' -v
 ```
 
-실제 POSIX 파일에 umask077을 적용해 context0644/0755, 실행 비트, private 루트/테스트 사본 유지, 입력 archive 불변, 링크/경로탈출 거절·기존 경로 미수정과 chmod 실패 시 Build/Scan 중단을 확인한다. 빌드 경로 시험은 실제 Git/snapshot을 쓰지만 Podman/Trivy는 MOCK이다. 기존 `P1 Source validation`의 Ubuntu 전체 회귀시험에 자동 포함된다. Windows에서 POSIX 권한 시험의 SKIP을 PASS로 보고하지 않는다.
+실제 POSIX 파일에 umask077을 적용해 context0644/0755, 실행 비트, private 루트/테스트 사본 유지, 입력 archive 불변, 링크/경로탈출 거절·기존 경로 미수정과 chmod 실패 시 Build/Scan 중단을 확인한다. 부모 디렉터리는 생성 단계마다0700으로 확정하며 umask000/022/077에서도 정상 private 추출과 거절 후 부분 트리 권한을 확인한다. 서비스 context의 단독 `.`/`./` 거절도 명시적으로 검사한다. 빌드 경로 시험은 실제 Git/snapshot을 쓰지만 Podman/Trivy는 MOCK이다. 기존 `P1 Source validation`의 Ubuntu 전체 회귀시험에 자동 포함된다. Windows에서 POSIX 권한 시험의 SKIP을 PASS로 보고하지 않는다.
 
 ## 실제 이미지 시험·후속 실행
 
