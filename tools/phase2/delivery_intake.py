@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 SERVICES = ('transaction-api', 'fds-engine')
+NAMESPACE = 'fds-app'  # rosa-app names the overlay, not the target namespace.
 SHA = r'[0-9a-f]{40}'
 HASH = r'[0-9a-f]{64}'
 NAME = r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
@@ -83,7 +84,7 @@ def evaluate(record):
     # The existing P1 fixed API must never silently become the P2 target.
     if https_url(api, origin=True):
         need(urlsplit(api).hostname != '10.1.93.109', 'P1_API_NOT_ROSA')
-    need(match(target.get('namespace'), NAME), 'NAMESPACE_INVALID')
+    need(target.get('namespace') == NAMESPACE, 'P2_NAMESPACE_REQUIRED')
     need(match(target.get('context'), r'[A-Za-z0-9_.:/@-]{1,200}'), 'CONTEXT_INVALID')
     reference(target.get('health_url'), 'target.health_url')
     source = obj(root.get('source'), 'repository commit manifest_repository manifest_commit '
