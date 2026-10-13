@@ -199,13 +199,20 @@ class StoreTests(unittest.TestCase):
                     journal(prepared(binding))
 
     def test_claim_or_lock_inode_replacement_is_detected(self):
-        claim = self.claim()
-        target = self.root / claim.lock_name
-        target.unlink()
-        target.write_bytes(b'')
-        target.chmod(0o600)
-        with self.assertRaisesRegex(store.StoreError, 'LOCK_CHANGED'):
-            claim.check()
+        for change, expected in (('unlink', 'FILE_UNSAFE'), ('rename', 'LOCK_CHANGED')):
+            with self.subTest(change=change):
+                claim = self.claim(replace(self.binding, cluster_id='lock-' + change))
+                target = self.root / claim.lock_name
+                if change == 'unlink':
+                    # The open original inode now has zero links: reject it first.
+                    target.unlink()
+                else:
+                    # Keep the original inode valid so the name/inode check runs.
+                    target.rename(self.root / (change + '-retained-lock'))
+                target.write_bytes(b'')
+                target.chmod(0o600)
+                with self.assertRaisesRegex(store.StoreError, expected):
+                    claim.check()
 
     def test_claim_bytes_change_is_detected(self):
         claim = self.claim()
