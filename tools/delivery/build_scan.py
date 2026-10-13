@@ -169,9 +169,19 @@ def read_output(path):
     return path.read_text().strip()
 
 
-def unpack_source(archive_path, target):
+def unpack_source(archive_path, target, *, for_image=False):
     """Narrow source profile: regular files/directories, no symlinks/gitlinks."""
     target.mkdir(mode=0o700)
+
+    def private_directory(path):
+        # Create each ancestor explicitly; mkdir(parents=True) ignores mode
+        # for implicit parents. The new target contains no accepted symlinks.
+        current = target
+        for part in path.relative_to(target).parts:
+            current = current / part
+            current.mkdir(mode=0o700, exist_ok=True)
+            current.chmod(0o700)
+
     seen, total = set(), 0
     with tarfile.open(archive_path, 'r:') as archive:
         for member in archive:
@@ -184,12 +194,18 @@ def unpack_source(archive_path, target):
             require(total <= 512 * 1024 * 1024, 'SOURCE_ARCHIVE_TOO_LARGE')
             path = target / name
             if member.isdir():
-                path.mkdir(mode=0o700, parents=True, exist_ok=True)
+                private_directory(path)
             else:
-                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                private_directory(path.parent)
                 with archive.extractfile(member) as src, path.open('xb') as dst:
                     shutil.copyfileobj(src, dst)
                 path.chmod(0o700 if member.mode & 0o111 else 0o600)
+
+    if for_image:
+        # COPY preserves these source modes in the non-root runtime image.
+        # Keep the context root private; only validated contents enter the image.
+        for path in target.rglob('*'):
+            path.chmod(0o755 if path.is_dir() or path.stat().st_mode & 0o111 else 0o644)
 
 
 def validate_source_files(root, config):
@@ -358,7 +374,7 @@ def execute(config, source_dir, evidence, context, incoming_env):
                         command(f'{name}-{phase}-{index}', step['argv'],
                                 tests_root / step['cwd'], step['timeout_seconds'])
         require(sha256(snapshot) == result['source_archive_sha256'], 'SOURCE_ARCHIVE_CHANGED')
-        unpack_source(snapshot, build_root)
+        unpack_source(snapshot, build_root, for_image=True)
         validate_source_files(build_root, config)
         if supplied:
             supply = offline_v3 if supply_v3 else offline

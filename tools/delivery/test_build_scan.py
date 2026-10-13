@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
@@ -277,6 +278,42 @@ class FlowTests(unittest.TestCase):
             self.assertEqual(env['HOME'], str(self.evidence / 'home'))
             self.assertEqual(env['GIT_NO_REPLACE_OBJECTS'], '1')
 
+    @unittest.skipUnless(os.name == 'posix', 'Requires POSIX permission semantics')
+    def test_build_context_is_readable_but_test_copy_and_root_stay_private(self):
+        previous = os.umask(0o077)
+        try:
+            rc, result = self.execute()
+        finally:
+            os.umask(previous)
+        self.assertEqual((rc, result['BUILD_SCAN']), (0, 'PASS'))
+        for name in flow.SERVICES:
+            self.assertEqual(stat.S_IMODE((self.evidence / 'build-source' / name /
+                                           'tracked.txt').stat().st_mode), 0o644)
+            self.assertEqual(stat.S_IMODE((self.evidence / 'build-source' / name).stat().st_mode),
+                             0o755)
+            self.assertEqual(stat.S_IMODE((self.evidence / 'tests-source' / name /
+                                           'tracked.txt').stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE((self.evidence / 'tests-source' / name).stat().st_mode),
+                             0o700)
+        for root in ('build-source', 'tests-source'):
+            self.assertEqual(stat.S_IMODE((self.evidence / root).stat().st_mode), 0o700)
+
+    def test_image_permission_failure_stops_before_build_or_scan(self):
+        chmod = Path.chmod
+
+        def denied(path, mode, *args, **kwargs):
+            if 'build-source' in path.parts and mode == 0o644:
+                raise PermissionError('fixture: image permission normalization denied')
+            return chmod(path, mode, *args, **kwargs)
+
+        with patch.object(Path, 'chmod', denied):
+            rc, result = self.execute()
+        self.assertEqual((rc, result['BUILD_SCAN']), (1, 'FAIL'))
+        self.assertEqual(result['error_code'], 'SOURCE_BUILD_OR_EVIDENCE_ERROR')
+        self.assertFalse(any(name.endswith('-build') or name.endswith('-base-pull')
+                             for name in self.events))
+        self.scanner.assert_not_called()
+
     def test_test_failure_or_interruption_stops_before_build_and_scan(self):
         for fault in ('transaction-api-unit-0', 'fds-engine-contract-0', 'timeout', 'signal'):
             self.evidence = self.root / fault
@@ -487,7 +524,7 @@ class CommandAndInputTests(unittest.TestCase):
             self.assertEqual((root / 'log').read_text().strip(), '$(touch forbidden)')
 
     def test_paths_cannot_escape_source_snapshot(self):
-        for value in ('../x', '/tmp', 'a/../../b', '.git', 'a//b', 'a\\b', 'a/./b'):
+        for value in ('.', './', '../x', '/tmp', 'a/../../b', '.git', 'a//b', 'a\\b', 'a/./b'):
             with self.subTest(value=value), self.assertRaises(flow.PreflightError):
                 flow.relative(value)
 
