@@ -21,7 +21,7 @@ PR76과 별도 변경이다. 실제 새 빌드에는 두 PR이 독립 리뷰·�
 
 ## 증적과 판정
 
-`build-scan/result.json`의 `image_startup`에 서비스별 identity(archive/config/manifest), probe 코드 SHA256, CID, 시각, probe 결과, cleanup을 남긴다. 정상 명령의 rc/log hash는 기존 steps에 기록되며 원본 로그는 같은 private 회차 폴더에 보존한다. 명령 timeout에는 정상 rc를 꾸며 넣지 않는다. CID 파일은 `<service>-image-smoke/container.cid`에 남아 정리 식별에 사용된다.
+`build-scan/result.json`의 `image_startup`에 서비스별 identity(archive/config/manifest), probe 코드 SHA256, CID, 시각, probe 결과, cleanup을 남긴다. 정상 명령의 rc/log hash는 기존 steps에 기록되며 원본 로그는 같은 private 회차 폴더에 보존한다. 명령 timeout에는 정상 rc를 꾸며 넣지 않는다. CID 파일은 `<service>-image-smoke/container.cid`에 생성돼 정리 식별에 사용된다. Podman rm 이후에는 이 파일이 없어질 수 있으므로 receipt의 container_id와 create/remove/removed 로그를 함께 보존한다.
 
 `scope=ISOLATED_IMAGE_STARTUP_ONLY`, DB_READINESS/APP_E2E/KUBERNETES_RUNTIME=NOT_VERIFIED다. 실제 파일 읽기·앱 기동·listener 분리의 제한된 결과이며, 운영 DB 저장/조회·NetworkPolicy·HA·클러스터 배포·APP 최종 인수가 아니다. 다음 Push는 이 검사가 포함된 새 Build/Scan 결과와 새로운 승인 입력을 사용한다. 이 변경은 과거 receipt의 Push 자격을 소급 재평가하지 않는다.
 
@@ -38,3 +38,12 @@ PR76과 별도 변경이다. 실제 새 빌드에는 두 PR이 독립 리뷰·�
 현재 실제 두 앱 이미지 재Build·Podman 기동은 NOT_RUN이다. 코드 CI 성공을 이미지 기동 성공으로 해석하지 않는다. 독립 리뷰/병합 후 승인된 후보 빌드에서 실제 두 이미지 결과·권한·로그·정리·해시를 확인해야 하며, 실제 서버 Deploy 시간창과 인수는 별도다.
 
 공식 옵션 기준: [Podman6.1 run](https://docs.podman.io/en/v6.1.0/markdown/podman-run.1.html), [create](https://docs.podman.io/en/v6.1.0/markdown/podman-create.1.html). 앱 기준: [pinned run.py](https://github.com/321Team/fds-msa/blob/affbc69beef9967f7977d09a6fec14f7fb6c0e94/transaction-api/run.py), [health 계약](https://github.com/321Team/fds-msa/blob/affbc69beef9967f7977d09a6fec14f7fb6c0e94/transaction-api/app/main.py).
+
+
+## 20:10 승인 회차에서 확인한 inspect 필드 수정
+
+[Run38388390767/Attempt1](https://github.com/321Team/infra-cicd/actions/runs/38388390767)은 교체된 Source 읽기 Secret으로 Private fetch·handoff에 성공했다. engine Unit16/API Contract20/engine Contract15, 총51개 시험 PASS와 API Build/save 뒤 컨테이너 생성까지 진행했다. 첫 inspect가 `can't evaluate field Id in type interface {}`와 exit125로 실패해 start/probe·engine Build·Scan·Push·Deploy는 실행하지 않았다. 자기 CID의 remove/removed는 exit0이며 cleanup=REMOVED다. 이 신규 승인1회도 소진했고 자동 재실행은 없다.
+
+원인은 Go template 필드와 JSON key 혼동이다. [Podman6.1.0 원본 타입](https://github.com/containers/podman/blob/v6.1.0/libpod/define/container_inspect.go#L741)은 exported field `ID`에 JSON tag `Id`를 부여한다. template은 `.ID`를 읽어야 한다. 출력 JSON의 `id` 키, 다른 필드/검사 기준, 비루트·격리·정리·실패 차단은 유지하고 해당 참조만 수정한다. 나머지 template12개 경로도 같은 원본 타입과 정적으로 대조했다.
+
+기존 MOCK lifecycle9개 PASS는 검사·실패·정리 경로에 한정되며, 이전 MOCK는 이미 만들어진 JSON을 반환해 Go template 평가 오류를 잡지 못했다. 이번 정적 원본 타입 대조는 그 한계를 보완하는 근거이고 실제 Podman template 실행이나 두 이미지 기동 성공을 대신하지 않는다. 수정 후 실서버 기동/Scan은 NOT_RUN. 독립 코드 리뷰·병합과 새로운 실행 범위 판단 전에는 수정본 Runtime을 실행하지 않는다. 코드 복구는 이 수정 커밋 revert이며 기존 실패 원본·claim을 변경하지 않는다.

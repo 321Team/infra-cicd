@@ -13,7 +13,8 @@ import uuid
 from image_smoke_probe import PROFILES
 
 PROBE = Path(__file__).with_name('image_smoke_probe.py')
-INSPECT = ('{"id":{{json .Id}},"image":{{json .Image}},'
+# Go templates use the exported ID field; "Id" is only its JSON serialization tag.
+INSPECT = ('{"id":{{json .ID}},"image":{{json .Image}},'
            '"name":{{json .Name}},"owner":{{json (index .Config.Labels "io.fds.image-smoke")}},'
            '"user":{{json .Config.User}},"workdir":{{json .Config.WorkingDir}},'
            '"path":{{json .Path}},"args":{{json .Args}},'
