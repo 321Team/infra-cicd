@@ -165,6 +165,10 @@ class FlowV3Tests(unittest.TestCase):
         h.commit()
         self.argv = {}
         h.commands.side_effect = self.command
+        self.smoke = patch.object(flow.image_smoke, 'check_image', side_effect=self.smoke_pass).start()
+
+    def smoke_pass(self, command, podman, name, identity, evidence, receipt):
+        receipt.update(status='PASS', identity=identity, scope='MOCK_ONLY')
 
     def command(self, argv, cwd, env, output, timeout):
         label = output.stem
@@ -231,6 +235,42 @@ class FlowV3Tests(unittest.TestCase):
         with self.assertRaisesRegex(flow.PreflightError, 'HANDOFF_DOCKERFILE_MISMATCH'):
             app.validate_handoff(
                 self.h.config, self.h.repo, app.command_runner(bad, {}, []))
+
+    def test_final_image_failure_blocks_scan_for_either_service(self):
+        for failed in flow.SERVICES:
+            with self.subTest(service=failed):
+                self.h.evidence = self.h.root / ('failed-smoke-' + failed)
+                self.h.evidence.mkdir()
+                self.h.scanner.reset_mock()
+
+                def fail(command, podman, name, identity, evidence, receipt):
+                    receipt['status'] = 'FAIL' if name == failed else 'PASS'
+                    if name == failed:
+                        raise flow.image_smoke.SmokeError('SMOKE_PROBE_NOT_PASS')
+
+                self.smoke.side_effect = fail
+                rc, data = self.h.execute()
+                self.assertEqual((rc, data['BUILD_SCAN']), (1, 'FAIL'))
+                self.assertEqual(data['error_code'], 'SMOKE_PROBE_NOT_PASS')
+                self.h.scanner.assert_not_called()
+
+    def test_smoke_must_explicitly_pass_and_archive_must_stay_bound(self):
+        for failure in ('missing-pass', 'changed-archive'):
+            with self.subTest(failure=failure):
+                self.h.evidence = self.h.root / failure
+                self.h.evidence.mkdir()
+                self.h.scanner.reset_mock()
+
+                def fail(command, podman, name, identity, evidence, receipt):
+                    if failure == 'changed-archive':
+                        receipt['status'] = 'PASS'
+                        (evidence / (name + '.oci.tar')).write_bytes(b'changed fixture')
+
+                self.smoke.side_effect = fail
+                rc, data = self.h.execute()
+                self.assertEqual((rc, data['BUILD_SCAN']), (1, 'FAIL'))
+                self.assertIn(data['error_code'], ('FINAL_IMAGE_STARTUP_NOT_PASS', 'BUILT_ARCHIVE_CHANGED'))
+                self.h.scanner.assert_not_called()
 
     def test_v3_rejects_mutable_dockerfile_before_podman(self):
         docker = self.h.repo / 'transaction-api/Dockerfile'
