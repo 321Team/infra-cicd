@@ -2,7 +2,7 @@
 
 2026-10-13 KST · Lead 이권욱 · CODEX_ASSISTED.
 
-`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. 이번 변경에는 네트워크 구현, 실제 인증/권한 검증기, 운영 CLI/Workflow가 없다. 외부 함수를 주입하는 Python 라이브러리이며 현재 시험은 전부 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
+`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. 후속 `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal을 구현한다. 네트워크 구현, 실제 인증/권한 검증기, 운영 CLI/Workflow는 없다. 외부 함수를 주입하는 Python 라이브러리이며 배포 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
 
 ## 기준과 Phase 1 경계
 
@@ -36,9 +36,23 @@
 3. **send(Request)**: 같은 credential fingerprint의 자격증명으로 해당 origin/CA를 검증하고 고정 path에만 요청한다. 환경 kubeconfig/context·P1 API·프록시·redirect로 대체하지 않는다. request timeout을 TLS 연결·전송·응답 전체에 강제하고 응답 크기를 제한한다. `Rejected`는 변경이 없다고 확정된 응답에만 사용한다. timeout/5xx/부분 응답은 `Rejected`로 바꾸지 않는다. 이 코어는 callback 자체가 영원히 block하는 것을 중단시킬 수 없다.
 4. **checkpoint(receipt)**: 비밀이 없는 최소 receipt를 원자적으로 내구성 있게 저장하고 성공 후에만 반환한다. 코어의 메모리 receipt를 영속 증적이라고 표시하지 않는다. `pending`은 저장한 쓰기 의도이며 crash 이후에는 전송 여부/실제 적용을 재조정해야 한다. `acknowledged`는 확인한 응답 수이지 전체 인수가 아니다.
 
-`Binding.key`와 `Lease.binding_key` 일치는 위 외부 검증을 대체하지 않는다. 현재 MOCK은 합성 authorizer/sender/checkpoint를 주입하므로 **실제 IAM/RBAC·TLS·동시 실행 lock·디스크 내구성 검증이 아니다**. 운영 함수를 연결하려면 해당 구현까지 포함한 독립 코드 리뷰가 필요하다.
+`Binding.key`와 `Lease.binding_key` 일치는 위 외부 검증을 대체하지 않는다. 배포 MOCK은 합성 authorizer/sender를 주입하므로 **실제 IAM/RBAC·TLS 검증이 아니다**. POSIX store 시험은 CI 임시 로컬 경로의 실제 파일 연산·실패 주입이며 운영 Runner 저장장치의 내구성 인수가 아니다. 운영 함수를 연결하려면 해당 구현까지 포함한 독립 코드 리뷰가 필요하다.
 
-동일 Adapter 인스턴스는 재사용을 거부한다. 프로세스 재시작/새 인스턴스/다른 Runner의 중복 실행 방지는 외부 claim 저장소의 책임이며 이번 구현으로 완료되지 않았다. `ROLLOUT_OBSERVED`도 `delivery_gate/health_e2e/pod_image_id=NOT_VERIFIED`를 유지한다.
+동일 Adapter 인스턴스는 재사용을 거부한다. 프로세스 재시작/새 인스턴스의 중복 실행에는 아래 store 연결이 필요하며, 다른 Runner를 포함한 분산 잠금은 구현하지 않았다. `ROLLOUT_OBSERVED`도 `delivery_gate/health_e2e/pod_image_id=NOT_VERIFIED`를 유지한다.
+
+## POSIX 실행 저장소 — 준비 구현, 운영 경로 미연결
+
+`delivery_store.py`는 P1 모듈을 import하지 않는다. Linux의 `flock`, `O_EXCL`, `O_NOFOLLOW`, 파일/디렉터리 `fsync`를 사용하며 Windows에서는 경로를 건드리기 전에 거부한다.
+
+- 실제 연결 전, **한 Runner의 모든 P2 Job이 공유하는 하나의 영구 root**를 운영 담당자가 지정해야 한다. caller 소유 0700 디렉터리, 0600 일반 파일·단일 hardlink, root/caller 소유이고 group/other 쓰기가 없는 상위 경로를 요구한다. `/tmp`, symlink 경로·파일과 per-RUN 임시 root는 실행 저장소로 사용하지 않는다. 원본 준비·권한 검증 후 claim을 획득한다.
+- 잠금 대상은 검증된 cluster identity + namespace/UID다. API 별칭 변경으로 같은 대상의 잠금을 우회하지 않는다. 비차단 `flock` 충돌이면 실행하지 않는다.
+- 같은 대상/RUN은 렌더·action을 바꾸어도 재사용할 수 없다. claim 파일은 영구 보존한다. 원본 bytes·inode·권한과 journal의 파일 목록/각 레코드를 재검사한다.
+- active 표시는 프로세스가 종료돼도 남는다. 중단·부분 기록·불명확한 쓰기 이후 다른 RUN도 자동 시작하지 못한다. 오래된 파일의 자동 삭제/TTL 탈취/강제 재개는 없다. **이 파일 존재는 권한 유지/회수 결정과 별개다.**
+- journal은 허용된 receipt 필드·고정 오류코드만 받아 순번·이전 레코드 SHA로 연결한다. `PREPARED → WRITE_PENDING → WRITE_ACKNOWLEDGED → rollout → ROLLOUT_OBSERVED` 순서와 STOP을 검증한다. 원본 token/환경/서버 응답을 저장하지 않는다. 기록 실패 파일은 보존하고 writer를 영구 실패 상태로 둔다.
+- 정상 종료 시 caller가 전체 업무의 독점 접근 필요가 끝났다고 판단한 뒤 `claim.complete(journal)`을 명시적으로 호출할 수 있다. 전체 적용/rollout의 내구성 있는 terminal 기록이 있을 때만 완료 marker를 보존하고 active 표시를 제거한다. STOP·결과 불명확은 이 경로로 해제할 수 없다. 실제 상태를 대조한 사람의 복구 절차는 Runtime 연결 전 잔여다.
+- `close()`는 descriptor/프로세스 mutex만 해제하며 claim·미해결 active·원본 journal을 지우지 않는다. 같은 기록을 복구 자료로 재사용한다.
+
+연결 순서: raw 입력 검사/승인 → `acquire(root, binding)` → `Journal(claim)` → authorizer에서 `claim.check()`/`journal.check()`와 실제 권한 확인 → Adapter에 journal callback 주입 → 결과 대조 → 필요 업무 종료 후 정상 complete → journal/claim close. 예외에서는 기록과 active를 보존한다. 실제 root 지정·credential/권한 검증·동일 Runner 제한·정리/수동 복구 통합은 미실행이다.
 
 ## 로컬 확인과 중단·복구
 
@@ -56,13 +70,13 @@ python -m unittest discover -s tools/phase2 -p "test_*.py" -v
 python tools/phase2/verify_producer_compatibility.py --producer <fds-msa-checkout>
 ```
 
-동일 생산자 검사기에 합성 승인 host/registry를 메모리로 주입한 정상 경로와 실제 저장소의 `PENDING` 계약 차단 경로를 확인한다. producer 파일을 변경하지 않으며 실제 값/승인을 만들지 않는다. 이 별도 시험은 표준 라이브러리만 사용하는 기본 CI 45건에 포함하지 않는다. 실행 결과 `MOCK_ONLY`, `actual_pending_sender_calls=0`, RC0을 확인하며 실제 ROSA 호환성으로 확대하지 않는다.
+동일 생산자 검사기에 합성 승인 host/registry를 메모리로 주입한 정상 경로와 실제 저장소의 `PENDING` 계약 차단 경로를 확인한다. producer 파일을 변경하지 않으며 실제 값/승인을 만들지 않는다. 이 별도 시험은 표준 라이브러리만 사용하는 기본 CI에 포함하지 않는다. 실행 결과 `MOCK_ONLY`, `actual_pending_sender_calls=0`, RC0을 확인하며 실제 ROSA 호환성으로 확대하지 않는다. 기본 suite의 POSIX filesystem 시험은 Windows에서 skip이며 Linux CI의 실제 성공 수와 구분한다.
 
 Runtime 연결 후에는 어떤 STOP도 자동 재시작·token 갱신·force apply의 근거가 아니다. 확인된 적용 목록과 pending intent를 실제 API 상태·field ownership·source 및 claim/checkpoint에 대조한 뒤 승인된 새 회차나 복구를 판단한다. 토큰이 만료되면 복구 쓰기도 하지 않는다. 이전 렌더에 없는 자원 정리는 이 코어의 범위 밖이다.
 
 ## 후속과 현재 단계
 
-- 권욱: 실제 producer bridge, 원본/승인 검증·영속 claim/checkpoint·TLS sender 연결, Runner CA 사용 출처와 Build/Push 원본 결속. 코어 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
+- 권욱: 실제 producer bridge, 원본/승인 검증·구현된 POSIX store의 실제 경로/수명주기·TLS sender 연결, Runner CA 사용 출처와 Build/Push 원본 결속. 코어/store 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
 - 하영: actual ROSA/API/namespace UID/CA/승인 host 및 플랫폼·권한 receipt.
 - 재환: 승인 Registry/current·previous digest, clean source·app/prereq 렌더 결속과 복구 입력.
 - 그 뒤 별도 허용된 RUN-A/RUN-B/복구 및 Pod imageID/health 증적을 검증한다. 이미 완료한 P1 Push 시험을 이 준비를 위해 반복하지 않는다.
