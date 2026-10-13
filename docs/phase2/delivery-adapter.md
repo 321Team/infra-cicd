@@ -88,6 +88,8 @@ python -m unittest discover -s tools/phase2 -p "test_*.py" -v
 
 정상 판정은 unittest의 테스트 수·실패/오류/skip과 RC를 함께 확인한다. 새 adapter 시험과 기존 intake 회귀를 포함한다. 기존 P2 CI가 이 경로를 자동 탐색하므로 운영 Workflow 수정은 없다. bridge parser 시험 9건은 PyYAML 6.0.3을 별도로 준비한 Python 환경에서 실행하며, 기본 환경에 없으면 명시적으로 SKIP한다. Git snapshot 시험 6건은 표준 라이브러리와 Git으로 실행한다. 실패하면 코드/합성 입력을 수정하고 영향 시험을 재실행한다. 운영 원복 대상은 없다.
 
+`test_delivery_integration.py`의 추가 6건은 코어·실제 POSIX journal·sender 코드의 연결을 확인한다. TLS/API·승인·validator는 합성이며 socket/DNS를 가로채므로 실제 네트워크는 호출하지 않는다. 정상 완료 후 별도 Binding의 복구, HTTP409·응답 timeout·권한 상실, 응답 직후 ack 기록 실패, ack 전 예외 주입 중단을 검증한다. 마지막 두 경우에는 메모리에서 응답을 관측했더라도 durable journal의 pending과 불완전 파일을 보존하고 새 RUN을 차단해야 한다. 실제 프로세스 강제 종료·전원 상실·운영 저장장치 내구성 시험은 아니다. Windows에서는 6건 모두 SKIP이며 Linux CI에서 확인한다.
+
 생산자 호환 시험은 별도 명령이다. 고정된 clean fds-msa checkout과 **시험용 Python 환경의 PyYAML 6.0.3**이 있을 때 실행한다. 서버 패키지를 설치하지 않는다. 검사기는 import 전에 위 producer HEAD와 tracked/untracked 변경 없음을 확인한다.
 
 ```text
