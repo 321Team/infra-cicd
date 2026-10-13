@@ -13,7 +13,8 @@ def build(path):
     files = {'__main__.py': b'from probe_offline_supply import main\nraise SystemExit(main())\n',
              'offline-probe-input.json': (json.dumps(record, sort_keys=True, indent=2) + '\n').encode()}
     for folder, modules in [('delivery', ('offline_supply', 'offline_supply_v3',
-                                                   'probe_offline_supply', 'build_scan')),
+                                                   'probe_offline_supply', 'build_scan',
+                                                   'image_smoke', 'image_smoke_probe')),
                             ('trivy', ('oci_archive', 'prepare_db', 'scan_images', 'verify_runner'))]:
         files.update({name + '.py': (root / 'tools' / folder / (name + '.py')).read_bytes() for name in modules})
     with path.open('xb') as stream, zipfile.ZipFile(stream, 'w') as archive:

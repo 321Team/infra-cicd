@@ -26,6 +26,7 @@ from scan_images import SERVICES, scan_pair  # noqa: E402
 from verify_runner import sha256  # noqa: E402
 import offline_supply as offline  # noqa: E402
 import offline_supply_v3 as offline_v3  # noqa: E402
+import image_smoke  # noqa: E402
 
 CONFIG = 'config/app-build-scan.json'
 PODMAN = '/usr/bin/podman'
@@ -399,6 +400,14 @@ def execute(config, source_dir, evidence, context, incoming_env):
             require(identity['config_digest'] == image_id, 'BUILD_ARCHIVE_ID_MISMATCH')
             result['images'][name] = {'image_id': image_id, **identity}
             archives[name] = archive
+            if supply_v3:
+                receipt = result.setdefault('image_startup', {}).setdefault(name, {})
+                try:
+                    image_smoke.check_image(command, podman, name, identity, evidence, receipt)
+                except image_smoke.SmokeError as exc:
+                    raise PreflightError(str(exc)) from None
+                require(receipt.get('status') == 'PASS', 'FINAL_IMAGE_STARTUP_NOT_PASS')
+                require(sha256(archive) == identity['archive_sha256'], 'BUILT_ARCHIVE_CHANGED')
         scan_dir = evidence / 'scan'
         scan_dir.mkdir(mode=0o700)
         scan_rc, scan = scan_pair(scan_dir, context, source_sha, archives, incoming_env)
