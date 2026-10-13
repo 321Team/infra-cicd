@@ -2,7 +2,7 @@
 
 2026-10-13 KST · Lead 이권욱 · CODEX_ASSISTED.
 
-`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal, `delivery_transport.py`는 CA·hostname 검증과 전체 I/O 제한시간을 적용하는 TLS sender 라이브러리다. `producer_bridge.py`는 지정 커밋의 계약·검사기 원본을 읽어 같은 raw 렌더를 검사한다. 실제 인증/권한·승인 검증기, 운영 CLI/Workflow와 이 모듈들의 실제 연결은 없다. 배포 및 socket 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
+`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal, `delivery_transport.py`는 CA·hostname 검증과 전체 I/O 제한시간을 적용하는 TLS sender 라이브러리다. `producer_bridge.py`는 지정 커밋의 계약·검사기 원본을 읽어 같은 raw 렌더를 검사한다. `delivery_recovery.py`는 재시작 후 기존 journal을 읽어 검증하는 오프라인 CLI다. 실제 인증/권한·승인 검증기, 배포 CLI/Workflow와 모듈의 실제 연결은 없다. 배포 및 socket 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
 
 ## 기준과 Phase 1 경계
 
@@ -102,7 +102,7 @@ Runtime 연결 후에는 어떤 STOP도 자동 재시작·token 갱신·force ap
 
 ## 중단 RUN의 복구 검토 인계
 
-[복구 검토 준비표](recovery-review.md)에 파일별 의미, ack 없는 pending·부분 tail·complete와 active 공존 등 중단 상태별 해석과 담당자/완료조건을 연결했다. 현재 store는 재시작 후 이전 journal을 재구성하거나 active를 수동 조정하는 운영 API가 없다. 그 기능의 미구현을 실제 배포 연결 전 잔여로 유지하며, 이 문서가 자동 해제·재개·복구를 허용하지 않는다. 기존 실패/복구 MOCK을 재사용하고 실제 상태 대조·조정 구현/시험은 후속이다.
+[복구 검토 준비표](recovery-review.md)에 파일별 의미, ack 없는 pending·부분 tail·complete와 active 공존 등 중단 상태별 해석과 담당자/완료조건을 연결했다. 10/14 추가한 `delivery_recovery.py`는 기존 파일을 검증해 마지막 receipt를 메모리에 복원한다. writer 재개·active 조정·API readback은 수행하지 않는다. 실제 상태 대조·한정 조정 구현/검토는 배포 연결 전 잔여다. [최신 공급 연결](producer-intake-20261014.md)의 P1 결과와 P2 실제 대상·승인을 분리한다.
 
 ## 후속과 현재 단계
 

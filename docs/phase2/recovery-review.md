@@ -1,6 +1,6 @@
 # P2 중단 RUN — 복구 검토 인계
 
-2026-10-13 KST · 이권욱 · CODEX_ASSISTED. `delivery_store.py`와 코어의 **현재 구현을 읽어 정리한 준비 절차**다. 실제 서버 조회·active 해제·재개·복구를 실행하는 Runbook/CLI는 아니다. [배포 코어 계약](delivery-adapter.md)과 기존 #46 AC를 유지한다.
+2026-10-13 작성 / 10/14 보완 · 이권욱 · CODEX_ASSISTED. `delivery_store.py`와 코어의 준비 절차 및 `delivery_recovery.py`의 오프라인 기록 검증 방법이다. 실제 서버 조회·active 해제·배포 재개·복구 쓰기는 수행하지 않는다. [배포 코어 계약](delivery-adapter.md)과 기존 #46 AC를 유지한다.
 
 ## 적용 범위와 현재 기술 제한
 
@@ -41,7 +41,7 @@
 
 1. **이권욱/#46:** 중복 실행을 막는 운영 제어와 단일 Runner/root 사용 여부를 먼저 확인하는 절차를 고정한다. 현재 claim/fence를 우회해 다른 root·다른 RUN을 만들지 않는다. 실제 실행 Job/프로세스 종료 여부는 승인된 운영 확인 범위에서 확보한다.
 2. **원본 보유 실행자 → 이권욱:** Binding/source·RUN·대상과 해당 claim/active/journal/complete·Job 로그를 같은 회차로 인계한다. 공유·수신·재해시·내용 검토를 분리한다. 공개 GitHub에는 token/credential·Plan/state·비공개 raw를 싣지 않는다.
-3. **이권욱 자체 검토:** 순번/이전 SHA·Binding·허용 receipt 전이·ack/pending/rollout 대응을 확인한다. 손상 시 원본 복구를 추측하지 않고 보류한다. 이 문서 작성에서 실제 원본이나 자동 journal 재검증 도구를 실행한 것은 아니다.
+3. **이권욱 자체 검토:** 아래 읽기 전용 CLI로 순번/이전 SHA·Binding·허용 receipt 전이·ack/pending/rollout 대응을 확인할 수 있다. 손상 시 원본 복구를 추측하지 않고 보류한다. 지금 시험한 파일은 합성 fixture이며 실제 운영 원본을 검증한 것으로 기록하지 않는다.
 4. **플랫폼 이하영 + 앱/Registry 생산 이재환의 입력 소비:** 승인된 실제 조회창에서 cluster/API/namespace UID·객체 UID/spec/image·field ownership·rollout/health/현재·이전 digest 및 다른 변경 여부를 대조한다. 실제 조회 명령은 운영 통합 SHA와 인계된 대상에 한정해 검토한다. 이 문서가 조회 권한·작업창을 새로 승인하지 않는다.
 5. **이권욱/#46 판단:** 정상 완료 확인, 별도 승인된 이전 렌더로 restore, 또는 불명확하여 계속 중단 중 하나를 근거와 함께 기록한다. restore는 새 RUN·새 Binding·유효 권한으로 한정하며 DB 데이터 원복을 포함하지 않는다. token 만료·actual 불일치면 복구 쓰기도 중단한다.
 6. **운영 통합 구현 후 별도 리뷰:** 해제 대상이 대조한 exact target/binding인지, 다른 active 변경이 없는지, 원본·결정 기록의 내구성이 확보되는지 확인한 한정 조정만 허용한다. 원본 claim/journal 보존, 실패 시 fence 유지, 중복 조정/재실행 차단을 검증해야 한다. 이 단계의 도구/실제 실행은 현재 미구현·미실행이다.
@@ -55,3 +55,30 @@
 수동 조정 코드가 생기면 **새 변경 부분**에 대해 active/Binding mismatch, live Job 충돌, snapshot 변경, partial/corrupt journal, complete+active, decision 기록 실패, 중복 조정, 새 RUN 진입의 실패/복구 경로를 검증한다. 현재 자동 해제/재개가 구현되었다고 표시하지 않는다. 기존 실패 fence를 없애는 우회 수정은 허용 범위 밖이다.
 
 현재 판정: **복구 검토 절차 준비 / 운영 조정 통합 미완료 / Runtime NOT_RUN**. 문서 복구는 해당 커밋 revert이며 서버 원복과 별개다.
+
+## 10/14 추가 — 재시작 후 읽기 전용 기록 검증
+
+실행 위치는 **승인된 P2 저장소를 가진 신뢰된 POSIX 준비 환경**이다. 해당 파일 소유자의 일반 권한과 Python 표준 라이브러리를 사용한다. 이번 PR의 Linux CI는 임시 합성 저장소만 검사한다. 운영 Runner에 배치·접속하거나 실제 root 경로를 지정한 것은 아니다. P1 저장소·kubeconfig·credential을 입력하지 않는다.
+
+```text
+python tools/phase2/delivery_recovery.py --root <기존-P2-영속-root> --binding <해당-RUN의-원본-Binding.json>
+```
+
+- 원래 Binding의 정확한 필드만 수용한다. 이 JSON은 승인서·Lease가 아니다. 재구성한 임의 Binding으로 승인 사실을 만들지 않는다.
+- 기존 target mutex에 비차단 잠금을 잡으며 파일을 새로 만들지 않는다. 실행 중 writer가 있으면 `TARGET_BUSY`, lock/claim 부재·다른 Binding·권한/경로 이상은 차단한다. Windows는 store 접근 전에 거부한다.
+- 원본 claim/active와 최대64개 journal의 파일 종류·소유·권한·hardlink, 목록·순번·이전 SHA·receipt 전이를 대조한다. 부분 tail·추가/누락·중복 JSON key·비정상 값은 보존한 채 실패한다. FIFO를 열어 대기하지 않는다.
+- RC0은 기록 검사 성공이다. `runtime_state/authorization/delivery_gate=NOT_VERIFIED`, `automatic_resume_allowed=false`를 항상 유지한다. `NO_DURABLE_INTENT`도 실제 미전송을 증명하지 않는다. `COMPLETED_RECORD`는 원본 완료 marker 정합성만 뜻한다.
+- RC2 또는 `WRITE_OUTCOME_UNCONFIRMED/INCOMPLETE_FENCE`는 담당자 검토로 넘긴다. 부분 파일을 편집하거나 마지막 정상 기록만으로 꼬리를 잘라내지 않는다. active·claim·journal·complete를 자동 삭제하거나 writer로 다시 열지 않는다.
+- 출력은 비공개 원본과 함께 보존하고 실제 cluster/API/namespace UID·객체 UID/spec/image/field ownership·후속 Job 변화와 사람이 대조한다. source/관측시각·readback·정리 판단 연결은 실제 입력 도착 후 별도다. hash는 파일 무결성만 의미한다.
+
+### 대조 결과에 따른 담당자 인계
+
+| 진단 | 담당자 조치와 종료조건 |
+|---|---|
+| TARGET_BUSY | 권욱이 기존 Job/실행 담당과 확인. 강제 종료·잠금 제거 없이 원래 실행 수명주기 종료 후 재조회 |
+| 손상/누락/다른 Binding | 생산 실행자가 같은 회차 원본을 보존, 권욱이 차이 검토. 임의 파일 보정·RUN 재사용 금지 |
+| pending/일부 ack/STOP | 하영 actual 대상·권한 입력과 재환 current/previous 렌더 입력을 소비하여 실제 변경 여부 대조. 불명확하면 중단 유지 |
+| terminal+active 또는 complete+active | 전체 업무 종료와 원본/실제 상태를 대조. 현재 도구에는 fence 해제 기능이 없으며 한정 조정 구현·독립 검토 후 별도 판단 |
+| complete·active 없음 | 원본 완료 기록 수용 후보. 실제 업무 인수·새 실행 승인·동일 RUN 재사용 허가는 아님 |
+
+코드 변경의 실패/복구 검증은 `test_delivery_recovery.py`로 분리한다. 새 프로세스에서 완료 기록 조회, 살아 있는 writer 거부, pending 복원 후 fence 유지, 손상/부분 완료/링크/FIFO 거부, 원본 bytes 불변을 시험한다. POSIX 시험과 Windows SKIP을 구분하며 이 테스트도 실제 ROSA 복구 성공은 아니다.
