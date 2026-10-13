@@ -2,7 +2,7 @@
 
 2026-10-13 KST · Lead 이권욱 · CODEX_ASSISTED.
 
-`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. 후속 `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal을 구현한다. 네트워크 구현, 실제 인증/권한 검증기, 운영 CLI/Workflow는 없다. 외부 함수를 주입하는 Python 라이브러리이며 배포 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
+`tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal, `delivery_transport.py`는 CA·hostname 검증과 전체 I/O 제한시간을 적용하는 TLS sender 라이브러리다. 실제 인증/권한 검증기, 운영 CLI/Workflow와 이 모듈들의 실제 연결은 없다. 배포 및 socket 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
 
 ## 기준과 Phase 1 경계
 
@@ -20,7 +20,7 @@
 | 렌더 | 주입한 생산자 검사기를 동일 raw bytes에 호출. app PASS, placeholder 허용=false, 계약/렌더 hash와 승인 host 일치 필요. 자원 누락/추가/중복 거부 | 저장된 PASS JSON만 읽는 함수를 연결하면 안 됨. 생산자 검사·파싱 bridge의 운영 연결은 잔여 |
 | 범위 | `fds-app` Service2·Deployment2·Route2. SA/NP/Secret/권한·삭제 불가. 앱 이름·SA·이미지·onprem-egress 라벨·두 Route host/TLS 고정 | CI 경로의 제한이며 Kubernetes admission 통제가 아님 |
 | 첫 쓰기 | 요청 TTL=900초, **실제 token 및 실행 승인 잔여시간 모두 660초 이상**인지 durable intent 저장 이후 재확인 | 실제 issuer/audience/TokenRequest·RBAC는 코어가 검증하거나 발급하지 않음 |
-| 통신 요청 | 대상 origin·CA hash·credential fingerprint를 요청에 결속. Server-Side Apply PATCH, fieldManager=fds-deployer, 강제 덮어쓰기/자동 재시도 없음 | TLS·HTTP·자격증명 전달은 주입한 sender의 책임. 이 변경에 실제 sender 없음 |
+| 통신 요청 | 대상 origin·CA hash·credential fingerprint를 요청에 결속. Server-Side Apply PATCH, fieldManager=fds-deployer, 강제 덮어쓰기/자동 재시도 없음 | TLS sender 라이브러리와 socket MOCK 추가. actual API/CA/credential 검증·연결은 미실행 |
 | 중단 | 매 요청과 응답 처리 후 승인·만료 확인. credential/승인 교체, 시계 역행, 응답 지연, 거부, 상태 불명확, checkpoint 실패 시 다음 쓰기 중단 | 외부 함수의 실제 마감시간 강제·내구성은 추후 독립 검증 필요 |
 | rollout | 두 Deployment 각 최대 300초. UID/generation/spec 불변, observedGeneration·replica 수 확인 | Pod imageID·Route/업무 health·DB/E2E·AC 성공은 별도 |
 | 복구 | `action=restore`와 별도 승인된 이전 렌더·새 RUN의 Binding으로 동일 6개 적용 절차 사용 | 자동 rollback/rollout undo/삭제·데이터 복구 없음. 복구 입력·실행 허가는 별도 |
@@ -54,6 +54,19 @@
 
 연결 순서: raw 입력 검사/승인 → `acquire(root, binding)` → `Journal(claim)` → authorizer에서 `claim.check()`/`journal.check()`와 실제 권한 확인 → Adapter에 journal callback 주입 → 결과 대조 → 필요 업무 종료 후 정상 complete → journal/claim close. 예외에서는 기록과 active를 보존한다. 실제 root 지정·credential/권한 검증·동일 Runner 제한·정리/수동 복구 통합은 미실행이다.
 
+## TLS sender — 라이브러리 구현, 접속 미실행
+
+`Sender(binding, ca_pem=..., token=..., endpoint_ip=...)`를 검증된 실행 통합 코드만 생성하고 Adapter의 `send`에 연결한다. CLI·환경 변수 기반 token·kubeconfig 탐색·자체 credential 발급은 없다. 실제 입력은 파일/명령행/로그에 복사하지 않고 기존 승인된 전달·검증 경로에서 소비해야 한다.
+
+- CA 원본 hash와 token fingerprint를 Binding/Request와 대조한다. 고정 CA만 넣은 `SSLContext(PROTOCOL_TLS_CLIENT)`로 인증서 체인·API DNS hostname을 검증하고 TLS 1.2 이상을 사용한다. 시스템 기본 trust·환경 `SSLKEYLOGFILE`·HTTP proxy를 읽지 않는다. 검증 실패 시 인증 헤더를 보내지 않는다.
+- `endpoint_ip`는 승인 준비 단계에서 실제 API DNS를 해석·검증한 숫자 주소 한 개다. 이 모듈은 DNS를 새로 해석하지 않아 이름 조회가 요청 제한시간을 넘기는 경로를 피한다. endpoint 주소와 해석 시각/출처를 실제 대상 검증에 연결하는 것은 후속 통합 책임이다. IP를 TLS hostname으로 대신 쓰거나 영구 hosts를 수정하지 않는다. 주소 변경은 자동 재시도 사유가 아니다.
+- socket을 nonblocking으로 사용하고 connect·TLS handshake·부분 send·응답 읽기 전체에 동일 monotonic deadline(최대10초)을 전달한다. 응답이 조금씩 도착해도 제한시간을 초기화하지 않는다. HTTP 파싱은 표준 `http.client.HTTPResponse`를 사용하고 응답 body 1MiB, wire 1MiB+64KiB를 제한한다.
+- 같은 6개 객체의 PATCH와 두 Deployment GET만 수용한다. 고정 Host/SNI·Content-Type·fieldManager를 사용한다. redirect·proxy·재연결·재시도·다음 IP fallback은 없다. 응답은 JSON 객체, 중복 key/NaN 금지, 모순된 length/encoding 거부다.
+- HTTP 오류는 4xx를 포함해 코어에 **결과 불명확**으로 전달하고 pending을 보존한다. 현재 모듈은 서버 Status를 근거로 비변경을 확정하는 `Rejected` 분류를 구현하지 않았다. 더 보수적으로 중단하는 것으로, 자동 복구/재시도를 허용하지 않는다.
+- 정적 검토와 주입 socket MOCK은 실제 TLS handshake 성공, 실제 CA의 적합성·token 진위·RBAC 또는 운영 DNS/ROSA 접속 성공을 증명하지 않는다. 실제 대상 없이 준비한 단계에서는 이를 미실행으로 유지한다.
+
+기술 근거: Python 공식 [SSLContext 및 nonblocking TLS](https://docs.python.org/3.12/library/ssl.html), [HTTPResponse](https://docs.python.org/3.12/library/http.client.html), [selectors](https://docs.python.org/3.12/library/selectors.html). 모듈 구성만으로 승인·권한의 진위를 검증했다고 해석하지 않는다.
+
 ## 로컬 확인과 중단·복구
 
 대상: 일반 사용자 권한의 작업 PC 또는 GitHub-hosted CI, Python 3 표준 라이브러리. 저장소 루트에서 다음 합성 시험을 실행한다. AWS/ROSA/Runner 접속·credential·kubectl이 필요 없다.
@@ -76,7 +89,7 @@ Runtime 연결 후에는 어떤 STOP도 자동 재시작·token 갱신·force ap
 
 ## 후속과 현재 단계
 
-- 권욱: 실제 producer bridge, 원본/승인 검증·구현된 POSIX store의 실제 경로/수명주기·TLS sender 연결, Runner CA 사용 출처와 Build/Push 원본 결속. 코어/store 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
+- 권욱: 실제 producer bridge, 원본/승인 검증·구현된 POSIX store의 실제 경로/수명주기·TLS sender 연결, Runner CA 사용 출처와 Build/Push 원본 결속. 코어/store/transport 독립 리뷰 후에도 이 통합 구현의 리뷰/시험이 남는다.
 - 하영: actual ROSA/API/namespace UID/CA/승인 host 및 플랫폼·권한 receipt.
 - 재환: 승인 Registry/current·previous digest, clean source·app/prereq 렌더 결속과 복구 입력.
 - 그 뒤 별도 허용된 RUN-A/RUN-B/복구 및 Pod imageID/health 증적을 검증한다. 이미 완료한 P1 Push 시험을 이 준비를 위해 반복하지 않는다.
