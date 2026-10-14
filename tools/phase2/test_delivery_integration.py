@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import delivery_adapter as core
+from delivery_authorization import BoundAuthorizer, VerifiedInputs
 import delivery_store as store
 import delivery_transport as transport
 from test_delivery_adapter import Harness
@@ -69,12 +70,11 @@ class DeliveryIntegrationTests(unittest.TestCase):
         sender = transport.Sender(h.binding, ca_pem=CA, token=TOKEN, endpoint_ip='192.0.2.10')
         self.h, self.claim, self.journal = h, claim, journal
 
-        def authorize(binding):
-            claim.check()
-            journal.check()
+        def verify(binding):
             if self.deny_after is not None and len(h.requests) >= self.deny_after:
                 raise RuntimeError('SYNTHETIC_PRIVATE_AUTH_DETAIL')
-            return h.lease
+            # Synthetic verified input only; no live identity/approval claim.
+            return VerifiedInputs(binding, binding, h.lease)
 
         def send(request):
             if request.method == 'PATCH':
@@ -86,7 +86,7 @@ class DeliveryIntegrationTests(unittest.TestCase):
             self.current_request = request
             return sender(request)
 
-        h.authorizer = authorize
+        h.authorizer = BoundAuthorizer(verify=verify, claim=claim, journal=journal, wall=lambda: h.now)
         h.adapter.send = send
         h.adapter.checkpoint = journal
         return h, claim, journal

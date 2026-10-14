@@ -31,6 +31,10 @@
 
 ## 주입 함수의 필수 계약 — 아직 Runtime 연결 아님
 
+10/14 후속 구현: `delivery_authorization.BoundAuthorizer`는 신뢰된 verifier가 매 호출 반환하는 `VerifiedInputs`의 승인 Binding·실제 대조 Binding·Lease를 요청 Binding 및 동일 claim/journal에 대조한다. 검증 전후 claim/journal을 검사하고 승인/관측 불일치·만료·묵시 갱신·provider 실패에서 차단한다. 이 타입은 외부 JSON 스키마가 아니며, `approved=true`나 기존 PASS 파일을 실제 승인으로 변환하지 않는다. 실제 승인 진위·fresh identity/UID/CA·RBAC·clean render·증적 원본을 확인하는 verifier 및 운영 연결은 여전히 미구현이다. 이 helper의 MOCK 성공을 실제 승인 검증 완료로 표시하지 않는다.
+
+Service는 생산자 검사기와 별도로 코어와 sender에서 `ClusterIP`(생략 시 기본값)만 허용한다. NodePort/LoadBalancer/ExternalName, 비어 있지 않은 externalIPs, nodePort 및 LB 전용 필드를 거부한다. 응답에 외부 IP/LB ingress가 남아 있으면 pending을 보존하고 중단하며 자동 재시도/정리를 하지 않는다. 지정 Route 2개와 TLS 계약은 기존대로다.
+
 1. **validator(raw_render, raw_contract)**: 고정·검토된 #43 `check_delivery_render.py`를 `mode=app`, `allow_placeholders=False`로 같은 bytes에 실행한다. `(report, parsed_documents)`를 반환한다. 원본 bytes/파싱 객체 결속, 승인 소스의 검사기 버전과 YAML parser 선택은 bridge가 보장해야 한다. 코어는 YAML dependency를 새로 설치하거나 저장소 코드를 동적으로 import하지 않는다.
 2. **authorize(binding)**: 원본 승인·실행 창, ROSA identity/API/namespace UID/CA, 실제 issuer/audience/만료·최소 RBAC, clean source/렌더, 같은 회차의 플랫폼/Build/Scan/Push 증적을 검증한다. 현재 앱 객체의 UID/spec/image와 field ownership도 기존 실행 계약에 따라 대조해야 한다. 외부의 **영속 실행 claim/lock**을 유지하고 중단 RUN의 임의 재사용을 거부한 경우에만 `Lease`를 반환한다. 사용자 입력의 문자열/boolean을 그대로 Lease로 변환하면 안 된다. token 원문은 Lease에 넣지 않는다.
 3. **send(Request)**: 같은 credential fingerprint의 자격증명으로 해당 origin/CA를 검증하고 고정 path에만 요청한다. 환경 kubeconfig/context·P1 API·프록시·redirect로 대체하지 않는다. request timeout을 TLS 연결·전송·응답 전체에 강제하고 응답 크기를 제한한다. `Rejected`는 변경이 없다고 확정된 응답에만 사용한다. timeout/5xx/부분 응답은 `Rejected`로 바꾸지 않는다. 이 코어는 callback 자체가 영원히 block하는 것을 중단시킬 수 없다.
@@ -45,6 +49,7 @@
 `CommittedProducerBridge(producer_repository, binding)`을 Adapter의 validator로 주입할 수 있다. 설치된 Git/Python과 소비자 Python 환경은 신뢰된 준비 환경이어야 한다.
 
 - full source commit의 `tools/check_delivery_render.py`와 `deploy/delivery/rosa.yaml` 두 Git 객체만 읽는다. working tree·HEAD 변경, Git replace ref, ambient GIT_DIR를 원본으로 소비하지 않는다. Git protocol·lazy fetch를 금지하여 local object가 없으면 차단한다.
+- 저장소 읽기 전에 실제 Git 바이너리의 `--no-replace-objects --no-lazy-fetch --version`을 실행해 옵션 지원을 검사한다. 실패/timeout/미설치면 `GIT_LOCAL_ONLY_UNAVAILABLE`로 차단하고 옵션을 빼서 재시도하지 않는다. Git 2.43 미지원은 PR75 리뷰에서 보고됐다. 배포판 backport도 있어 버전 문자열만으로 지원을 추정하지 않는다. 준비 PC/후속 실행 환경에서 기능 검사 성공이 필요하며 이번 변경으로 Runner Git을 설치·갱신하지 않는다.
 - 실행할 검사기는 fds-msa `6e7acf1053b1e44164d38851e477a2d2d64b9c3a`의 원본 SHA256 `b889d6123fe0d566424a17ab88a6e41e49696bb1bb572b16ed88f22a654df2e1`에 고정했다. 다른 검사기 코드는 새 소스 검토·소비자 변경 없이 실행하지 않는다.
 - 전달 계약은 해당 commit의 계약과 일치해야 한다. CRLF/LF 차이만 허용하며 receipt hash는 전달된 원본 bytes 기준으로 유지한다. 승인 host를 Handoff 2 후 PR로 기록한다는 생산 계약 §4의 조건을 따른다. 현재 저장소의 `PENDING` 값을 메모리에서 운영 승인값으로 덮어쓰지 않는다.
 - 입력당 1MiB와 YAML 깊이/토큰 수를 제한하고, 중복/non-string key·alias/anchor/tag/merge·비 JSON scalar·추가/누락 문서를 먼저 거부한다. 이후 검토된 원본 checker를 `app`, `allow_placeholders=False`로 다시 실행한다. 오류에는 YAML 원문·생산자 상세 오류·Git stderr를 노출하지 않는다.
@@ -80,13 +85,17 @@
 
 ## 로컬 확인과 중단·복구
 
+Linux store/연결 시험은 `/tmp` 아래에서 실행하지 않는다. 저장소 checkout 및 상위 경로가 root/현재 사용자 소유이고 group/other 쓰기 불가인 작업 디렉터리에서 실행한다. 시험은 그 아래 임시 0700 경로를 쓰지만 운영에서는 모든 P2 Job이 공유하는 영속 root가 필요하다. `ROOT_PARENT_UNSAFE`이면 실행 위치/소유·권한을 확인하며 보안 검사를 완화하지 않는다.
+
+민감정보 로깅 경계: token은 sender 및 전송 중 지역변수에 존재한다. `raise ... from None`은 지역변수를 지우지 않는다. 운영 통합에서 traceback 지역변수 수집(`capture_locals=True`), 객체 전체 repr/vars, HTTP wire/debug, 환경 덤프 또는 Sentry류의 local-variable 수집을 활성화하지 않는다. receipt의 허용 필드·정적 오류코드만 기록한다. 실제 로깅 설정 점검은 운영 연결 전 담당자의 확인 항목이며, 이번 문서가 로거 설정을 변경한 것은 아니다.
+
 대상: 일반 사용자 권한의 작업 PC 또는 GitHub-hosted CI, Python 3 표준 라이브러리. 저장소 루트에서 다음 합성 시험을 실행한다. AWS/ROSA/Runner 접속·credential·kubectl이 필요 없다.
 
 ```text
 python -m unittest discover -s tools/phase2 -p "test_*.py" -v
 ```
 
-정상 판정은 unittest의 테스트 수·실패/오류/skip과 RC를 함께 확인한다. 새 adapter 시험과 기존 intake 회귀를 포함한다. 기존 P2 CI가 이 경로를 자동 탐색하므로 운영 Workflow 수정은 없다. bridge parser 시험 9건은 PyYAML 6.0.3을 별도로 준비한 Python 환경에서 실행하며, 기본 환경에 없으면 명시적으로 SKIP한다. Git snapshot 시험 6건은 표준 라이브러리와 Git으로 실행한다. 실패하면 코드/합성 입력을 수정하고 영향 시험을 재실행한다. 운영 원복 대상은 없다.
+정상 판정은 unittest의 테스트 수·실패/오류/skip과 RC를 함께 확인한다. 새 adapter 시험과 기존 intake 회귀를 포함한다. 기존 P2 CI가 이 경로를 자동 탐색하므로 운영 Workflow 수정은 없다. bridge parser 시험 9건은 PyYAML 6.0.3을 별도로 준비한 Python 환경에서 실행하며, 기본 환경에 없으면 명시적으로 SKIP한다. Git snapshot 시험은 표준 라이브러리와 위 옵션을 지원하는 Git으로 실행한다. 실패하면 코드/합성 입력을 수정하고 영향 시험을 재실행한다. 운영 원복 대상은 없다.
 
 `test_delivery_integration.py`의 추가 6건은 코어·실제 POSIX journal·sender 코드의 연결을 확인한다. TLS/API·승인·validator는 합성이며 socket/DNS를 가로채므로 실제 네트워크는 호출하지 않는다. 정상 완료 후 별도 Binding의 복구, HTTP409·응답 timeout·권한 상실, 응답 직후 ack 기록 실패, ack 전 예외 주입 중단을 검증한다. 마지막 두 경우에는 메모리에서 응답을 관측했더라도 durable journal의 pending과 불완전 파일을 보존하고 새 RUN을 차단해야 한다. 실제 프로세스 강제 종료·전원 상실·운영 저장장치 내구성 시험은 아니다. Windows에서는 6건 모두 SKIP이며 Linux CI에서 확인한다.
 

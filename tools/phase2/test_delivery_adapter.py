@@ -105,6 +105,46 @@ class Harness:
 
 
 class AdapterTests(unittest.TestCase):
+    def test_public_service_fields_block_before_any_request(self):
+        changes = ({'type': 'NodePort'}, {'type': 'LoadBalancer'}, {'type': 'ExternalName'},
+                   {'externalIPs': ['192.0.2.10']}, {'externalIPs': None},
+                   {'externalIPs': False}, {'externalName': 'other.example.com'},
+                   {'loadBalancerIP': '192.0.2.10'}, {'loadBalancerClass': 'other'},
+                   {'loadBalancerSourceRanges': []}, {'healthCheckNodePort': 30000},
+                   {'allocateLoadBalancerNodePorts': False}, {'externalTrafficPolicy': 'Local'},
+                   {'ports': [{'port': 8000, 'nodePort': 0}]})
+        for change in changes:
+            with self.subTest(change=change):
+                h = Harness()
+                h.change_render(lambda docs: docs[0]['spec'].update(change))
+                result = h.run()
+                self.assertEqual(result['error_code'], 'SERVICE_EXPOSURE_FORBIDDEN')
+                self.assertEqual(h.requests, [])
+
+    def test_defaulted_internal_service_response_is_allowed(self):
+        h = Harness()
+        def default(request, obj):
+            if obj['kind'] == 'Service':
+                obj['spec'].update(type='ClusterIP', clusterIP='10.0.0.1', externalIPs=[])
+                obj['status'] = {'loadBalancer': {}}
+        h.after_send = default
+        self.assertEqual(h.run()['status'], 'ROLLOUT_OBSERVED')
+
+    def test_exposed_service_response_keeps_pending_and_stops_without_retry(self):
+        for lb in (False, True):
+            h = Harness()
+            def changed(request, obj):
+                if lb:
+                    obj['status'] = {'loadBalancer': {'ingress': [{'ip': '192.0.2.10'}]}}
+                else:
+                    obj['spec']['externalIPs'] = ['192.0.2.10']
+            h.after_send = changed
+            result = h.run()
+            self.assertEqual(result['error_code'], 'WRITE_RESPONSE_INVALID')
+            self.assertEqual(len(h.requests), 1)
+            self.assertEqual(result['pending'], 'v1/Service/transaction-api')
+            self.assertEqual(result['acknowledged'], [])
+
     def test_six_scoped_applies_and_two_rollouts_are_not_delivery_acceptance(self):
         h = Harness()
         r = h.run()

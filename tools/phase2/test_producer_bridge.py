@@ -7,6 +7,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import delivery_adapter as core
 import producer_bridge as bridge
@@ -57,6 +58,21 @@ class RepositoryFixture(unittest.TestCase):
 
 
 class SnapshotTests(RepositoryFixture):
+    def test_unsupported_git_stops_before_reading_any_repository_object(self):
+        with patch.object(bridge.subprocess, 'run', return_value=SimpleNamespace(returncode=129)) as run:
+            with self.assertRaisesRegex(bridge.BridgeError, '^GIT_LOCAL_ONLY_UNAVAILABLE$'):
+                bridge.GitSnapshot(self.root, self.commit)
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0],
+                         ['git', '--no-replace-objects', '--no-lazy-fetch', '--version'])
+
+    def test_git_probe_timeout_or_missing_binary_has_static_error_and_no_fallback(self):
+        for error in (FileNotFoundError('private/path'), subprocess.TimeoutExpired('private', 15)):
+            with patch.object(bridge.subprocess, 'run', side_effect=error) as run:
+                with self.assertRaisesRegex(bridge.BridgeError, '^GIT_LOCAL_ONLY_UNAVAILABLE$'):
+                    bridge.GitSnapshot(self.root, self.commit)
+            self.assertEqual(run.call_count, 1)
+
     def test_reads_requested_commit_not_worktree_or_new_head(self):
         self.publish(b'raise RuntimeError("do not execute")\n', b'host: other.example.com\n')
         snapshot = bridge.GitSnapshot(self.root, self.commit)
