@@ -157,6 +157,22 @@ def scope_checked(obj, b, *, response=False):
     if obj['kind'] == 'Route':
         need(obj['spec']['host'] == b.route_host and obj['spec']['tls'] == TLS,
              'ROUTE_CONTRACT_MISMATCH')
+    if obj['kind'] == 'Service':
+        spec = obj['spec']
+        need(type(spec) is dict and spec.get('type', 'ClusterIP') == 'ClusterIP'
+             and type(spec.get('externalIPs', [])) is list and not spec.get('externalIPs')
+             and not set(spec).intersection(('externalName', 'loadBalancerIP', 'loadBalancerClass',
+                                            'loadBalancerSourceRanges', 'healthCheckNodePort',
+                                            'allocateLoadBalancerNodePorts', 'externalTrafficPolicy')),
+             'SERVICE_EXPOSURE_FORBIDDEN')
+        ports = spec.get('ports')
+        need(type(ports) is list and len(ports) > 0
+             and all(type(port) is dict and 'nodePort' not in port for port in ports),
+             'SERVICE_EXPOSURE_FORBIDDEN')
+        if response:
+            # An internal Service must not carry a leftover/external LB ingress.
+            need(not obj.get('status', {}).get('loadBalancer', {}).get('ingress'),
+                 'SERVICE_EXPOSURE_FORBIDDEN')
     if obj['kind'] == 'Deployment':
         pod = obj['spec']['template']['spec']
         containers = pod['containers']

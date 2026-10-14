@@ -43,6 +43,9 @@ class GitSnapshot:
         self.env = {k: v for k, v in os.environ.items() if not k.upper().startswith('GIT_')}
         self.env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                         GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0', GIT_NO_LAZY_FETCH='1')
+        # Probe the actual binary instead of guessing support from a version
+        # string. No repository access or fallback that could enable lazy fetch.
+        require_local_only_git(self.env)
         need(self._git('-t', commit).strip() == b'commit', 'SOURCE_NOT_COMMIT')
 
     def _git(self, *args):
@@ -67,6 +70,16 @@ class GitSnapshot:
         raw = self._git('blob', spec)
         need(len(raw) == size, 'SOURCE_SIZE_CHANGED')
         return raw
+
+
+def require_local_only_git(env):
+    try:
+        result = subprocess.run(['git', '--no-replace-objects', '--no-lazy-fetch', '--version'],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                stdin=subprocess.DEVNULL, env=env, timeout=15, check=False)
+        need(result.returncode == 0, 'GIT_LOCAL_ONLY_UNAVAILABLE')
+    except Exception:
+        raise BridgeError('GIT_LOCAL_ONLY_UNAVAILABLE') from None
 
 
 def yaml_module():
@@ -161,5 +174,9 @@ class CommittedProducerBridge:
                           parser_version=yaml.__version__,
                           render_generation='NOT_VERIFIED', source_approval='NOT_VERIFIED')
             return result, docs
+        except BridgeError as exc:
+            if str(exc) == 'GIT_LOCAL_ONLY_UNAVAILABLE':
+                raise BridgeError('GIT_LOCAL_ONLY_UNAVAILABLE') from None
+            raise BridgeError('PRODUCER_BRIDGE_FAILED') from None
         except Exception:
             raise BridgeError('PRODUCER_BRIDGE_FAILED') from None
