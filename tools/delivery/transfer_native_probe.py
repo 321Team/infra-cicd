@@ -33,6 +33,7 @@ FILES = {
     'deploy_native_probe.py', 'deploy_cp1_access.py', 'deploy_binding.py',
     'deploy_credential.py', 'deploy_transport.py', 'deploy_adapter.py', 'delivery_gate.py',
 }
+SCHEMA = 'P1-CICD-native-probe-source-1'
 def require(ok):
     if not ok:
         raise ValueError('SOURCE_BOOTSTRAP_FAILED')
@@ -87,7 +88,7 @@ def stage(raw, expected_hash, source_sha, role):
             and re.fullmatch('[0-9a-f]{40}', source_sha))
     bundle = json.loads(raw.decode('utf-8'), object_pairs_hook=pairs, parse_constant=constant)
     require(type(bundle) is dict and set(bundle) == {'schema', 'source_sha', 'files'}
-            and bundle['schema'] == 'P1-CICD-native-probe-source-1'
+            and bundle['schema'] == SCHEMA
             and bundle['source_sha'] == source_sha and type(bundle['files']) is dict
             and set(bundle['files']) == FILES)
     prepared = {}
@@ -136,9 +137,16 @@ def need(ok, code):
         raise TransferError(code)
 
 
-def loader():
+def bootstrap(lifecycle=False):
+    need(type(lifecycle) is bool, 'PROBE_MODE_INVALID')
+    extra = ("\nFILES = FILES | {'deploy_token_lifecycle.py'}\n"
+             "SCHEMA = 'P1-CICD-token-lifecycle-source-1'\n") if lifecycle else ''
+    return BOOTSTRAP_LIBRARY + extra
+
+
+def loader(lifecycle=False):
     namespace = {}
-    exec(BOOTSTRAP_LIBRARY, namespace)
+    exec(bootstrap(lifecycle), namespace)
     return namespace
 
 
@@ -148,8 +156,8 @@ def snapshot(info):
 
 class Session:
     def __init__(self, role, bundle, digest, source, ca, authorization, channel_class,
-                 *, key=None, checks=None):
-        self.checks = checks or loader()
+                 *, key=None, checks=None, lifecycle=False):
+        self.checks = checks or loader(lifecycle)
         ssh = shutil.which('ssh')
         need(ssh is not None and Path(ssh).is_absolute(), 'SSH_MISSING')
         self.checks['safe'](ssh)
@@ -173,8 +181,11 @@ class Session:
             need(not info.st_mode & 0o077, 'PRIVATE_KEY_PERMISSIONS_INVALID')
             self.key_info = snapshot(info)
             options += ['-o', 'IdentitiesOnly=yes', '-i', str(self.key)]
+        remote = REMOTE_MAIN
+        if lifecycle:
+            remote = remote.replace('import deploy_native_probe', 'import deploy_token_lifecycle as deploy_native_probe')
         command = ' '.join(shlex.quote(value) for value in [
-            '/usr/bin/python3', '-I', '-B', '-c', BOOTSTRAP_LIBRARY + REMOTE_MAIN,
+            '/usr/bin/python3', '-I', '-B', '-c', bootstrap(lifecycle) + remote,
             role, digest, source, ca, CA_SHA, authorization or '',
         ])
         env = {k: v for k, v in os.environ.items()
@@ -413,11 +424,19 @@ def main():
     parser.add_argument('--runner-ca', default=RUNNER_CA)
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--authorization-expires')
+    parser.add_argument('--token-lifecycle', action='store_true',
+                        help='Separate AC08 diagnosis: valid GET, expired 401, fresh-token GET')
+    parser.add_argument('--max-token-requests', type=int,
+                        help='Explicitly set to 2 for an authorized AC08 execution')
     args = parser.parse_args()
     try:
         need(not args.execute or args.authorization_expires is not None,
              'EXPLICIT_ISSUANCE_WINDOW_REQUIRED')
-        checks = loader()
+        need((args.token_lifecycle and args.max_token_requests in (None, 2)
+              and (not args.execute or args.max_token_requests == 2))
+             or (not args.token_lifecycle and args.max_token_requests is None),
+             'TOKEN_REQUEST_LIMIT_REQUIRED')
+        checks = loader(args.token_lifecycle)
         checks['identity']('ansible')
         raw = checks['read'](Path(args.bundle))
         need(raw.endswith(b'\n') and raw.count(b'\n') == 1,
@@ -425,11 +444,19 @@ def main():
         root = checks['stage'](raw, args.bundle_sha256, args.source_sha, 'ansible')
         sys.dont_write_bytecode = True
         sys.path.insert(0, str(root))
-        import deploy_native_probe as module
-        result = coordinate(module, raw, args.bundle_sha256, args.source_sha,
-                            execute=args.execute, authorization=args.authorization_expires,
-                            cp1_ca=args.cp1_ca, runner_ca=args.runner_ca,
-                            cp1_key=args.cp1_key, runner_key=args.runner_key)
+        if args.token_lifecycle:
+            import deploy_token_lifecycle as module
+            result = module.coordinate(sys.modules[__name__], raw, args.bundle_sha256,
+                                       args.source_sha, execute=args.execute,
+                                       authorization=args.authorization_expires,
+                                       cp1_ca=args.cp1_ca, runner_ca=args.runner_ca,
+                                       cp1_key=args.cp1_key, runner_key=args.runner_key)
+        else:
+            import deploy_native_probe as module
+            result = coordinate(module, raw, args.bundle_sha256, args.source_sha,
+                                execute=args.execute, authorization=args.authorization_expires,
+                                cp1_ca=args.cp1_ca, runner_ca=args.runner_ca,
+                                cp1_key=args.cp1_key, runner_key=args.runner_key)
         result.update({'source_sha': args.source_sha, 'bundle_sha256': args.bundle_sha256,
                        'local_source_workdir': str(root),
                        'SOURCE_APPROVAL': 'OPERATOR_PINNED_NOT_VERIFIED_IN_TOOL',
