@@ -69,7 +69,40 @@ def check_db(evidence, db_result):
     return cache
 
 
-def scan_one(directory, archive, identity, cache, env):
+def _probe_file_limit():
+    # Only the deliberate missing-DB child: no successful report is expected.
+    import resource
+    resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
+
+
+def _run_empty_db_probe(command, directory):
+    """Retain bounded private diagnostics only for the dedicated error probe."""
+    invocation = {'argv': command, 'started_at': utcnow().isoformat(),
+                  'outcome': 'INTERRUPTED', 'exit_code': None,
+                  'file_size_limit': 1024 * 1024}
+    stderr = directory / 'scanner-stderr.log'
+    # No proxy/auth/Trivy override inheritance and no existing HOME config.
+    env = scanner_environment({})
+    env['HOME'] = str(directory)
+    try:
+        with stderr.open('xb') as log:
+            completed = subprocess.run(command, cwd=directory, env=env,
+                                       stdout=subprocess.DEVNULL, stderr=log,
+                                       timeout=150, check=False,
+                                       preexec_fn=_probe_file_limit)
+        invocation.update(outcome='COMPLETED', exit_code=completed.returncode)
+        return completed
+    except subprocess.TimeoutExpired:
+        invocation['outcome'] = 'TIMEOUT'
+        raise
+    finally:
+        invocation['finished_at'] = utcnow().isoformat()
+        if stderr.is_file():
+            invocation['stderr_sha256'] = sha256(stderr)
+        (directory / 'scanner-invocation.json').write_text(json.dumps(invocation, indent=2) + '\n')
+
+
+def scan_one(directory, archive, identity, cache, env, *, empty_db_probe=False):
     directory.mkdir(mode=0o700)
     # Trivy's OCI-image opener stats <input>/index.json, so --input must be an
     # extracted layout directory; the packed oci-archive tar itself is rejected
@@ -89,9 +122,12 @@ def scan_one(directory, archive, identity, cache, env):
                '--skip-version-check', '--severity', 'HIGH,CRITICAL', '--exit-code', '10',
                '--format', 'json', '--output', str(report_path), '--no-progress', '--timeout', '10m']
     # Reports can contain image config/secrets. Keep them private; never echo them.
-    completed = subprocess.run(command, cwd=directory, env=scanner_environment(env),
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               timeout=630, check=False)
+    if empty_db_probe:
+        completed = _run_empty_db_probe(command, directory)
+    else:
+        completed = subprocess.run(command, cwd=directory, env=scanner_environment(env),
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   timeout=630, check=False)
     rc = completed.returncode
     (directory / 'exit-code.txt').write_text(str(rc) + '\n')
     require(rc in (0, 10), 'SCANNER_EXECUTION_ERROR')
@@ -103,7 +139,7 @@ def scan_one(directory, archive, identity, cache, env):
             'report_sha256': sha256(report_path), **identity}
 
 
-def scan_pair(evidence, context, source_sha, archives, env):
+def scan_pair(evidence, context, source_sha, archives, env, *, empty_db_probe=False):
     """Internal adapter: same-process fresh DB, exact two images, no callbacks.
 
     Source approval/Test/Build provenance are the future caller's obligations.
@@ -116,6 +152,14 @@ def scan_pair(evidence, context, source_sha, archives, env):
               'binary_sha256': BINARY_SHA256, 'started_at': utcnow().isoformat()}
     rc = 1
     try:
+        if empty_db_probe:
+            require(context.get('purpose') == 'SCAN_NEGATIVE_NOT_DELIVERABLE' and
+                    context.get('negative_case') == 'scanner-error' and
+                    context.get('attempt') == 1 and
+                    context.get('workflow_ref') ==
+                    '321Team/infra-cicd/.github/workflows/app-scan-negative.yml@refs/heads/main',
+                    'EMPTY_DB_PROBE_CONTEXT_REQUIRED')
+            result['db_mode'] = 'INTENTIONAL_EMPTY_CACHE_NO_DOWNLOAD'
         require(isinstance(source_sha, str) and re.fullmatch('[0-9a-f]{40}', source_sha),
                 'SOURCE_SHA_INVALID')
         require(set(archives) == set(SERVICES), 'EXACT_TWO_IMAGES_REQUIRED')
@@ -127,15 +171,22 @@ def scan_pair(evidence, context, source_sha, archives, env):
             with path.open('rb') as src, copies[name].open('xb') as dst:
                 shutil.copyfileobj(src, dst)
             identities[name] = inspect_archive(copies[name])
-        db_evidence = evidence / 'db'
-        db_evidence.mkdir(mode=0o700)
-        db_rc, db_result = prepare(db_evidence, context, env)
-        require(db_rc == 0 and db_result.get('context') == context, 'DB_PREFLIGHT_FAILED')
-        result['db_result_sha256'] = sha256(db_evidence / 'result.json')
+        if empty_db_probe:
+            cache = evidence / 'empty-db-cache'
+            cache.mkdir(mode=0o700)  # Never remove or repurpose any existing DB.
+        else:
+            db_evidence = evidence / 'db'
+            db_evidence.mkdir(mode=0o700)
+            db_rc, db_result = prepare(db_evidence, context, env)
+            require(db_rc == 0 and db_result.get('context') == context, 'DB_PREFLIGHT_FAILED')
+            result['db_result_sha256'] = sha256(db_evidence / 'result.json')
         for name in SERVICES:
-            cache = check_db(evidence, db_result)
+            if not empty_db_probe:
+                cache = check_db(evidence, db_result)
             verify_binary()
-            scanned = scan_one(evidence / name, copies[name], identities[name], cache, env)
+            options = {'empty_db_probe': True} if empty_db_probe else {}
+            scanned = scan_one(evidence / name, copies[name], identities[name], cache, env, **options)
+            require(not empty_db_probe, 'EMPTY_DB_PROBE_UNEXPECTED_RESULT')
             result['images'][name] = scanned
             require(sha256(copies[name]) == identities[name]['archive_sha256'], 'OCI_ARCHIVE_CHANGED')
             check_db(evidence, db_result)
