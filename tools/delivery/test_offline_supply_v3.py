@@ -280,6 +280,38 @@ class FlowV3Tests(unittest.TestCase):
         self.assertEqual((rc, data['error_code']), (1, 'DOCKERFILE_TWO_STAGE_PROFILE_REQUIRED'))
         self.assertNotIn('podman-version', self.argv)
 
+    def test_negative_unit_stops_before_contract_build_and_scan_even_if_probe_returns(self):
+        for fault in ('expected-failure', 'unexpected-return'):
+            with self.subTest(fault=fault):
+                self.h.evidence = self.h.root / fault
+                self.h.evidence.mkdir()
+                self.h.scanner.reset_mock()
+                self.h.events.clear()
+                error = (flow.PreflightError('COMMAND_FAILED:unit-negative-start')
+                         if fault == 'expected-failure' else None)
+                with patch.object(flow.unit_negative, 'run', side_effect=error) as negative:
+                    rc, data = flow.execute(self.h.config, self.h.repo, self.h.evidence,
+                                            self.h.context, {}, unit_failure_probe=True)
+                self.assertEqual((rc, data['BUILD_SCAN']), (1, 'FAIL'))
+                self.assertIn('fds-engine-unit-0', self.h.events)
+                self.assertFalse(any('-contract-' in x or x.endswith(('-build', '-save'))
+                                     for x in self.h.events))
+                self.assertEqual(data['images'], {})
+                self.h.scanner.assert_not_called()
+                negative.assert_called_once()
+                # A mocked error without actual exit/log/cleanup proof must not pass.
+                self.assertEqual(data['NEGATIVE_UNIT_PROBE'], 'NOT_CONFIRMED')
+
+    def test_negative_flag_rejects_non_boolean_before_commands(self):
+        for flag in ('true', 1, None):
+            self.h.evidence = self.h.root / ('bad-mode-' + str(flag))
+            self.h.evidence.mkdir()
+            with patch.object(flow, 'run_command') as command:
+                rc, data = flow.execute(self.h.config, self.h.repo, self.h.evidence,
+                                        self.h.context, {}, unit_failure_probe=flag)
+            self.assertEqual((rc, data['error_code']), (1, 'NEGATIVE_MODE_INVALID'))
+            command.assert_not_called()
+
 
 class ProbeV3Tests(unittest.TestCase):
     def setUp(self):

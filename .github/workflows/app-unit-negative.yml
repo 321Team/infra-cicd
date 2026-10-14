@@ -1,0 +1,50 @@
+name: P1 Intentional Unit Failure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1-app-test-build-scan
+  cancel-in-progress: false
+
+jobs:
+  unit-negative:
+    if: github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    runs-on: [self-hosted, Linux, X64, p1-cicd, onprem, podman]
+    timeout-minutes: 30
+    env:
+      CICD_CHECKOUT: cicd-unit-negative-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Require a new checkout directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(hostname -s)" = cicd-runner01
+          test "$(id -un)" = server01_cicd-runner
+          test "$(id -u)" = 1000
+          test ! -e "$GITHUB_WORKSPACE/$CICD_CHECKOUT"
+          test ! -L "$GITHUB_WORKSPACE/$CICD_CHECKOUT"
+      - name: Checkout the reviewed workflow commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          path: ${{ env.CICD_CHECKOUT }}
+          persist-credentials: false
+          clean: false
+          set-safe-directory: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+      - name: Run approved app Unit then fixed intentional failing Unit
+        env:
+          CICD_APP_SOURCE_TOKEN: ${{ secrets.CICD_APP_SOURCE_READ_TOKEN }}
+        shell: bash
+        working-directory: ${{ env.CICD_CHECKOUT }}
+        run: |
+          set -euo pipefail
+          export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+          export PYTHONDONTWRITEBYTECODE=1
+          exec /usr/bin/python3 tools/delivery/app_workflow.py --execute --unit-failure-probe

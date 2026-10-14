@@ -27,6 +27,7 @@ from verify_runner import sha256  # noqa: E402
 import offline_supply as offline  # noqa: E402
 import offline_supply_v3 as offline_v3  # noqa: E402
 import image_smoke  # noqa: E402
+import unit_negative  # noqa: E402
 
 CONFIG = 'config/app-build-scan.json'
 PODMAN = '/usr/bin/podman'
@@ -266,7 +267,7 @@ def validate_scan_receipt(scan_rc, scan, context, source_sha, built, archives):
     return statuses
 
 
-def execute(config, source_dir, evidence, context, incoming_env):
+def execute(config, source_dir, evidence, context, incoming_env, *, unit_failure_probe=False):
     """Caller provides a new private directory and reviewed main input record."""
     result = {'BUILD_SCAN': 'FAIL', 'DELIVERY_GATE': 'NOT_VERIFIED',
               'PUSH': 'NOT_EXECUTED', 'DEPLOY': 'NOT_EXECUTED', 'context': context,
@@ -274,8 +275,11 @@ def execute(config, source_dir, evidence, context, incoming_env):
               'not_applicable_tests': []}
     rc = 1
     try:
+        require(type(unit_failure_probe) is bool, 'NEGATIVE_MODE_INVALID')
         validate_config(config)  # No source command/network before input completion.
         schema = config['schema']
+        require(not unit_failure_probe or schema == 'P1-CICD-app-build-scan-3',
+                'NEGATIVE_SCHEMA3_REQUIRED')
         supplied = schema in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3')
         supply_v3 = schema == 'P1-CICD-app-build-scan-3'
         v3_images = None
@@ -374,6 +378,11 @@ def execute(config, source_dir, evidence, context, incoming_env):
                     else:
                         command(f'{name}-{phase}-{index}', step['argv'],
                                 tests_root / step['cwd'], step['timeout_seconds'])
+            if unit_failure_probe and phase == 'unit':
+                receipt = result.setdefault('unit_negative', {})
+                unit_negative.run(command, podman, v3_images['builder']['config_digest'],
+                                  evidence, receipt)
+                require(False, 'NEGATIVE_UNEXPECTED_RETURN')
         require(sha256(snapshot) == result['source_archive_sha256'], 'SOURCE_ARCHIVE_CHANGED')
         unpack_source(snapshot, build_root, for_image=True)
         validate_source_files(build_root, config)
@@ -433,12 +442,19 @@ def execute(config, source_dir, evidence, context, incoming_env):
         result['BUILD_SCAN'], rc = ('BLOCK' if scan_rc == 10 else 'PASS'), scan_rc
     except PreflightError as exc:
         result['error_code'] = str(exc)
+    except unit_negative.NegativeError as exc:
+        result['error_code'] = str(exc)
     except subprocess.TimeoutExpired:
         result['error_code'] = 'COMMAND_TIMEOUT'
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError,
             tarfile.TarError, offline.zipfile.BadZipFile, EOFError, subprocess.SubprocessError):
         result['error_code'] = 'SOURCE_BUILD_OR_EVIDENCE_ERROR'
     result['finished_at'] = utcnow().isoformat()
+    if unit_failure_probe:
+        result['NEGATIVE_UNIT_PROBE'] = unit_negative.observed(result, evidence)
+        if 'unit_negative' in result:
+            result['unit_negative']['status'] = result['NEGATIVE_UNIT_PROBE']
+        result['deployment_image_preservation'] = 'REQUIRES_SEPARATE_PRE_POST_COLLECTION'
     (evidence / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     (evidence / 'SHA256SUMS').write_text(sha256(evidence / 'result.json') + '  result.json\n')
     return rc, result
