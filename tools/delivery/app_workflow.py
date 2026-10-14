@@ -17,6 +17,7 @@ import build_scan as flow
 import source_auth as auth
 
 WORKFLOW = '.github/workflows/app-test-build-scan.yml'
+NEGATIVE_WORKFLOW = '.github/workflows/app-unit-negative.yml'
 ORIGIN = 'https://github.com/' + flow.SOURCE_REPOSITORY + '.git'
 GIT = auth.GIT
 
@@ -149,7 +150,7 @@ def save_receipt(folder, result):
     (folder / 'SHA256SUMS').write_text(flow.sha256(path) + '  result.json\n')
 
 
-def run(config, folder, context, incoming, source=None, execute=False):
+def run(config, folder, context, incoming, source=None, execute=False, *, unit_failure_probe=False):
     # Consume the dedicated credential. No raw inherited mapping reaches app execution.
     token = incoming.pop(auth.TOKEN_ENV, '')
     result = {'APP_WORKFLOW': 'FAIL', 'started_at': flow.utcnow().isoformat(),
@@ -157,6 +158,7 @@ def run(config, folder, context, incoming, source=None, execute=False):
               'PUSH': 'NOT_EXECUTED', 'DEPLOY': 'NOT_EXECUTED', 'DELIVERY_GATE': 'NOT_VERIFIED'}
     rc = 1
     try:
+        flow.require(not unit_failure_probe or execute, 'NEGATIVE_EXECUTION_REQUIRED')
         flow.validate_config(config)
         flow.require(config['schema'] in ('P1-CICD-app-build-scan-2', 'P1-CICD-app-build-scan-3'),
                  'OFFLINE_SCHEMA_REQUIRED')
@@ -179,12 +181,18 @@ def run(config, folder, context, incoming, source=None, execute=False):
             build_dir = folder / 'build-scan'
             build_dir.mkdir(mode=0o700)
             build_context = {**context, 'handoff_sha256': result['handoff_sha256']}
+            options = {'unit_failure_probe': True} if unit_failure_probe else {}
             rc, built = flow.execute(config, source, build_dir, build_context,
-                                     flow.scanner_environment(incoming))
+                                     flow.scanner_environment(incoming), **options)
             result['APP_TEST_BUILD_SCAN'] = built['BUILD_SCAN']
             result['build_result_sha256'] = flow.sha256(build_dir / 'result.json')
             result['APP_WORKFLOW'] = built['BUILD_SCAN']
             result['error_code'] = built.get('error_code', 'NONE')
+            if unit_failure_probe:
+                result['NEGATIVE_UNIT_PROBE'] = built.get('NEGATIVE_UNIT_PROBE', 'NOT_CONFIRMED')
+                # The intentional failing Run stays failed. It is never a delivery receipt.
+                result['APP_WORKFLOW'] = result['APP_TEST_BUILD_SCAN'] = 'FAIL'
+                rc = 1
         else:
             result['APP_WORKFLOW'], rc = 'HANDOFF_CHECK_PASS', 0
     except flow.PreflightError as exc:
@@ -200,16 +208,20 @@ def run(config, folder, context, incoming, source=None, execute=False):
     return rc, result
 
 
-def bind_context(raw, incoming):
+def bind_context(raw, incoming, *, unit_failure_probe=False):
     os.chdir(flow.ROOT)
     context = flow.runtime_context(incoming)
-    expected = '321Team/infra-cicd/' + WORKFLOW + '@refs/heads/main'
+    workflow = NEGATIVE_WORKFLOW if unit_failure_probe else WORKFLOW
+    expected = '321Team/infra-cicd/' + workflow + '@refs/heads/main'
     flow.require(incoming.get('GITHUB_WORKFLOW_REF') == expected, 'CENTRAL_WORKFLOW_REQUIRED')
     flow.require(incoming.get('GITHUB_WORKFLOW_SHA') == context['workflow_sha'], 'WORKFLOW_SHA_MISMATCH')
     committed = subprocess.check_output(GIT + ['show', context['workflow_sha'] + ':' + flow.CONFIG],
                                         timeout=15, stderr=subprocess.DEVNULL)
     flow.require(raw == committed, 'INPUT_NOT_FROM_WORKFLOW_COMMIT')
     context['input_sha256'] = hashlib.sha256(raw).hexdigest()
+    if unit_failure_probe:
+        flow.require(context['attempt'] == 1, 'NEGATIVE_RERUN_FORBIDDEN')
+        context['purpose'] = 'INTENTIONAL_UNIT_FAILURE_NOT_DELIVERABLE'
     return context
 
 
@@ -228,18 +240,21 @@ def main(argv=None):
     os.environ.pop(auth.TOKEN_ENV, None)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--unit-failure-probe', action='store_true',
+                        help='Fixed failure; only the dedicated main/manual workflow may use this')
     parser.add_argument('--source-dir', type=Path, help='Local committed source for a read-only handoff check')
     parser.add_argument('--config', type=Path, help='Local check only; execution always uses the committed config')
     args = parser.parse_args(argv)
     os.umask(0o077)
     try:
+        flow.require(not args.unit_failure_probe or args.execute, 'NEGATIVE_EXECUTION_REQUIRED')
         flow.require(not args.execute or (args.config is None and args.source_dir is None),
                      'EXECUTION_INPUT_OVERRIDE_FORBIDDEN')
         raw, config = read_config(args.config or (flow.ROOT / flow.CONFIG))
         signal.signal(signal.SIGTERM, flow.interrupted)
         signal.signal(signal.SIGINT, flow.interrupted)
         if args.execute:
-            context = bind_context(raw, incoming)
+            context = bind_context(raw, incoming, unit_failure_probe=args.unit_failure_probe)
             home = runner_home()
             # No truncate/chmod/chown of an existing control file or old run directory.
             fd = os.open(home / 'FDS_CICD_AppWorkflow.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -248,9 +263,11 @@ def main(argv=None):
                 flow.require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
                              stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1, 'LOCK_FILE_INVALID')
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                folder = Path(tempfile.mkdtemp(prefix='FDS_CICD_AppWorkflow.', dir=home))
+                prefix = 'FDS_CICD_UnitNegative.' if args.unit_failure_probe else 'FDS_CICD_AppWorkflow.'
+                folder = Path(tempfile.mkdtemp(prefix=prefix, dir=home))
                 print(f'EVIDENCE_DIR={folder}', flush=True)
-                rc, result = run(config, folder, context, incoming, execute=True)
+                rc, result = run(config, folder, context, incoming, execute=True,
+                                 unit_failure_probe=args.unit_failure_probe)
         else:
             flow.require(args.source_dir is not None, 'SOURCE_CHECKOUT_REQUIRED')
             folder = Path(tempfile.mkdtemp(prefix='FDS_CICD_HandoffCheck.'))

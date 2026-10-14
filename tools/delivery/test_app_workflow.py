@@ -357,6 +357,36 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(app.main(args), 1)
                 run.assert_not_called()
 
+    def test_negative_mode_is_bound_to_own_workflow_and_first_attempt(self):
+        ctx = dict(self.context)
+        env = {'GITHUB_WORKFLOW_REF': '321Team/infra-cicd/' + app.NEGATIVE_WORKFLOW + '@refs/heads/main',
+               'GITHUB_WORKFLOW_SHA': ctx['workflow_sha']}
+        with patch.object(app.flow, 'runtime_context', return_value=ctx), \
+                patch.object(app.os, 'chdir'), \
+                patch.object(app.subprocess, 'check_output', return_value=b'committed'):
+            self.assertEqual(app.bind_context(b'committed', env, unit_failure_probe=True)['purpose'],
+                             'INTENTIONAL_UNIT_FAILURE_NOT_DELIVERABLE')
+            with self.assertRaisesRegex(app.flow.PreflightError, 'CENTRAL_WORKFLOW_REQUIRED'):
+                app.bind_context(b'committed', env)
+            normal = {**env, 'GITHUB_WORKFLOW_REF': env['GITHUB_WORKFLOW_REF'].replace(
+                app.NEGATIVE_WORKFLOW, app.WORKFLOW)}
+            with self.assertRaisesRegex(app.flow.PreflightError, 'CENTRAL_WORKFLOW_REQUIRED'):
+                app.bind_context(b'committed', normal, unit_failure_probe=True)
+            with self.assertRaisesRegex(app.flow.PreflightError, 'INPUT_NOT_FROM_WORKFLOW_COMMIT'):
+                app.bind_context(b'different', env, unit_failure_probe=True)
+            ctx['attempt'] = 2
+            with self.assertRaisesRegex(app.flow.PreflightError, 'NEGATIVE_RERUN_FORBIDDEN'):
+                app.bind_context(b'committed', env, unit_failure_probe=True)
+
+    def test_negative_cli_requires_execute_and_forbids_config_source_overrides(self):
+        for args in (['--unit-failure-probe'],
+                     ['--execute', '--unit-failure-probe', '--config', '/any'],
+                     ['--execute', '--unit-failure-probe', '--source-dir', '/any']):
+            with self.subTest(args=args), patch.object(app, 'run') as run, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(app.main(args), 1)
+                run.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
