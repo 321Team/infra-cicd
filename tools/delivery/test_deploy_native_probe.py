@@ -367,13 +367,86 @@ class RunnerTests(unittest.TestCase):
         probe.request = Mock(side_effect=reply)
         result = probe.run()
         self.assertEqual(result['RUNNER_TOKEN_AUTH'], 'PASS')
-        self.assertEqual(len(result['permissions']), 13)
+        self.assertEqual(len(result['permissions']), 25)
         self.assertEqual(len(result['deployments']), 2)
-        self.assertEqual(len(seen), 15)
+        self.assertEqual(len(seen), 27)
         self.assertNotIn('PRIVATE_', json.dumps(result))
         self.assertTrue(all(method in ('GET', 'POST') for method, _ in seen))
         with self.assertRaises(n.ProbeError):
             probe.run()
+
+    def test_rbac_and_exec_unexpected_allow_stops_before_deployment_get(self):
+        # An overprivileged identity must not receive PASS or proceed to GET.
+        targets = [attrs for attrs, _ in n.RBAC_TESTS
+                   if attrs['group'] == 'rbac.authorization.k8s.io'
+                   or attrs.get('subresource') == 'exec']
+        self.assertEqual(len(targets), 12)
+        for target in targets:
+            probe = self.probe()
+
+            def reply(method, path, body):
+                attrs = body['spec']['resourceAttributes']
+                allowed = (attrs == target or
+                           (attrs['resource'] == 'deployments'
+                            and attrs.get('namespace') == 'fds-app'
+                            and attrs.get('name') in ('transaction-api', 'fds-engine')
+                            and attrs['verb'] in ('get', 'update', 'patch')))
+                return {**copy.deepcopy(body), 'status': {'allowed': allowed}}
+
+            probe.request = Mock(side_effect=reply)
+            with self.subTest(target=target), self.assertRaisesRegex(
+                    n.ProbeError, '^RUNNER_RBAC_MISMATCH$'):
+                probe.run()
+            self.assertTrue(probe.blocked)
+            self.assertTrue(all(call.args[0] == 'POST'
+                                and call.args[1] == n.SSAR_PATH
+                                for call in probe.request.call_args_list))
+
+    def test_exec_denial_requires_exact_subresource_echo(self):
+        attrs = {'verb': 'create', 'resource': 'pods', 'group': '', 'version': 'v1',
+                 'namespace': 'fds-app', 'subresource': 'exec'}
+        body = {'apiVersion': 'authorization.k8s.io/v1', 'kind': 'SelfSubjectAccessReview',
+                'spec': {'resourceAttributes': attrs}}
+        self.probe().scope('POST', n.SSAR_PATH, body)
+        for bad in (None, 'attach'):
+            probe = self.probe()
+
+            def reply(method, path, body):
+                echoed = copy.deepcopy(body)
+                actual = echoed['spec']['resourceAttributes']
+                if actual.get('subresource') == 'exec':
+                    if bad is None:
+                        actual.pop('subresource')
+                    else:
+                        actual['subresource'] = bad
+                allowed = (actual['resource'] == 'deployments'
+                           and actual.get('namespace') == 'fds-app'
+                           and actual.get('name') in ('transaction-api', 'fds-engine')
+                           and actual['verb'] in ('get', 'update', 'patch'))
+                return {**echoed, 'status': {'allowed': allowed}}
+
+            probe.request = Mock(side_effect=reply)
+            with self.subTest(subresource=bad), self.assertRaisesRegex(
+                    n.ProbeError, '^RUNNER_RBAC_MISMATCH$'):
+                probe.run()
+            self.assertTrue(probe.blocked)
+
+    def test_new_permission_queries_never_allow_actual_rbac_or_exec_requests(self):
+        probe = self.probe()
+        for method, path in (
+            ('POST', '/apis/rbac.authorization.k8s.io/v1/namespaces/fds-app/roles'),
+            ('PATCH', '/apis/rbac.authorization.k8s.io/v1/namespaces/fds-app/rolebindings/cicd-deploy-updater-binding'),
+            ('POST', '/api/v1/namespaces/fds-app/pods/example/exec'),
+            ('GET', '/api/v1/namespaces/fds-app/pods/example/exec'),
+        ):
+            with self.subTest(method=method, path=path), self.assertRaises(n.ProbeError):
+                probe.scope(method, path, None if method == 'GET' else {})
+        body = {'apiVersion': 'authorization.k8s.io/v1', 'kind': 'SelfSubjectAccessReview',
+                'spec': {'resourceAttributes': {'verb': 'create', 'resource': 'pods',
+                         'group': '', 'version': 'v1', 'namespace': 'fds-app',
+                         'subresource': 'attach'}}}
+        with self.assertRaisesRegex(n.ProbeError, '^RUNNER_POST_SCOPE_INVALID$'):
+            probe.scope('POST', n.SSAR_PATH, body)
 
     def test_rbac_mismatch_or_evaluation_error_is_not_pass(self):
         for status in ({'allowed': False}, {'allowed': True, 'evaluationError': 'PRIVATE_REASON'},
