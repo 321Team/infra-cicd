@@ -244,6 +244,14 @@ class BrokerTests(unittest.TestCase):
         self.assertEqual(result['NATIVE_AUTH_PROBE'], 'NOT_CONFIRMED')
         self.assertNotIn(self.token, json.dumps(result))
 
+    def test_old_thirteen_permission_receipt_cannot_pass_extended_probe(self):
+        self.runner.messages[1]['result']['permissions'] = (
+            self.runner.messages[1]['result']['permissions'][:13])
+        result = self.run_probe()
+        self.assertEqual(result['NATIVE_AUTH_PROBE'], 'NOT_CONFIRMED')
+        self.assertNotIn(self.token, json.dumps(result))
+        self.assertTrue(self.cp1.closed and self.runner.closed)
+
     def test_earliest_expiry_must_match_between_both_receipts(self):
         self.done['credential']['token_request_expires_at'] = (
             NOW + dt.timedelta(seconds=800)).isoformat()

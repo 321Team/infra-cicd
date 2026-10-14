@@ -88,9 +88,14 @@ SSH 준비 시간도 프로토콜 기한을 소비한다. broker는 첫 bundle �
 | fds-app의 transaction-api / fds-engine 각각 get, update, patch | SSAR allow 6건 |
 | fds-app Deployment create, transaction-api delete, 다른 Deployment patch, default namespace patch | SSAR deny 4건 |
 | fds-app Secret get, Pod list, TokenReview create | SSAR deny 3건 |
+| fds-app Role create/patch/bind/escalate, RoleBinding create/patch | SSAR deny 6건 |
+| ClusterRole create/bind/escalate, ClusterRoleBinding create | SSAR deny 4건 |
+| fds-app Pod exec get/create | `resource=pods`, `subresource=exec`의 SSAR deny 2건 |
 | 두 named Deployment GET | TLS와 Bearer 인증 성공; 이름·namespace·UID·resourceVersion 확인 |
 
-Deny 검사는 SSAR로 인가 결과만 조회한다. Secret 조회나 금지된 변경 요청을 실제로 실행하지 않는다. SSAR의 evaluationError, 권한 불일치, SA UID 변경, 만료, 응답 결속 실패, CA/SSH trust 변경은 모두 중단한다. Runner HTTP client에는 PATCH 구현, proxy, redirect, refresh/retry가 없다.
+Deny 검사는 SSAR로 인가 결과만 조회한다. 총 25건(allow 6 / deny 19) 뒤 두 named GET을 수행한다. Secret 조회나 금지된 변경·exec 요청을 실제로 실행하지 않는다. Role의 patch/bind/escalate는 `cicd-deploy-updater`, RoleBinding patch는 `cicd-deploy-updater-binding`, ClusterRole bind/escalate는 `cluster-admin`을 지정한다. exec 응답이 다른 subresource를 반환하거나 생략해도 실패다. SSAR의 evaluationError, 권한 불일치, SA UID 변경, 만료, 응답 결속 실패, CA/SSH trust 변경은 모두 중단한다. Runner HTTP client에는 PATCH 구현, proxy, redirect, refresh/retry가 없다.
+
+이 결과는 위 고정 요청의 인가 관측이다. 모든 namespace·객체·verb를 전수 검사한 결과로 확대하지 않는다. AC07 인수 시 현재 SA에 연결된 Role/Binding 정본과 실효 권한 관측을 함께 대조한다. 추가 행의 코드/CI PASS만으로 실제 Runner RBAC 거부를 확인했다고 하지 않는다. [AC07 실행 준비 및 AC08 잔여](ac07-rbac-followup-20261014.md)를 따른다.
 
 Credential의 공통 메타데이터 `runner_token_authentication=NOT_VERIFIED`는 TokenReview만으로 Runner 실제 인증을 주장하지 않는 기존 계약이다. 실제 Runner 결과는 별도 `runner_observation.RUNNER_TOKEN_AUTH`에서 확인한다. `SOURCE_APPROVAL=OPERATOR_PINNED_NOT_VERIFIED_IN_TOOL`은 GitHub 리뷰를 도구가 검증하지 않았음을 뜻한다.
 

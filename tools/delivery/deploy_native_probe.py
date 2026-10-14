@@ -256,12 +256,14 @@ class NativeAccess(a.CP1Access):
         return super().review(token, audience, self.budget(deadline))
 
 
-def attributes(verb, resource, namespace='', name='', group='apps'):
+def attributes(verb, resource, namespace='', name='', group='apps', *, subresource=''):
     obj = {'verb': verb, 'resource': resource, 'group': group, 'version': 'v1'}
     if namespace:
         obj['namespace'] = namespace
     if name:
         obj['name'] = name
+    if subresource:
+        obj['subresource'] = subresource
     return obj
 
 
@@ -276,6 +278,25 @@ RBAC_TESTS = tuple(
     (attributes('get', 'secrets', 'fds-app', group=''), False),
     (attributes('list', 'pods', 'fds-app', group=''), False),
     (attributes('create', 'tokenreviews', group='authentication.k8s.io'), False),
+    # Query authorization only: no Role/RoleBinding write or exec request is sent.
+    (attributes('create', 'roles', 'fds-app', group='rbac.authorization.k8s.io'), False),
+    (attributes('patch', 'roles', 'fds-app', 'cicd-deploy-updater',
+                group='rbac.authorization.k8s.io'), False),
+    (attributes('bind', 'roles', 'fds-app', 'cicd-deploy-updater',
+                group='rbac.authorization.k8s.io'), False),
+    (attributes('escalate', 'roles', 'fds-app', 'cicd-deploy-updater',
+                group='rbac.authorization.k8s.io'), False),
+    (attributes('create', 'rolebindings', 'fds-app', group='rbac.authorization.k8s.io'), False),
+    (attributes('patch', 'rolebindings', 'fds-app', 'cicd-deploy-updater-binding',
+                group='rbac.authorization.k8s.io'), False),
+    (attributes('create', 'clusterroles', group='rbac.authorization.k8s.io'), False),
+    (attributes('bind', 'clusterroles', name='cluster-admin',
+                group='rbac.authorization.k8s.io'), False),
+    (attributes('escalate', 'clusterroles', name='cluster-admin',
+                group='rbac.authorization.k8s.io'), False),
+    (attributes('create', 'clusterrolebindings', group='rbac.authorization.k8s.io'), False),
+    (attributes('get', 'pods', 'fds-app', group='', subresource='exec'), False),
+    (attributes('create', 'pods', 'fds-app', group='', subresource='exec'), False),
 )
 
 
