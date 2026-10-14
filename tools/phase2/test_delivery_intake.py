@@ -16,7 +16,7 @@ def fixture():
     record = {
         'schema': 'P2-CICD-intake-1', 'template_only': False, 'environment': 'ROSA',
         'target': {'cluster_reference': ref, 'api_url': 'https://api.rosa.example.invalid:6443',
-                   'ca_reference': ref, 'context': 'synthetic-rosa', 'namespace': 'synthetic-app',
+                   'ca_reference': ref, 'context': 'synthetic-rosa', 'namespace': 'fds-app',
                    'health_url': 'https://app.example.invalid/readyz'},
         'source': {'repository': '321Team/fds-msa', 'commit': 'a' * 40,
                    'manifest_repository': '321Team/fds-msa', 'manifest_commit': 'b' * 40,
@@ -126,6 +126,20 @@ class IntakeTests(unittest.TestCase):
                     record = fixture()
                     record[stage][field] = value
                     self.assertBlocked(record)
+
+    def test_overlay_or_other_namespace_cannot_pass_intake(self):
+        for namespace in ('rosa-app', 'default', 'synthetic-app', 'fds-app ', None, [], {}):
+            with self.subTest(namespace=namespace):
+                record = fixture()
+                record['target']['namespace'] = namespace
+                with patch('socket.socket', side_effect=AssertionError('network forbidden')), \
+                     patch('subprocess.run', side_effect=AssertionError('subprocess forbidden')):
+                    rc, report = self.run_cli(json.dumps(record).encode())
+                self.assertEqual(rc, 2)
+                self.assertIn('P2_NAMESPACE_REQUIRED', report['errors'])
+                self.assertFalse(report['execution_authorized'])
+                self.assertFalse(report['external_references_verified'])
+                self.assertEqual(report['runtime'], 'NOT_RUN')
 
     def test_test_scan_or_push_failure_blocks_both_workloads(self):
         for service in intake.SERVICES:

@@ -37,6 +37,8 @@ Registry 서비스/ROSA namespace/실제 endpoint를 새로 선택하지 않는�
 
 ## 출력과 종료코드
 
+10/14 보완: 사전점검에서도 소비 계약의 namespace `fds-app`을 고정 대조한다. `rosa-app`은 overlay 이름이므로 `P2_NAMESPACE_REQUIRED`로 거부한다. 이전 형식검사만으로 임의 namespace가 일관적이라고 표시되던 차이를 수정했다. `fds-app` 문자열 일치는 actual cluster/namespace UID 확인이나 배포 승인을 뜻하지 않으며, 미수신 template의 namespace는 계속 null이다.
+
 - RC 2 / `INCOMPLETE_OR_INCONSISTENT`: 미수신·실패·불일치·잘못된 형식. 배포 준비 미충족 항목을 생산자에게 돌려보낸다. 양식은 의도적으로 이 결과를 낸다.
 - RC 0 / `DECLARED_INPUTS_CONSISTENT`: 제출된 문자열/형식만 일관적. **실행 허가·Readiness PASS·Runtime PASS가 아니다.**
 - 모든 결과에 `execution_authorized=false`, `external_references_verified=false`, `runtime=NOT_RUN`을 유지한다. 실행 계획·명령·credential을 출력하지 않는다.
