@@ -31,6 +31,8 @@
 
 ## 주입 함수의 필수 계약 — 아직 Runtime 연결 아님
 
+10/15 추가: 아래 계약을 실제 기존 함수와 연결한 [운영 검증기·CLI 구현 전 인계](operational-integration-contract.md)를 준비했다. 이 문서는 인터페이스·시험 설계이며 verifier/배포 CLI 구현 또는 실행 승인이 아니다. 기존 helper/TLS/store/recovery 구현과 시험은 재사용한다.
+
 10/14 후속 구현: `delivery_authorization.BoundAuthorizer`는 신뢰된 verifier가 매 호출 반환하는 `VerifiedInputs`의 승인 Binding·실제 대조 Binding·Lease를 요청 Binding 및 동일 claim/journal에 대조한다. 검증 전후 claim/journal을 검사하고 승인/관측 불일치·만료·묵시 갱신·provider 실패에서 차단한다. 이 타입은 외부 JSON 스키마가 아니며, `approved=true`나 기존 PASS 파일을 실제 승인으로 변환하지 않는다. 실제 승인 진위·fresh identity/UID/CA·RBAC·clean render·증적 원본을 확인하는 verifier 및 운영 연결은 여전히 미구현이다. 이 helper의 MOCK 성공을 실제 승인 검증 완료로 표시하지 않는다.
 
 Service는 생산자 검사기와 별도로 코어와 sender에서 `ClusterIP`(생략 시 기본값)만 허용한다. NodePort/LoadBalancer/ExternalName, 비어 있지 않은 externalIPs, nodePort 및 LB 전용 필드를 거부한다. 응답에 외부 IP/LB ingress가 남아 있으면 pending을 보존하고 중단하며 자동 재시도/정리를 하지 않는다. 지정 Route 2개와 TLS 계약은 기존대로다.
