@@ -1,15 +1,19 @@
 # CP1 native SA → Runner 인증 진단
 
-P1-CICD-01의 다음 진단 후보다. CP1의 기존 사용자 인증으로 짧은 ServiceAccount 토큰을 요청하고, 같은 후보를 CP1의 fresh TokenReview와 Runner의 직접 TLS API 요청으로 확인한다. 진단 소스 `14dba0f018e6dcaa32bdb569552b40fae7bb269f`는 [PR #61](https://github.com/321Team/infra-cicd/pull/61)의 독립 리뷰를 거쳐 merge `88394d7a8ec472be2e86cad5227d079250b91daf`로 편입됐다. 소스 승인·병합은 현장 실행·토큰 발급·배포 완료 기록이 아니다.
+CP1의 기존 사용자 인증으로 짧은 ServiceAccount 토큰을 요청하고, 같은 후보를 CP1의 fresh TokenReview와 Runner의 직접 TLS API 요청으로 확인하는 진단이다.
 
-## 기존 관측과 이번 범위
+**AC07 실측 기준(2026-10-14 KST):** 실행 소스는 [PR #82](https://github.com/321Team/infra-cicd/pull/82)의 merge `9fb2e2dcac8682a89c4b7c267c833ae8d9aaeb18`이며, 검토 HEAD는 `db8230d7580820c55ab388680a1e87fc3e45db0a`다. 실제 실행 결과는 [증적 PR #231](https://github.com/321Team/fds-project-evidence/pull/231), AC07 인수는 [별도 결정](https://github.com/321Team/fds-project-baseline/issues/16#issuecomment-6171164664)에 연결한다. O01에서 사용하는 evidence `43e26384ae422f2017f1e96e6c1bb5fe46d087d4`의 봉인 사본은 [AC07 고정 증적 판독 보완](o01-ac07-reading-notes-20261015.md)과 함께 읽는다. 이 이력은 새 토큰 발급·현장 실행 승인이 아니다.
+
+초기 구현 이력: 진단 소스 `14dba0f018e6dcaa32bdb569552b40fae7bb269f`는 [PR #61](https://github.com/321Team/infra-cicd/pull/61)의 독립 리뷰를 거쳐 merge `88394d7a8ec472be2e86cad5227d079250b91daf`로 편입됐다. 이 초기 소스와 위 AC07 실측 소스를 구분한다.
+
+## 도입 당시 관측과 진단 범위
 
 - PR #60의 승인 source `25d35ff693301bc48292daaa7ec278b6321f4d84`에 대해 사용자가 제공한 2026-10-06 20:20:01 KST CP1 콘솔 결과는 두 Deployment의 failed-UID server dry-run PATCH가 HTTP 422/Invalid를 반환하고 두 read의 spec/RV가 일치했다고 기록한다. 원본 증적을 이 진단이 독립 검증한 것은 아니다.
-- Runner → `https://10.1.93.109:6443` CA/호스트명 TLS 검증은 이전 콘솔 결과에서 PASS다. SA 토큰으로 Runner 인증은 별도 미검증 상태다.
+- PR #61 도입 당시 Runner → `https://10.1.93.109:6443` CA/호스트명 TLS 검증은 이전 콘솔 결과에서 PASS였고, SA 토큰으로 Runner 인증은 별도 미검증 상태였다. 이후 AC07 실측과 인수 상태는 위 증적·결정 기록을 따른다.
 - 이번 진단은 기존 SA/Role/RoleBinding, kubeconfig, SSH 신뢰, CA, 이미지 Digest를 변경하지 않는다. 실제 Deployment PATCH/apply, rollout/rollback, Runner kubectl 설치, Workflow 편입, claim/journal 작성, AC 인수는 포함하지 않는다.
 - CP1 TokenRequest/TokenReview/SSAR는 API 인증·인가 진단 요청이다. 새 SA, Role, Secret, 클러스터 오브젝트를 영구 등록하지 않는다. 토큰 자체는 서버에서 발급되므로 순수 읽기 Pre-check로 분류하지 않는다.
 
-[governance.md](governance.md)의 보안 통제 코드 독립 리뷰 및 운영 적용 기준을 적용한다. 새 두 모듈·두 시험 파일·이 문서 전체가 리뷰 범위다. 기존 CP1Access/Transport allowlist를 변경하지 않고 별도 subclass와 진단 전용 HTTP client로 추가한다.
+[governance.md](governance.md)의 보안 통제 코드 독립 리뷰 및 운영 적용 기준을 적용한다. PR #61 도입 당시 새 두 모듈·두 시험 파일·이 문서 전체가 리뷰 범위였으며, 이후 변경의 리뷰 범위는 해당 PR에 연결한다. 기존 CP1Access/Transport allowlist를 변경하지 않고 별도 subclass와 진단 전용 HTTP client로 추가한다.
 
 ## 고정 대상
 
@@ -59,7 +63,7 @@ Broker는 같은 loader로 Ansible·CP1·Runner에 bundle SHA-256, 정확한 파
 2. Ansible의 두 대상 SSH 로그인과 기존 known_hosts, 공개 CA 경로를 확인한다. CP1 사용자 kubeconfig를 Runner/Ansible로 복사하지 않는다.
 3. 아래 **기본 preflight**를 수행한다. 공개 코드 staging과 CA·계정·source 확인, CP1 fresh SA UID와 TokenRequest/TokenReview 권한 두 건의 SSAR만 실행한다. 토큰을 발급하지 않는다.
 4. preflight가 PASS인 뒤 Lead가 실제 단기 발급·중계·Runner 진단 범위와 UTC 종료 시각을 판단한다. 이 판단은 Deploy 승인이 아니다. `--execute`의 종료 시각은 실행 시작 기준 미래 1시간 이내로 제한한다.
-5. 승인된 실행에서 CP1은 발급 직전 SA UID를 다시 확인한다. wrapper는 TokenRequest 명령을 한 번만 호출한다. 같은 실행에서 CP1 fresh TokenReview, Runner의 별도 fresh TokenReview RPC, 13건의 고정 SSAR와 두 named Deployment GET을 수행한다.
+5. 승인된 실행에서 CP1은 발급 직전 SA UID를 다시 확인한다. wrapper는 TokenRequest 명령을 한 번만 호출한다. 같은 실행에서 CP1 fresh TokenReview, Runner의 별도 fresh TokenReview RPC, 25건의 고정 SSAR(allow 6 / deny 19)와 두 named Deployment GET을 수행한다.
 6. 양쪽 Credential close/입력 참조 해제 응답, SSH 정상 종료 및 추가 출력 없음까지 확인한 공개 결과만 보존한다. 한 단계라도 불명확하면 자동 재발급하지 않는다.
 
 Ansible에서 사용자가 실행하는 진입점은 `transfer_native_probe.py` 하나다. endpoint 함수의 stdout은 토큰이 포함되는 **private SSH protocol**이므로 직접 실행하거나 tee/로그/리다이렉트로 수집하지 않는다.
