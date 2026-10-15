@@ -146,6 +146,8 @@ class Execution:
             'MATCHED_AT_LAST_SUCCESSFUL_LOOKUP' if self.approval_observation else 'NOT_VERIFIED')
         result['claim'] = copy.deepcopy(self.claim_metadata)
         result['approval_reference'] = self.binding['approval_reference'] if self.binding else None
+        result['operation'] = self.binding['operation'] if self.binding else 'NOT_VALIDATED'
+        result['recovery_basis'] = copy.deepcopy(self.binding['recovery_basis']) if self.binding else None
         result['CREDENTIAL_METADATA'] = 'CALLER_SUPPLIED_NOT_VERIFIED_HERE'
         # Do not upgrade upstream Source approval, Runtime health, or final gate.
         result['SOURCE_APPROVAL'] = 'NOT_INDEPENDENTLY_VERIFIED'

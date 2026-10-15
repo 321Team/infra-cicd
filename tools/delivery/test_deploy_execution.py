@@ -15,6 +15,7 @@ from test_deploy_adapter import Fake, fixtures
 from test_deploy_approval import Source, approval_fixture
 from test_deploy_binding import NOW, encode
 from test_deploy_plan import plan_inputs
+from test_recovery_plan import recovery_inputs
 
 
 @unittest.skipUnless(os.name == 'posix', 'Single Runner claim is POSIX only')
@@ -263,6 +264,54 @@ class ExecutionTests(unittest.TestCase):
         self.run_execution(helper=helper)
         with self.assertRaisesRegex(core.Stop, 'EXECUTION_ALREADY_USED'):
             self.run_execution(helper=helper)
+
+    def prepare_recovery(self):
+        self.plan, _, self.push, self.execution = recovery_inputs()
+        self.change_approval(plan_sha256=b.sha(encode(self.plan)), allow_rollback=True)
+        for name, obj in self.client.objects.items():
+            obj['spec']['template']['spec']['containers'][1]['image'] = (
+                b.read(self.push)['images'][name]['registry_repository'] + '@' +
+                b.read(self.push)['images'][name]['manifest_digest'])
+
+    def test_explicit_recovery_uses_fresh_authority_and_consumes_its_own_claim(self):
+        self.prepare_recovery()
+        result = self.run_execution()
+        self.assertEqual(result['operation'], 'RESTORE_PREVIOUS')
+        self.assertEqual(result['ROLLOUT'], 'READY')
+        self.assertEqual(result['HEALTH_E2E'], 'NOT_VERIFIED')
+        self.assertEqual(len(self.source.calls), 1 + self.client.gets + 2)
+        for name, patch in self.client.patches:
+            self.assertEqual(patch[-1]['value'], self.plan['targets'][name]['previous_image'])
+        self.assertTrue(all(r['operation'] == 'RESTORE_PREVIOUS' for r in self.receipts))
+        self.execution['run_id'] += 1
+        self.assertEqual(self.run_execution()['error_code'], 'PLAN_ALREADY_CLAIMED')
+        self.assertEqual(len(self.client.patches), 2)
+
+    def test_recovery_rejects_drift_without_writes(self):
+        self.prepare_recovery()
+        self.client.objects['fds-engine']['spec']['template']['spec']['containers'][1]['image'] = 'drift'
+        self.assertEqual(self.run_execution()['error_code'], 'IMAGE_DRIFT')
+        self.assertEqual(self.client.patches, [])
+
+    def test_failed_recovery_compensates_to_current_image_only_when_authorized(self):
+        self.prepare_recovery()
+        current = self.client.objects['transaction-api']['spec']['template']['spec']['containers'][1]['image']
+        def reject_second(client, name):
+            if len(client.patches) == 2:
+                raise core.Rejected()
+        self.client.patch_hook = reject_second
+        result = self.run_execution()
+        self.assertEqual(result['ROLLBACK'], 'READY_HEALTH_NOT_VERIFIED')
+        self.assertEqual(self.client.patches[-1][1][-1]['value'], current)
+        self.assertEqual(len(self.client.patches), 3)
+
+    def test_recovery_revocation_never_uses_old_approval_to_continue_or_compensate(self):
+        self.prepare_recovery()
+        self.client.patch_hook = lambda client, name: self.source.obj.update(body='REVOKED')
+        result = self.run_execution()
+        self.assertEqual(result['authority_error_code'], 'APPROVAL_REFERENCE_CHANGED')
+        self.assertEqual(result['ROLLBACK'], 'MANUAL_RECONCILIATION_REQUIRED')
+        self.assertEqual(len(self.client.patches), 1)
 
 
 if __name__ == '__main__':
