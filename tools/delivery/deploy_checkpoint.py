@@ -36,6 +36,7 @@ FIELDS = frozenset({
     'push_receipt_sha256', 'authority_error_code', 'DEPLOY_APPROVAL_REFERENCE',
     'claim', 'approval_reference', 'CREDENTIAL_METADATA', 'SOURCE_APPROVAL',
 })
+OPERATION_FIELDS = frozenset({'operation', 'recovery_basis'})
 DEPLOY_STATES = frozenset({
     'NOT_EXECUTED', 'PATCH_PENDING', 'REJECTED', 'UNKNOWN', 'APPLIED', 'READY',
     'NOT_SENT_AUTH_DENIED', 'NOT_SENT_CREDENTIAL_WINDOW', 'NOT_SENT_AUTH_WINDOW',
@@ -65,8 +66,11 @@ def summary_checked(value, service):
 
 
 def receipt_checked(receipt, claim):
-    need(type(receipt) is dict and (set(receipt) == FIELDS or
-         set(receipt) == FIELDS | {'rollback_error_code'}))
+    need(type(receipt) is dict)
+    keys = set(receipt) - {'rollback_error_code'}
+    need(keys == FIELDS or keys == FIELDS | OPERATION_FIELDS)
+    if keys == FIELDS | OPERATION_FIELDS:
+        operation_checked(receipt)
     need(receipt['schema'] == 'P1-CICD-deploy-execution-2')
     for field in ('DELIVERY_GATE', 'HEALTH_E2E', 'POD_IMAGE_ID'):
         need(receipt[field] == 'NOT_VERIFIED')
@@ -101,6 +105,30 @@ def receipt_checked(receipt, claim):
                 summary_checked(item[field], service)
     # Reject unknown/raw fields rather than writing env, kubeconfig or token data.
     return copy.deepcopy(receipt)
+
+
+def operation_checked(receipt):
+    """Allow only projected recovery metadata, never embedded plan/approval bytes."""
+    operation, origin = receipt['operation'], receipt['recovery_basis']
+    need(operation in ('DEPLOY_PUSHED', 'RESTORE_PREVIOUS'))
+    if operation == 'DEPLOY_PUSHED':
+        need(origin is None)
+        return
+    need(type(origin) is dict and set(origin) == {
+        'origin_plan_sha256', 'origin_approval_sha256', 'origin_execution',
+        'evidence_reference', 'historical_approval_verification', 'historical_runtime'})
+    for field in ('origin_plan_sha256', 'origin_approval_sha256'):
+        need(type(origin[field]) is str and b.gate.SHA256.fullmatch(origin[field]))
+    need(origin['historical_approval_verification'] == 'SUPPLIED_BYTES_ONLY'
+         and origin['historical_runtime'] == 'NOT_VERIFIED')
+    need(type(origin['evidence_reference']) is str
+         and b.REFERENCE.fullmatch(origin['evidence_reference']))
+    try:
+        previous = b.identity(origin['origin_execution'])
+        current = b.identity(receipt['execution'])
+    except b.Invalid:
+        raise CheckpointError('CHECKPOINT_RECORD_INVALID') from None
+    need(previous['attempt'] == 1 and previous['run_id'] != current['run_id'])
 
 
 class Journal:

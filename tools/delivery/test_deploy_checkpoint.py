@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import stat
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -19,6 +20,8 @@ from test_deploy_adapter import Fake, fixtures
 from test_deploy_approval import Source, approval_fixture
 from test_deploy_binding import NOW, encode
 from test_deploy_plan import plan_inputs
+from test_recovery_plan import recovery_inputs
+import deploy_plan
 
 
 def receipt_for(claim):
@@ -38,6 +41,53 @@ def receipt_for(claim):
         'SOURCE_APPROVAL': 'NOT_INDEPENDENTLY_VERIFIED',
     })
     return result
+
+
+class ReceiptMetadataTests(unittest.TestCase):
+    def setUp(self):
+        plan, approved, push, execution = recovery_inputs()
+        binding = deploy_plan.validate(encode(plan), encode(approved), push,
+                                        b.sha(encode(plan)), b.sha(encode(approved)), execution, NOW)
+        self.claim = SimpleNamespace(record={
+            'execution': execution, 'plan_sha256': binding['plan_sha256'],
+            'approval_sha256': binding['approval_sha256']}, sha256='a' * 64)
+        self.receipt = receipt_for(self.claim)
+        self.receipt.update(operation=binding['operation'], recovery_basis=binding['recovery_basis'])
+
+    def test_recovery_and_forward_metadata_and_legacy_readback(self):
+        self.assertEqual(j.receipt_checked(self.receipt, self.claim)['operation'], 'RESTORE_PREVIOUS')
+        self.receipt.update(operation='DEPLOY_PUSHED', recovery_basis=None)
+        self.assertEqual(j.receipt_checked(self.receipt, self.claim)['operation'], 'DEPLOY_PUSHED')
+        del self.receipt['operation'], self.receipt['recovery_basis']
+        self.assertNotIn('operation', j.receipt_checked(self.receipt, self.claim))
+
+    def test_metadata_is_not_arbitrary_raw_data_or_runtime_success(self):
+        for field, value in [('token', 'PRIVATE_TOKEN'), ('origin_plan', '{}'),
+                              ('origin_plan_sha256', 'PRIVATE_TOKEN'),
+                              ('historical_runtime', 'PASS'),
+                              ('historical_approval_verification', 'VERIFIED'),
+                              ('origin_execution', {}), ('evidence_reference', 'PRIVATE_TOKEN')]:
+            bad = copy.deepcopy(self.receipt)
+            bad['recovery_basis'][field] = value
+            with self.subTest(field=field), self.assertRaises(j.CheckpointError):
+                j.receipt_checked(bad, self.claim)
+
+    def test_partial_or_contradictory_metadata_rejected(self):
+        for change in (lambda r: r.pop('operation'), lambda r: r.pop('recovery_basis'),
+                       lambda r: r.update(operation='UNKNOWN'),
+                       lambda r: r.update(operation='DEPLOY_PUSHED'),
+                       lambda r: r.update(recovery_basis=None)):
+            bad = copy.deepcopy(self.receipt)
+            change(bad)
+            with self.assertRaises(j.CheckpointError):
+                j.receipt_checked(bad, self.claim)
+
+    def test_origin_retry_and_same_run_rejected(self):
+        for key, value in [('attempt', 2), ('run_id', self.receipt['execution']['run_id'])]:
+            bad = copy.deepcopy(self.receipt)
+            bad['recovery_basis']['origin_execution'][key] = value
+            with self.subTest(key=key), self.assertRaises(j.CheckpointError):
+                j.receipt_checked(bad, self.claim)
 
 
 @unittest.skipUnless(os.name == 'posix', 'Checkpoint needs the POSIX claim')

@@ -95,9 +95,13 @@ def run(env, home, github_token):
     folder = Path(tempfile.mkdtemp(prefix='FDS_CICD_Deploy.', dir=home))
     print('EVIDENCE_DIR=' + str(folder), flush=True)
     save(folder, 'dispatch.json', {'binding': scope, 'mode': env['DEPLOY_EXECUTE'],
+                                  'operation': binding['operation'],
+                                  'recovery_basis': binding['recovery_basis'],
                                   'SOURCE_APPROVAL': 'NOT_INDEPENDENTLY_VERIFIED'})
     if env['DEPLOY_EXECUTE'] == 'false':
         save(folder, 'result.json', {'PREFLIGHT': 'SUPPLIED_BYTES_MATCH', 'TOKEN_ISSUED': False,
+                                    'operation': binding['operation'],
+                                    'recovery_basis': binding['recovery_basis'],
                                     'APPROVAL_REFERENCE': 'NOT_VERIFIED', 'DEPLOY': 'NOT_EXECUTED',
                                     'DELIVERY_GATE': 'NOT_VERIFIED'})
         return 0
@@ -132,6 +136,8 @@ def run(env, home, github_token):
             result['handoff_socket_cleanup'] = 'NOT_CONFIRMED'
             result['status'] = 'MANUAL_RECONCILIATION_REQUIRED'
         result['workflow_input_reference_cleanup'] = 'LOCAL_REFERENCE_DROPPED'
+        result['operation'] = binding['operation']
+        result['recovery_basis'] = binding['recovery_basis']
         save(folder, 'result.json', result)
     receipt = result.get('execution_receipt') or {}
     return 0 if (result.get('status') == 'EXECUTION_RETURNED'

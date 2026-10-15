@@ -11,6 +11,7 @@ import deploy_workflow as w
 import test_deploy_session as session_fixture
 from test_deploy_binding import NOW, encode
 from test_deploy_credential import SA_UID
+from test_recovery_plan import recovery_inputs
 
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX Workflow/files required')
@@ -127,6 +128,59 @@ class WorkflowTests(unittest.TestCase):
         with patch.object(self, 'close', side_effect=OSError(self.fixture.token)):
             self.assertEqual(self.run_flow(), 1)
         self.assertEqual(self.latest_result()['status'], 'MANUAL_RECONCILIATION_REQUIRED')
+
+    def prepare_recovery(self):
+        plan, _, push, execution = recovery_inputs()
+        self.fixture.inputs['execution'].update(execution)
+        approved = json.loads(self.record['approval'])
+        approved.update(plan_sha256=b.sha(encode(plan)), allow_rollback=True)
+        self.record.update(plan=encode(plan).decode(), approval=encode(approved).decode())
+        self.fixture.source.obj['body'] = self.record['approval']
+        for name, obj in self.fixture.client.objects.items():
+            image = b.read(push)['images'][name]
+            obj['spec']['template']['spec']['containers'][1]['image'] = (
+                image['registry_repository'] + '@' + image['manifest_digest'])
+        self.refresh()
+        return plan
+
+    def test_recovery_preflight_is_explicit_and_does_not_issue_credentials(self):
+        self.prepare_recovery()
+        self.assertEqual(self.run_flow(), 0)
+        self.assertEqual(self.latest_result()['operation'], 'RESTORE_PREVIOUS')
+        self.assertEqual(self.latest_result()['DEPLOY'], 'NOT_EXECUTED')
+        self.assertEqual(self.opened, 0)
+        self.assertEqual(self.fixture.reviewer.calls, [])
+        self.assertEqual(self.fixture.client.patches, [])
+
+    def test_recovery_dispatch_composes_session_with_inverse_transport_allowlist(self):
+        plan = self.prepare_recovery()
+        self.env['DEPLOY_EXECUTE'] = 'true'
+        self.assertEqual(self.run_flow(), 0)
+        result = self.latest_result()
+        self.assertEqual(result['operation'], 'RESTORE_PREVIOUS')
+        self.assertEqual(result['execution_receipt']['operation'], 'RESTORE_PREVIOUS')
+        self.assertEqual(result['execution_receipt']['ROLLOUT'], 'READY')
+        self.assertEqual(result['execution_receipt']['HEALTH_E2E'], 'NOT_VERIFIED')
+        targets = self.fixture.client_factory.call_args.args[0]
+        for target in targets:
+            self.assertEqual(target.image, plan['targets'][target.service]['previous_image'])
+        self.assertEqual(len(self.fixture.client.patches), 2)
+        self.assertEqual(self.closed, 1)
+
+    def test_bad_recovery_basis_stops_before_receiver_tokenreview_or_claim(self):
+        plan = self.prepare_recovery()
+        plan['recovery']['origin_plan_sha256'] = '0' * 64
+        self.record['plan'] = encode(plan).decode()
+        approved = json.loads(self.record['approval'])
+        approved['plan_sha256'] = b.sha(encode(plan))
+        self.record['approval'] = encode(approved).decode()
+        self.refresh()
+        self.env['DEPLOY_EXECUTE'] = 'true'
+        with self.assertRaisesRegex(b.Invalid, 'ORIGIN_PLAN_HASH_MISMATCH'):
+            self.run_flow()
+        self.assertEqual(self.opened, 0)
+        self.assertEqual(self.fixture.reviewer.calls, [])
+        self.assertFalse((self.home / 'FDS_CICD_DeployClaims').exists())
 
 
 class ContextTests(unittest.TestCase):

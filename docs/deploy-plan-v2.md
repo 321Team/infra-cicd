@@ -104,3 +104,8 @@ TLS API client·요청 deadline·실제 credential metadata·회수, workflow.
 운영 선행으로 최신 HPA/Deployment 기준선, 이전 image 재Pull/호환성, Worker Pull,
 APP DB TLS/Health/E2E 및 K8S 시험 종료/보호 상태를 확인한다.
 이 코드는 K8S 시험 실패를 해소하거나 Deploy·Runtime 승인/Phase1 인수를 부여하지 않는다.
+
+## 명시적 이전 digest 복구
+
+기존 plan-2의 배포 방향은 유지한다. 별도 `P1-CICD-recovery-plan-1` 계약과
+새 승인·현행 복원 절차는 [AC09 복구 계획](deploy-recovery-plan.md)을 따른다.

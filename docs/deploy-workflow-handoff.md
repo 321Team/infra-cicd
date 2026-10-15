@@ -5,12 +5,16 @@
 코드 병합, 독립 Source 승인, 새 Push 증적/입력 승인, 비중첩 실행창을 별도로
 확보해야 한다. 기존 인증 probe의 성공이나 과거 Push 승인을 재사용하지 않는다.
 
+AC09의 명시적 복구는 [별도 recovery 계약](deploy-recovery-plan.md)을 따른다.
+이 경우 과거 Build/Push 원문은 고정된 이미지의 근거로만 재사용하고,
+새 복구/현행 복원 실행 권한은 각 계획에 대한 현재 승인으로 확보한다.
+
 ## 실행 경로와 신뢰 경계
 
 `app-deploy.yml`은 main의 수동 dispatch/attempt1만 허용한다. 새 checkout의
 HEAD/Workflow SHA/Run/Attempt와 clean 상태를 검사한다. 입력 record 해시는
 외부에서 검토한 값이며, record 내부 plan/approval/push 영수증의 바이트를 묶는다.
-plan은 실제 dispatch 이후의 Run ID를 요구하지 않는 기존 v2 기준을 유지한다.
+plan은 실제 dispatch 이후의 Run ID를 요구하지 않는 기존 v2 또는 명시적 recovery 계약을 사용한다.
 
 - `execute=false`(기본): 정상 Runner에서 입력/CA/시간/실행 결속만 검사한다.
   승인 GitHub 조회, 소켓 열기, TokenRequest, claim, API GET/PATCH는 하지 않는다.
@@ -54,7 +58,7 @@ Runner HOME의 `FDS_CICD_DeployInputs/`는 0700, record는 소유자만 읽는 0
 ```json
 {
   "schema": "P1-CICD-deploy-inputs-1",
-  "plan": "<정확한 v2 plan UTF-8 원문>",
+  "plan": "<정확한 v2 또는 recovery plan UTF-8 원문>",
   "approval": "<정확한 v2 approval UTF-8 원문>",
   "push_receipt": "<새 Push receipt UTF-8 원문>",
   "sa_uid": "<최신 승인된 cicd-runner-sa UID>"
