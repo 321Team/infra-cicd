@@ -1,5 +1,7 @@
 # #46 P2 배포 코어 — 독립 검토용 준비 구현
 
+10/15 후속 로컬 검토본: [운영 provider 비교·session 수명주기·차단 CLI](operational-offline-implementation.md)를 추가했다. 기존 코어를 주입형 harness에서 연결한 단계이며, 아래에 미구현으로 표시한 실제 승인/플랫폼/생산 원본 인증과 운영 배포 연결은 여전히 잔여다.
+
 2026-10-13 KST · Lead 이권욱 · CODEX_ASSISTED.
 
 `tools/phase2/delivery_adapter.py`는 검증된 입력을 받았을 때 **앱 6개 자원 적용 → 두 Deployment rollout 관측**을 수행하는 상태 기계다. `delivery_store.py`는 POSIX 단일 Runner의 실행 claim·불변 journal, `delivery_transport.py`는 CA·hostname 검증과 전체 I/O 제한시간을 적용하는 TLS sender 라이브러리다. `producer_bridge.py`는 지정 커밋의 계약·검사기 원본을 읽어 같은 raw 렌더를 검사한다. `delivery_recovery.py`는 재시작 후 기존 journal을 읽어 검증하는 오프라인 CLI다. 실제 인증/권한·승인 검증기, 배포 CLI/Workflow와 모듈의 실제 연결은 없다. 배포 및 socket 시험은 MOCK이다. 기존 `delivery_intake.py`의 문자열 일관성 결과를 실행 허가로 연결하지 않는다.
