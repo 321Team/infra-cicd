@@ -47,7 +47,7 @@ class ReaderTests(unittest.TestCase):
             guard.start()
             self.addCleanup(guard.stop)
         factory = patch.object(socket, 'socket', side_effect=self.make_socket)
-        factory.start()
+        self.socket_factory = factory.start()
         self.addCleanup(factory.stop)
         with patch.object(transport.ssl, 'SSLContext', return_value=self.context):
             self.reader = ObjectReader(self.b, credential=self.credential, ca_pem=CA,
@@ -123,7 +123,7 @@ class ReaderTests(unittest.TestCase):
         sock = FakeSocket()
         sock.handshake_error = ssl.SSLCertVerificationError('SECRET')
         self.queue = [sock]
-        with self.assertRaisesRegex(VerificationError, '^OBJECT_READ_FAILED$'):
+        with self.assertRaisesRegex(VerificationError, '^TLS_CERTIFICATE_FAILED$'):
             self.provider().objects(self.request)
         self.assertEqual(sock.sent, b'')
         self.assertTrue(sock.closed)
@@ -133,7 +133,9 @@ class ReaderTests(unittest.TestCase):
             with self.subTest(status=status):
                 self.queue = [response(core.encoded(absent(core.OBJECTS[0])), status)]
                 before = len(self.sockets)
-                with self.assertRaisesRegex(VerificationError, '^OBJECT_READ_FAILED$'):
+                code = {401: 'HTTP_UNAUTHORIZED', 403: 'HTTP_FORBIDDEN',
+                        429: 'HTTP_RATE_LIMITED'}.get(status, 'HTTP_NOT_ACCEPTED')
+                with self.assertRaisesRegex(VerificationError, '^' + code + '$'):
                     self.provider().objects(self.request)
                 self.assertEqual(len(self.sockets), before + 1)
                 self.assertTrue(self.sockets[-1].closed)
@@ -149,7 +151,7 @@ class ReaderTests(unittest.TestCase):
             obj = absent(core.OBJECTS[0])
             change(obj)
             self.queue = [response(core.encoded(obj), 404)]
-            with self.assertRaisesRegex(VerificationError, '^OBJECT_READ_FAILED$'):
+            with self.assertRaisesRegex(VerificationError, '^OBJECT_ABSENCE_UNCONFIRMED$'):
                 self.reader.read(self.request, core.OBJECTS[0])
 
     def test_core_resource_empty_group_may_be_omitted_by_api(self):
@@ -184,9 +186,10 @@ class ReaderTests(unittest.TestCase):
                 self.reader.read(self.request, core.OBJECTS[0])
 
     def test_different_credential_same_token_still_fails_before_socket(self):
-        with self.assertRaises(VerificationError):
+        self.queue_absence()  # A missing fake response must not cause a false PASS.
+        with self.assertRaisesRegex(VerificationError, '^OBJECT_READ_BINDING_INVALID$'):
             self.provider().objects(replace(self.request, credential=BearerCredential(TOKEN)))
-        self.assertFalse(self.sockets)
+        self.socket_factory.assert_not_called()
 
     def test_other_binding_or_scope_fails_before_socket(self):
         with self.assertRaises(VerificationError):
@@ -222,7 +225,7 @@ class ReaderTests(unittest.TestCase):
             return original(sock, **kw)
         self.context.wrap_socket.side_effect = wrap
         provider = self.provider()
-        with self.assertRaisesRegex(VerificationError, '^OBJECT_READ_FAILED$'):
+        with self.assertRaisesRegex(VerificationError, '^DEADLINE_EXCEEDED$'):
             provider.objects(self.request)
         self.assertEqual(len(self.sockets), 3)
         self.assertEqual(provider.last_observations, ())
@@ -261,6 +264,106 @@ class ReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(VerificationError, '^OBJECT_PROVIDER_FAILED$'):
             provider.objects(self.request)
         self.assertFalse(self.sockets)
+
+    def test_socket_wait_uses_absolute_deadline_after_setup_time(self):
+        # Two seconds elapse between the relative budget calculation and
+        # Deadline construction. Removing the absolute clamp would wait 5s,
+        # not the remaining 3s, despite rejecting the late reply afterwards.
+        ticks = iter((100.0, 100.0))
+        def clock():
+            value = next(ticks, None)
+            return self.clock if value is None else value
+        self.clock = 102.0
+        self.reader.monotonic = clock
+        sock = FakeSocket()
+        sock.handshake_error = ssl.SSLWantReadError()
+        self.queue = [sock]
+        selector = Mock()
+        selector.__enter__ = Mock(return_value=selector)
+        selector.__exit__ = Mock(return_value=False)
+        def select(timeout):
+            self.assertEqual(timeout, 3.0)
+            self.clock = 105.0
+            return []
+        selector.select.side_effect = select
+        with patch.object(transport.selectors, 'DefaultSelector', return_value=selector):
+            with self.assertRaisesRegex(VerificationError, '^DEADLINE_EXCEEDED$'):
+                self.reader.read(replace(self.request, deadline=105.0), core.OBJECTS[0])
+        selector.select.assert_called_once_with(3.0)
+        self.assertEqual(sock.sent, b'')
+        self.assertTrue(sock.closed)
+
+    def test_last_read_deadline_retains_partial_diagnostics_not_evidence(self):
+        self.queue_absence()
+        def wrap(sock, **kw):
+            if len(self.sockets) == 6:
+                self.clock = self.request.deadline
+            return sock
+        self.context.wrap_socket.side_effect = wrap
+        provider = self.provider()
+        with self.assertRaisesRegex(VerificationError, '^DEADLINE_EXCEEDED$'):
+            provider.objects(self.request)
+        self.assertEqual(len(self.sockets), 6)
+        self.assertEqual(provider.last_observations, ())
+        diagnostic = provider.failure_diagnostics
+        self.assertEqual(diagnostic.code, 'DEADLINE_EXCEEDED')
+        self.assertEqual(diagnostic.failed_key, core.OBJECTS[-1])
+        self.assertEqual(len(diagnostic.observations), 5)
+        self.assertFalse(diagnostic.execution_authorized)
+        self.assertEqual(diagnostic.purpose, 'DIAGNOSTIC_ONLY')
+
+    def test_named_group_confusion_is_not_absence(self):
+        obj = absent(core.OBJECTS[2])
+        obj['details']['group'] = 'route.openshift.io'
+        self.queue = [response(core.encoded(obj), 404)]
+        with self.assertRaisesRegex(VerificationError, '^OBJECT_ABSENCE_UNCONFIRMED$'):
+            self.reader.read(self.request, core.OBJECTS[2])
+
+    def test_drift_retains_six_private_raws_without_promoting_evidence(self):
+        self.queue_objects()
+        provider = self.provider()
+        with self.assertRaisesRegex(VerificationError, '^OBJECT_DRIFT$'):
+            provider.objects(self.request)
+        diagnostic = provider.failure_diagnostics
+        self.assertEqual(tuple(o.raw for o in diagnostic.observations), self.raws)
+        self.assertIsNone(diagnostic.failed_key)
+        self.assertEqual(provider.last_observations, ())
+        self.assertNotIn('synthetic-uid', repr(diagnostic))
+        self.assertFalse(diagnostic.execution_authorized)
+
+    def test_diagnostics_reset_per_attempt_and_invalid_body_is_not_retained(self):
+        provider = self.provider()
+        self.queue_objects()
+        with self.assertRaises(VerificationError):
+            provider.objects(self.request)
+        self.queue = [response(b'SECRET_INVALID_BODY', 403)]
+        with self.assertRaisesRegex(VerificationError, '^HTTP_FORBIDDEN$'):
+            provider.objects(self.request)
+        self.assertEqual(provider.failure_diagnostics.observations, ())
+        self.assertNotIn('SECRET', repr(provider.failure_diagnostics))
+        self.queue_absence()
+        provider.objects(self.request)
+        self.assertIsNone(provider.failure_diagnostics)
+        self.assertEqual(len(provider.last_observations), 6)
+
+    def test_arbitrary_verification_error_text_is_not_a_safe_code(self):
+        provider = self.provider()
+        provider.progress = Mock(side_effect=VerificationError('SECRET_TOKEN_UPPERCASE'))
+        with self.assertRaisesRegex(VerificationError, '^OBJECT_PROVIDER_FAILED$'):
+            provider.objects(self.request)
+        self.assertNotIn('SECRET', repr(provider.failure_diagnostics))
+        self.assertEqual(provider.failure_diagnostics.observations, ())
+
+    def test_read_transport_preserves_known_codes_but_not_arbitrary_text(self):
+        for error, expected in ((TimeoutError(TOKEN), 'IO_TIMEOUT'),
+                                (OSError(TOKEN), 'OBJECT_READ_FAILED'),
+                                (transport.TransportError(TOKEN), 'OBJECT_READ_FAILED')):
+            sock = FakeSocket()
+            sock.recv_error = error
+            self.queue = [sock]
+            with self.assertRaisesRegex(VerificationError, '^' + expected + '$'):
+                self.reader.read(self.request, core.OBJECTS[0])
+            self.assertTrue(sock.closed)
 
     def connected_session(self, fail_after_first=False):
         c = ContractHarness()

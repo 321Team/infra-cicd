@@ -105,7 +105,10 @@ def unique_object(pairs):
 def read_json_response(sock, request, deadline, accepted):
     with http.client.HTTPResponse(HTTPStream(sock, deadline), method=request.method) as response:
         response.begin()
-        need(response.version == 11 and response.status in accepted, 'HTTP_NOT_ACCEPTED')
+        need(response.version == 11, 'HTTP_NOT_ACCEPTED')
+        need(response.status in accepted, {
+            401: 'HTTP_UNAUTHORIZED', 403: 'HTTP_FORBIDDEN',
+            429: 'HTTP_RATE_LIMITED'}.get(response.status, 'HTTP_NOT_ACCEPTED'))
         for header in ('content-length', 'transfer-encoding', 'content-type', 'content-encoding'):
             need(len(response.headers.get_all(header, [])) <= 1, 'HTTP_HEADERS_INVALID')
         length = response.getheader('Content-Length')
@@ -214,6 +217,10 @@ class Sender:
     def _read_response(self, sock, request, deadline):
         return read_response(sock, request, deadline)
 
+    def _transport_error(self, error):
+        # Writes remain uncertain for EVERY failure; never infer no mutation.
+        return TransportError('TRANSPORT_FAILED')
+
     def _exchange(self, request, deadline):
         raw_socket = tls_socket = None
         try:
@@ -245,10 +252,11 @@ class Sender:
                 need(sent > 0, 'SEND_FAILED')
                 offset += sent
             return self._read_response(tls_socket, request, deadline)
-        except Exception:
-            # Even 4xx is conservatively uncertain until a separately reviewed
-            # API-Status classifier can prove no mutation. Never auto-retry.
-            raise TransportError('TRANSPORT_FAILED') from None
+        except Exception as error:
+            # The write Sender treats even 4xx as uncertain. GET-only subclasses
+            # may retain fixed diagnostic codes without inferring write success.
+            # Neither path automatically retries.
+            raise self._transport_error(error) from None
         finally:
             for connection in (tls_socket, raw_socket):
                 if connection is not None:
