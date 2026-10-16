@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import delivery_adapter as core
-from delivery_objects import ObjectReconciler, decode
+from delivery_objects import ObjectReconciler, REVISION, REVISION_FIELDS, decode
 from delivery_verifier import ObjectEvidence, Progress, VerificationError
 from test_delivery_adapter import fixture, validator
 from test_delivery_operational import ContractHarness
@@ -20,6 +20,18 @@ def owned(obj, number):
                        'apiVersion': obj['apiVersion'], 'fieldsType': 'FieldsV1',
                        'fieldsV1': {'f:spec': {}}, 'time': '2026-10-16T00:00:00Z'}])
     return obj
+
+
+def controller_revision(obj, value='1', status=False):
+    obj['metadata'].setdefault('annotations', {})[REVISION] = value
+    entry = {'manager': 'kube-controller-manager', 'operation': 'Update',
+             'apiVersion': 'apps/v1', 'fieldsType': 'FieldsV1',
+             'fieldsV1': copy.deepcopy(REVISION_FIELDS)}
+    if status:
+        entry['subresource'] = 'status'
+        entry['fieldsV1']['f:status'] = {'f:observedGeneration': {}}
+    obj['metadata']['managedFields'].append(entry)
+    return entry
 
 
 class ObjectTests(unittest.TestCase):
@@ -118,6 +130,94 @@ class ObjectTests(unittest.TestCase):
             'manager': 'controller', 'operation': 'Update', 'apiVersion': 'v1',
             'fieldsType': 'FieldsV1', 'subresource': 'status', 'fieldsV1': {'f:spec': {}}}))
 
+    def test_controller_revision_after_deployment_ack_and_at_finish(self):
+        for index in (2, 3):
+            for count in (index + 1, 6):
+                for status in (False, True):
+                    with self.subTest(index=index, count=count, status=status):
+                        docs = copy.deepcopy(self.docs)
+                        controller_revision(docs[index], status=status)
+                        observed = tuple(core.encoded(x) for x in docs[:count])+self.absent[count:]
+                        self.make(self.absent).check(self.b, self.progress(count), observed)
+
+    def test_existing_revision_survives_baseline_then_increases_after_ack(self):
+        for status in (False, True):
+            docs = copy.deepcopy(self.docs)
+            controller_revision(docs[2], '2', status=status)
+            baseline = tuple(core.encoded(x) for x in docs)
+            r = self.make(baseline)
+            r.check(self.b, Progress(), baseline)
+            docs[2]['metadata']['annotations'][REVISION] = '3'
+            observed = tuple(core.encoded(x) for x in docs)
+            r.check(self.b, replace(self.progress(6), responses=baseline), observed)
+
+    def test_revision_before_own_ack_is_still_drift(self):
+        docs = copy.deepcopy(self.docs)
+        controller_revision(docs[2])
+        with self.assertRaisesRegex(VerificationError, 'OBJECT_DRIFT'):
+            self.make(self.raws).check(self.b, Progress(), tuple(core.encoded(x) for x in docs))
+
+    def test_revision_exception_does_not_cover_service_or_route(self):
+        for index in (0, 4):
+            self.reject_change(lambda o: controller_revision(o), index=index)
+
+    def test_revision_owner_must_be_exact_and_unambiguous(self):
+        for mutation in (lambda e: e.update(manager='foreign'),
+                         lambda e: e.update(operation='Apply'),
+                         lambda e: e.update(apiVersion='apps/v1beta1'),
+                         lambda e: e.update(subresource='scale'),
+                         lambda e: e['fieldsV1'].update({'f:spec': {}}),
+                         lambda e: e['fieldsV1']['f:metadata']['f:annotations'].update({'f:other': {}})):
+            for status in (False, True):
+                def change(o):
+                    mutation(controller_revision(o, status=status))
+                self.reject_change(change, index=2)
+        self.reject_change(lambda o: (controller_revision(o), controller_revision(o)), index=2)
+
+    def test_same_controller_cannot_hide_other_annotation_or_spec_change(self):
+        for mutation in (lambda o: o['metadata']['annotations'].update(other='changed'),
+                         lambda o: o['spec'].update(replicas=99)):
+            for status in (False, True):
+                def change(o):
+                    controller_revision(o, status=status)
+                    mutation(o)
+                self.reject_change(change, index=2)
+
+    def test_revision_invalid_values_and_owner_without_annotation_block(self):
+        for value in ('', '0', '-1', '01', '+1', '1.0', '1e3', ' 1', '١', '9'*20,
+                      str(2**63), 1, None):
+            self.reject_change(lambda o: controller_revision(o, value), index=2)
+        def owner_only(o):
+            controller_revision(o)
+            del o['metadata']['annotations'][REVISION]
+        self.reject_change(owner_only, index=2)
+
+    def test_revision_without_owner_is_not_ignored(self):
+        self.reject_change(lambda o: o['metadata'].setdefault('annotations', {}).update(
+            {REVISION: '1'}), index=2)
+
+    def test_revision_cannot_reverse_or_disappear_after_observation(self):
+        docs = list(copy.deepcopy(self.docs))
+        controller_revision(docs[2], '3')
+        self.r.check(self.b, self.progress(6), tuple(core.encoded(x) for x in docs))
+        for value in ('2', None):
+            if value is None:
+                docs[2] = copy.deepcopy(self.docs[2])
+            else:
+                docs[2]['metadata']['annotations'][REVISION] = value
+            with self.assertRaisesRegex(VerificationError, 'OBJECT_REVISION_REVERSED'):
+                self.r.check(self.b, self.progress(6), tuple(core.encoded(x) for x in docs))
+
+    def test_revision_cannot_be_below_baseline_or_ack_reply(self):
+        docs = copy.deepcopy(self.docs)
+        controller_revision(docs[2], '3')
+        previous = tuple(core.encoded(x) for x in docs)
+        docs[2]['metadata']['annotations'][REVISION] = '2'
+        observed = tuple(core.encoded(x) for x in docs)
+        for baseline, replies in ((previous, self.raws), (self.absent, previous)):
+            with self.assertRaisesRegex(VerificationError, 'OBJECT_REVISION_REVERSED'):
+                self.make(baseline).check(self.b, replace(self.progress(6), responses=replies), observed)
+
     def test_missing_or_malformed_ownership_is_unknown(self):
         for value in (None, {}, 'UNKNOWN', [{'manager': 'fake'}]):
             self.reject_change(lambda o: o['metadata'].update(managedFields=value))
@@ -212,6 +312,25 @@ class ObjectTests(unittest.TestCase):
         self.assertEqual(len(c.h.requests), 1)
         self.assertEqual(c.storage.complete_calls, 0)
         self.assertIsNotNone(c.storage.active)
+
+    def test_session_controller_revision_through_remaining_writes_and_rollout(self):
+        for status in (False, True):
+            c, observed = self.connected()
+            def revise(name, request):
+                if name != 'producer':
+                    return
+                for key in core.OBJECTS[2:4]:
+                    if key in observed:
+                        obj = json.loads(observed[key])
+                        if REVISION not in obj['metadata'].get('annotations', {}):
+                            controller_revision(obj, status=status)
+                            observed[key] = core.encoded(obj)
+                            c.h.objects[core.path_for(key)] = copy.deepcopy(obj)
+            c.providers.before = revise
+            result = c.run(finalize=True)
+            self.assertEqual(result['status'], 'SESSION_COMPLETED', result)
+            self.assertEqual(len(c.h.requests), 8)
+            self.assertEqual(c.storage.complete_calls, 1)
 
 
 if __name__ == '__main__':

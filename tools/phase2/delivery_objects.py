@@ -6,12 +6,43 @@ does not prove freshness, ownership permission, admission safety or authority.
 It neither constructs ObjectEvidence nor authorizes execution on its own.
 """
 import json
+import re
 
 import delivery_adapter as core
 import delivery_store as store
 from delivery_verifier import Progress, VerificationError, require
 
 MAX_RAW = 1024 * 1024
+REVISION = 'deployment.kubernetes.io/revision'
+REVISION_FIELDS = {'f:metadata': {'f:annotations': {'f:' + REVISION: {}}}}
+
+
+def deployment_revision(obj):
+    """A missing initial revision is zero; present values must be positive int64."""
+    if obj is None:
+        return 0
+    annotations = obj['metadata'].get('annotations', {})
+    require(type(annotations) is dict, 'OBJECT_REVISION_INVALID')
+    if REVISION not in annotations:
+        return 0
+    value = annotations[REVISION]
+    require(type(value) is str and re.fullmatch(r'[1-9][0-9]{0,18}', value)
+            and int(value) <= 2**63 - 1, 'OBJECT_REVISION_INVALID')
+    return int(value)
+
+
+def revision_owner(entry, key):
+    # Kubernetes also updates this metadata through UpdateStatus. Accept only
+    # this field, optionally alongside status in that status-subresource entry.
+    fields = entry['fieldsV1']
+    if entry.get('subresource') == 'status':
+        fields = {k: v for k, v in fields.items() if k != 'f:status'}
+        if 'f:status' in entry['fieldsV1'] and type(entry['fieldsV1']['f:status']) is not dict:
+            return False
+    return (key[:2] == ('apps/v1', 'Deployment')
+            and entry['manager'] == 'kube-controller-manager'
+            and entry['operation'] == 'Update' and entry['apiVersion'] == 'apps/v1'
+            and fields == REVISION_FIELDS)
 
 
 def unique(pairs):
@@ -35,7 +66,7 @@ def decode(raw):
         raise VerificationError('OBJECT_JSON_INVALID') from None
 
 
-def normalized(obj, key):
+def normalized(obj, key, ignore_revision=False):
     """Preserve spec and non-status ownership; ignore only known volatile data."""
     require(type(obj) is dict and core.identity(obj) == key, 'OBJECT_IDENTITY_MISMATCH')
     obj = decode(core.encoded(obj))
@@ -49,6 +80,7 @@ def normalized(obj, key):
     entries = meta.get('managedFields')
     require(type(entries) is list and len(entries) <= 128, 'OBJECT_OWNERSHIP_UNKNOWN')
     owners = []
+    revision_owners = 0
     for entry in entries:
         require(type(entry) is dict and set(entry) <= {
             'manager', 'operation', 'apiVersion', 'time', 'fieldsType', 'fieldsV1', 'subresource'}
@@ -60,12 +92,29 @@ def normalized(obj, key):
             'OBJECT_OWNERSHIP_INVALID')
         subresource = entry.get('subresource', '')
         require(subresource in ('', 'status'), 'OBJECT_SUBRESOURCE_UNKNOWN')
+        if revision_owner(entry, key):
+            revision_owners += 1
+            require(deployment_revision(obj) > 0, 'OBJECT_REVISION_INVALID')
+            if ignore_revision:
+                continue
+            # Before this object's ACK, revision and its ownership remain part
+            # of the frozen baseline comparison; only status is volatile.
+            entry['fieldsV1'].pop('f:status', None)
+            entry.pop('time', None)
+            owners.append(core.encoded(entry))
+            continue
         if subresource == 'status':
             require(set(entry['fieldsV1']) <= {'f:status'}, 'OBJECT_STATUS_OWNERSHIP_INVALID')
             continue
         entry.pop('time', None)
         entry.pop('subresource', None)
         owners.append(core.encoded(entry))
+    require(revision_owners <= 1, 'OBJECT_REVISION_OWNERSHIP_INVALID')
+    if ignore_revision and deployment_revision(obj):
+        require(revision_owners == 1, 'OBJECT_REVISION_OWNERSHIP_INVALID')
+        del meta['annotations'][REVISION]
+    if ignore_revision and meta.get('annotations') == {}:
+        del meta['annotations']
     require(len(owners) == len(set(owners)), 'OBJECT_OWNERSHIP_DUPLICATE')
     meta['managedFields'] = [decode(x) for x in sorted(owners)]
     meta.pop('resourceVersion')
@@ -101,6 +150,9 @@ class ObjectReconciler:
             # Store private immutable bytes, not caller-owned dict references.
             self.baseline = tuple(None if raw is None else core.encoded(
                 normalized(decode(raw), key)) for key, raw in zip(core.OBJECTS, baseline))
+            self.revisions = tuple(deployment_revision(None if raw is None else decode(raw))
+                if key[:2] == ('apps/v1', 'Deployment') else 0
+                for key, raw in zip(core.OBJECTS, baseline))
         except VerificationError:
             raise
         except Exception:
@@ -127,12 +179,14 @@ class ObjectReconciler:
                         'OBJECT_RUN_STOPPED')
                 count = len(journal['acknowledged'])
             require(len(progress.responses) == count, 'OBJECT_REPLY_ACK_MISMATCH')
+            revisions = list(self.revisions)
             for i, (key, raw) in enumerate(zip(core.OBJECTS, observations)):
                 expected = self.baseline[i]
+                ignore_revision = i < count and key[:2] == ('apps/v1', 'Deployment')
                 if i < count:
                     reply = decode(progress.responses[i])
                     core.scope_checked(reply, binding, response=True)
-                    after = normalized(reply, key)
+                    after = normalized(reply, key, ignore_revision=ignore_revision)
                     if expected is not None:
                         require(after['metadata']['uid'] == decode(expected)['metadata']['uid'],
                                 'OBJECT_UID_REPLACED')
@@ -151,8 +205,17 @@ class ObjectReconciler:
                 observed = None if raw is None else decode(raw)
                 if i < count and observed is not None:
                     core.scope_checked(observed, binding, response=True)
-                actual = None if observed is None else core.encoded(normalized(observed, key))
+                if ignore_revision:
+                    revision = deployment_revision(observed)
+                    require(revision >= max(revisions[i], deployment_revision(reply)),
+                            'OBJECT_REVISION_REVERSED')
+                    revisions[i] = revision
+                actual = None if observed is None else core.encoded(
+                    normalized(observed, key, ignore_revision=ignore_revision))
                 require(actual == expected, 'OBJECT_DRIFT')
+            # Commit the in-memory high-water mark only after the complete set
+            # passed. This is not a durable ACK or permission to resume a RUN.
+            self.revisions = tuple(revisions)
             return progress.key
         except VerificationError:
             raise
