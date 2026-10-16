@@ -40,6 +40,7 @@ P1 파일·Workflow·Runner 설정·권한·AC 변경은 없다. 새 시험은 �
 
 `budget_seconds`는 신뢰된 통합 설정에서 명시적으로 받아야 한다. 시험의5초/300초는 합성 값이며 운영 수치나 새 AC가 아니다.
 승인·credential 만료가 더 이르면 그 시점으로 읽기 deadline을 줄인다. 조회 전후와 결과 대조 후 시간을 검사하며 preflight 소요도 실제 잔여시간에서 차감한다.
+10/16 리뷰5544978490 반영: platform은 같은 credential의 인증된 `issued_at`도 전달하며 `issued_at <= now < expires_at`, `0 < expires_at - issued_at <= 900`을 검증한다. 요청만900초이고 실제 발급수명이1800초인 토큰은 잔여가900초 이하가 되어도 거부한다. 임의60초 여유나 자동 refresh는 추가하지 않았다. 발급시각도 회차 중 고정한다. unverified JWT decode나 호출자가 임의로 채운 시각은 증거가 아니며 기존 provider의 issuer/audience·credential 인증 경로에서 읽는다. 새 수동 양식·별도 팀원 승인·토큰 재발급 절차를 요구하지 않는다.
 wall clock이 정지해도 monotonic 경과로 수명이 늘어나지 않는다. 첫 PATCH의660초 가드는 기존 core를 재사용한다.
 
 **동기 Python callback이 반환하지 않는 경우 이 비교층이 강제로 중단시키지는 못한다.**

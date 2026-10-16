@@ -53,7 +53,7 @@ class FakeProviders:
     def platform(self, r):
         return self.call('platform', r, v.PlatformEvidence(
             r, self.h.binding, ORIGIN, self.credential, 'f' * 64,
-            'synthetic-issuer', 'synthetic-audience', 900, 1900,
+            'synthetic-issuer', 'synthetic-audience', 900, 1900, 1000,
             CA_RAW, '192.0.2.10', PLATFORM_RAW))
 
     def producer(self, r):
@@ -298,6 +298,36 @@ class OperationalTests(unittest.TestCase):
             self.c = ContractHarness()
             self.c.providers.hooks[name] = lambda r, value: replace(value, raw_receipt=b'wrong-run')
             self.assert_preflight_denied()
+
+    def verifier(self):
+        return v.Verifier(providers=self.c.providers, credential=self.c.credential,
+                          progress=lambda: v.Progress(), wall=lambda: self.c.h.now,
+                          monotonic=lambda: self.c.h.mono, budget_seconds=5)
+
+    def test_actual_credential_lifetime_900_succeeds(self):
+        result = self.verifier()(self.c.h.binding)
+        self.assertEqual(result.lease.token_expires_at, 1900)
+
+    def test_actual_long_lived_or_unknown_credential_blocks_before_sender(self):
+        for changes in ({'expires_at': 2800},  # 1800 seconds despite requested 900
+                        {'issued_at': 100},   # old 1800s token with only 900s left
+                        {'issued_at': 1001}, {'issued_at': float('nan')},
+                        {'issued_at': None}, {'issued_at': True}):
+            self.c = ContractHarness()
+            self.c.providers.hooks['platform'] = lambda r, value: replace(value, **changes)
+            self.assert_preflight_denied()
+        self.c = ContractHarness()
+        self.c.providers.hooks['platform'] = lambda r, value: replace(value, expires_at=2800)
+        with self.assertRaisesRegex(v.VerificationError, '^CREDENTIAL_LIFETIME_INVALID$'):
+            self.verifier()(self.c.h.binding)
+
+    def test_expired_credential_has_direct_error_without_downstream_reads(self):
+        self.c.providers.hooks['platform'] = lambda r, value: replace(
+            value, issued_at=100, expires_at=1000)
+        with self.assertRaisesRegex(v.VerificationError, '^CREDENTIAL_EXPIRED$'):
+            self.verifier()(self.c.h.binding)
+        self.assertNotIn('producer', self.c.providers.calls)
+        self.assertNotIn('objects', self.c.providers.calls)
 
     def test_producer_source_contract_render_checker_and_adoption_mismatch(self):
         for field, value in (('source_commit', '9' * 40), ('contract_sha256', '9' * 64),

@@ -74,6 +74,7 @@ class PlatformEvidence:
     audience: str
     requested_seconds: int
     expires_at: float
+    issued_at: float  # authenticated issuance time, not an unverified JWT decode
     ca_pem: bytes = field(repr=False)
     endpoint_ip: str
     raw_receipt: bytes = field(repr=False)
@@ -224,7 +225,7 @@ class Verifier:
             require(type(p.credential_fingerprint) is str
                     and core.HEX.fullmatch(p.credential_fingerprint)
                     and type(p.requested_seconds) is int and p.requested_seconds == 900
-                    and core.finite(p.expires_at), 'CREDENTIAL_INVALID')
+                    and core.finite(p.expires_at) and core.finite(p.issued_at), 'CREDENTIAL_INVALID')
             for value in (p.issuer, p.audience):
                 require(type(value) is str and value.strip()
                         and value.upper() not in ('PENDING', 'UNKNOWN'), 'CREDENTIAL_INVALID')
@@ -238,6 +239,8 @@ class Verifier:
             self.receipt(p.raw_receipt, binding.platform_receipt_sha256)
             now, m = self.clock()
             require(now < p.expires_at, 'CREDENTIAL_EXPIRED')
+            require(p.issued_at <= now and 0 < p.expires_at - p.issued_at <= p.requested_seconds,
+                    'CREDENTIAL_LIFETIME_INVALID')
             request = ReadRequest(binding, self.credential, request.progress,
                                   min(request.deadline, m + p.expires_at - now))
             s = self.read(self.providers.producer, ProducerEvidence, request)
@@ -255,7 +258,7 @@ class Verifier:
             require(now < min(a.expires_at, p.expires_at), 'VERIFICATION_EXPIRED')
             stable = (a.provenance, a.expires_at, a.starts_at, binding,
                       p.provenance, p.credential_fingerprint, p.issuer, p.audience,
-                      p.expires_at, p.endpoint_ip, s.provenance)
+                      p.expires_at, p.issued_at, p.endpoint_ip, s.provenance)
             require(self.initial is None or stable == self.initial, 'AUTHORITY_CHANGED')
             self.initial, self.platform = stable, p
             lease = core.Lease(binding.key, p.credential_fingerprint, p.requested_seconds,
