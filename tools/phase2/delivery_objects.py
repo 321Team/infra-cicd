@@ -15,6 +15,7 @@ from delivery_verifier import Progress, VerificationError, require
 MAX_RAW = 1024 * 1024
 REVISION = 'deployment.kubernetes.io/revision'
 REVISION_FIELDS = {'f:metadata': {'f:annotations': {'f:' + REVISION: {}}}}
+REVISION_MAP_FIELDS = {'f:metadata': {'f:annotations': {'.': {}, 'f:' + REVISION: {}}}}
 
 
 def deployment_revision(obj):
@@ -42,7 +43,10 @@ def revision_owner(entry, key):
     return (key[:2] == ('apps/v1', 'Deployment')
             and entry['manager'] == 'kube-controller-manager'
             and entry['operation'] == 'Update' and entry['apiVersion'] == 'apps/v1'
-            and fields == REVISION_FIELDS)
+            # FieldsV1 '.' owns this annotations map itself, not every child.
+            # Only this exact optional empty marker is allowed, never arbitrary
+            # map markers or sibling annotation/spec fields.
+            and fields in (REVISION_FIELDS, REVISION_MAP_FIELDS))
 
 
 def unique(pairs):

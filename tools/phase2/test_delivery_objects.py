@@ -22,11 +22,13 @@ def owned(obj, number):
     return obj
 
 
-def controller_revision(obj, value='1', status=False):
+def controller_revision(obj, value='1', status=False, map_owned=False):
     obj['metadata'].setdefault('annotations', {})[REVISION] = value
     entry = {'manager': 'kube-controller-manager', 'operation': 'Update',
              'apiVersion': 'apps/v1', 'fieldsType': 'FieldsV1',
              'fieldsV1': copy.deepcopy(REVISION_FIELDS)}
+    if map_owned:
+        entry['fieldsV1']['f:metadata']['f:annotations']['.'] = {}
     if status:
         entry['subresource'] = 'status'
         entry['fieldsV1']['f:status'] = {'f:observedGeneration': {}}
@@ -150,6 +152,51 @@ class ObjectTests(unittest.TestCase):
             docs[2]['metadata']['annotations'][REVISION] = '3'
             observed = tuple(core.encoded(x) for x in docs)
             r.check(self.b, replace(self.progress(6), responses=baseline), observed)
+
+    def test_revision_annotations_map_marker_after_ack(self):
+        for index in (2, 3):
+            for count in (index + 1, 6):
+                for status in (False, True):
+                    with self.subTest(index=index, count=count, status=status):
+                        docs = copy.deepcopy(self.docs)
+                        controller_revision(docs[index], status=status, map_owned=True)
+                        observed = tuple(core.encoded(x) for x in docs[:count])+self.absent[count:]
+                        self.make(self.absent).check(self.b, self.progress(count), observed)
+
+    def test_revision_map_marker_does_not_hide_extra_fields_or_bad_marker(self):
+        mutations = (
+            lambda e: e['fieldsV1']['f:metadata']['f:annotations'].update({'f:other': {}}),
+            lambda e: e['fieldsV1']['f:metadata']['f:annotations'].update({'.': {'f:other': {}}}),
+            lambda e: e['fieldsV1']['f:metadata']['f:annotations'].update({'.': None}),
+            lambda e: e['fieldsV1']['f:metadata']['f:annotations'].update({'.': []}),
+            lambda e: e['fieldsV1']['f:metadata']['f:annotations'].update({'f:'+REVISION: {'x': {}}}),
+            lambda e: e['fieldsV1']['f:metadata'].update({'.': {}}),
+            lambda e: e['fieldsV1'].update({'f:spec': {}}),
+        )
+        for status in (False, True):
+            for mutate in mutations:
+                def change(o):
+                    mutate(controller_revision(o, status=status, map_owned=True))
+                self.reject_change(change, index=2)
+            def changed_annotation(o):
+                controller_revision(o, status=status, map_owned=True)
+                o['metadata']['annotations']['unrelated'] = 'changed'
+            self.reject_change(changed_annotation, index=2)
+
+    def test_revision_map_marker_baseline_and_ack_reply_keep_guards(self):
+        for status in (False, True):
+            docs = copy.deepcopy(self.docs)
+            controller_revision(docs[2], '2', status=status, map_owned=True)
+            baseline = tuple(core.encoded(x) for x in docs)
+            r = self.make(baseline)
+            r.check(self.b, Progress(), baseline)
+            docs[2]['metadata']['annotations'][REVISION] = '3'
+            observed = tuple(core.encoded(x) for x in docs)
+            with self.assertRaisesRegex(VerificationError, 'OBJECT_DRIFT'):
+                r.check(self.b, Progress(), observed)
+            r.check(self.b, replace(self.progress(6), responses=baseline), observed)
+            with self.assertRaisesRegex(VerificationError, 'OBJECT_REVISION_REVERSED'):
+                r.check(self.b, replace(self.progress(6), responses=baseline), baseline)
 
     def test_revision_before_own_ack_is_still_drift(self):
         docs = copy.deepcopy(self.docs)
@@ -314,7 +361,7 @@ class ObjectTests(unittest.TestCase):
         self.assertIsNotNone(c.storage.active)
 
     def test_session_controller_revision_through_remaining_writes_and_rollout(self):
-        for status in (False, True):
+        for status, map_owned in ((False, False), (True, False), (False, True), (True, True)):
             c, observed = self.connected()
             def revise(name, request):
                 if name != 'producer':
@@ -323,7 +370,7 @@ class ObjectTests(unittest.TestCase):
                     if key in observed:
                         obj = json.loads(observed[key])
                         if REVISION not in obj['metadata'].get('annotations', {}):
-                            controller_revision(obj, status=status)
+                            controller_revision(obj, status=status, map_owned=map_owned)
                             observed[key] = core.encoded(obj)
                             c.h.objects[core.path_for(key)] = copy.deepcopy(obj)
             c.providers.before = revise
