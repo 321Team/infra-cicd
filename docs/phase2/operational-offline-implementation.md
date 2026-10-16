@@ -5,6 +5,10 @@ PR84의 [운영 연결 계약](operational-integration-contract.md)을 코드 �
 **실제 승인/플랫폼/생산 원본을 인증하는 운영 adapter와 실제 배포 CLI는 미완성이다.**
 아래 구현은 로컬 검토본이며 독립 리뷰·변경 CI·Runtime GO·#46 인수를 뜻하지 않는다.
 
+10/16 추가: [객체 대조 helper와 합성 통합 시험](object-reconciliation.md)을 구현했다.
+baseline/ACK/UID/spec/소유 필드 비교는 가능하지만 실제 `objects()` reader의 인증·freshness·deadline·admission 검증은 미구현이다.
+기존 아래의 동적 객체 미구현 표기는 실제 운영 provider에 대한 설명이며, 이 순수 helper와 구분한다.
+
 ## 구현한 범위
 
 | 파일 | 동작 |
