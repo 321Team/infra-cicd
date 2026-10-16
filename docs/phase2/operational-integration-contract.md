@@ -1,5 +1,7 @@
 # #46 운영 검증기·CLI 구현 전 인계
 
+10/16 후속: [고정6객체 조회 adapter](object-reader.md)를 별도 검토본으로 구현했다. bounded TLS GET·404분류·진행 상태 대조가 추가됐으며, 아래 최초 설계의 객체 조회 미구현 부분에 해당한다. 승인/플랫폼 인증·baseline admission·완료 provider와 운영 배포 CLI는 계속 잔여다.
+
 10/15 후속 로컬 검토본: [provider 비교·수명주기 오프라인 구현](operational-offline-implementation.md). 내부 타입/비교층·주입형 session과 fail-closed CLI 경계를 추가했으며 실제 승인/플랫폼/생산/object provider와 배포 CLI는 여전히 미구현이다. 아래 PR84 작성 당시 설계와 후속 구현·시험 범위를 구분한다.
 
 2026-10-15 KST · 이권욱 · CODEX_ASSISTED. 기준 main `c373f1d7a8e6e84548180839098c34e9a1262eef`. 10/15 09:42 KST fetch 후 P2 경로 변경 없음을 재확인했다. `tools/phase2`와 `docs/phase2`는 PR80 HEAD `eeadfd256b5360fb414569e15f0e32c2efd9ea39`에서 변경 없음(git diff 확인). **현재는 인터페이스·실패 시험 설계 완료, 운영 구현·새 MOCK·Runtime 미실행**이다. 기존 [소비 계약](delivery-adapter.md), [생산자 수신](producer-intake-20261014.md), [읽기 전용 복구](recovery-review.md)를 확장하며 AC·권한·Workflow를 변경하지 않는다.

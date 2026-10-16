@@ -82,6 +82,10 @@ Windows에서 새 POSIX 통합3건과 기존 POSIX 시험은 SKIP이다. fake Me
 Linux에서 실제 store 시험을 실행할 때 저장소와 상위 경로는 root/현재 사용자 소유이며 group/other 쓰기 불가여야 한다. `/tmp`에서 실행하거나 store 보안 검사를 낮추지 않는다.
 기존 선택적 bridge9건은 PyYAML6.0.3이 있어야 한다. 이번 변경은 parser/bridge 코드를 변경하지 않으며 패키지를 설치하지 않았다.
 
+## 10/16 후속 객체 조회 구현
+
+[객체 조회 adapter](object-reader.md)는 고정6객체의 bounded TLS GET·정확404분류·Progress/deadline 대조를 기존 ObjectReconciler에 연결한다. 실제 운영 입력/인증 provider·baseline admission·CLI는 미완성이며 Runtime는 미실행이다. 아래 객체 provider 잔여 중 조회 연결만 구현됐고 독립 검토·실제 원본 확인은 남는다.
+
 ## 연결 전 남은 담당·완료조건
 
 | 담당 | 남은 작업 | 완료조건 |
