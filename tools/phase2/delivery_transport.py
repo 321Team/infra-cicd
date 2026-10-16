@@ -102,10 +102,10 @@ def unique_object(pairs):
     return result
 
 
-def read_response(sock, request, deadline):
+def read_json_response(sock, request, deadline, accepted):
     with http.client.HTTPResponse(HTTPStream(sock, deadline), method=request.method) as response:
         response.begin()
-        need(response.version == 11 and response.status in (200, 201), 'HTTP_NOT_ACCEPTED')
+        need(response.version == 11 and response.status in accepted, 'HTTP_NOT_ACCEPTED')
         for header in ('content-length', 'transfer-encoding', 'content-type', 'content-encoding'):
             need(len(response.headers.get_all(header, [])) <= 1, 'HTTP_HEADERS_INVALID')
         length = response.getheader('Content-Length')
@@ -127,8 +127,13 @@ def read_response(sock, request, deadline):
                          parse_constant=lambda value: (_ for _ in ()).throw(
                              TransportError('RESPONSE_JSON_INVALID')))
         need(type(obj) is dict, 'RESPONSE_JSON_INVALID')
+        core.encoded(obj)  # Also reject finite JSON literals that overflow a float.
         deadline.left()
-        return obj
+        return response.status, raw, obj
+
+
+def read_response(sock, request, deadline):
+    return read_json_response(sock, request, deadline, (200, 201))[2]
 
 
 class Sender:
@@ -179,6 +184,10 @@ class Sender:
              and self._context.minimum_version >= ssl.TLSVersion.TLSv1_2
              and self._context.keylog_filename is None, 'TLS_POLICY_INVALID')
         need(type(request.body) is bytes and len(request.body) <= MAX_BODY, 'REQUEST_BODY_INVALID')
+        self._check_scope(request)
+
+    def _check_scope(self, request):
+        b = self._binding
         paths = {core.path_for(key): key for key in core.OBJECTS}
         if request.method == 'GET':
             need(request.path in paths and paths[request.path][1] == 'Deployment'
@@ -197,10 +206,19 @@ class Sender:
             raise TransportError('REQUEST_SCOPE_INVALID')
 
     def __call__(self, request):
+        try:
+            return self._exchange(request, Deadline(request.timeout_seconds))
+        except Exception:
+            raise TransportError('TRANSPORT_FAILED') from None
+
+    def _read_response(self, sock, request, deadline):
+        return read_response(sock, request, deadline)
+
+    def _exchange(self, request, deadline):
         raw_socket = tls_socket = None
         try:
-            deadline = Deadline(request.timeout_seconds)
             self._check(request)
+            deadline.left()
             raw_socket = socket.socket(self._family, socket.SOCK_STREAM)
             raw_socket.setblocking(False)
             address = (self._ip, self._port) if self._family == socket.AF_INET else (self._ip, self._port, 0, 0)
@@ -226,7 +244,7 @@ class Sender:
                 sent = tls_call(tls_socket, lambda: tls_socket.send(wire[offset:]), deadline)
                 need(sent > 0, 'SEND_FAILED')
                 offset += sent
-            return read_response(tls_socket, request, deadline)
+            return self._read_response(tls_socket, request, deadline)
         except Exception:
             # Even 4xx is conservatively uncertain until a separately reviewed
             # API-Status classifier can prove no mutation. Never auto-retry.

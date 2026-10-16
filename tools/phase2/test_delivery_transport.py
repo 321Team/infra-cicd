@@ -209,7 +209,7 @@ class TransportTests(unittest.TestCase):
                     self.send()
 
     def test_truncated_invalid_duplicate_or_nonobject_json_stops(self):
-        for raw in (b'{"ok":true', b'{"ok":true,"ok":false}', b'{"ok":NaN}', b'[]', b'\xff'):
+        for raw in (b'{"ok":true', b'{"ok":true,"ok":false}', b'{"ok":NaN}', b'{"ok":1e400}', b'[]', b'\xff'):
             self.sock = FakeSocket(response(raw))
             self.context.wrap_socket.return_value = self.sock
             with self.subTest(raw=raw), self.assertRaises(transport.TransportError):
