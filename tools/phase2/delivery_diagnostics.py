@@ -9,11 +9,11 @@ import os
 import delivery_adapter as core
 import delivery_store as store
 from delivery_object_reader import FailureDiagnostics, Observation, SAFE_CODES
-from delivery_objects import decode
-from delivery_verifier import Progress, require
+from delivery_objects import REVISION, decode, deployment_revision
+from delivery_verifier import Progress, VerificationError, require
 
 REDACTED = '<REDACTED>'
-REDACTION_PROFILE = 'P2-K8S-DIAGNOSTIC-1'
+REDACTION_PROFILE = 'P2-K8S-DIAGNOSTIC-2'
 
 
 def redacted_snapshot(observation):
@@ -24,7 +24,8 @@ def redacted_snapshot(observation):
     ObjectReader/Reconciler continue to use the original bytes in memory.
     """
     obj = decode(observation.raw)
-    counts = dict(route_tls=0, literal_env=0, annotation=0, command=0, header=0, message=0)
+    counts = dict(route_tls=0, literal_env=0, annotation=0, command=0, header=0, message=0,
+                  revision_preserved=0)
     if observation.status == 404:
         key = observation.key
         group = key[0].split('/')[0] if '/' in key[0] else ''
@@ -41,10 +42,21 @@ def redacted_snapshot(observation):
                'reason': 'NotFound', 'code': 404,
                'details': {'group': group, 'kind': plural, 'name': key[2]}}
     else:
+        metadata = obj.get('metadata')
         require(set(obj) <= {'apiVersion', 'kind', 'metadata', 'spec', 'status'}
-                and core.identity(obj) == observation.key
-                and obj['metadata'].get('namespace') == core.NAMESPACE,
+                and type(metadata) is dict
+                and (obj.get('apiVersion'), obj.get('kind'), metadata.get('name')) == observation.key
+                and metadata.get('namespace') == core.NAMESPACE
+                and type(obj.get('spec', {})) is dict,
                 'DIAGNOSTIC_INVALID')
+        revision = None
+        if observation.key[:2] == ('apps/v1', 'Deployment'):
+            try:
+                if deployment_revision(obj) > 0:
+                    revision = metadata['annotations'][REVISION]
+            except VerificationError:
+                # An invalid value is still opaque: redact it, never preserve/hash it.
+                pass
         if observation.key[1] == 'Route':
             tls = obj.get('spec', {}).get('tls', {})
             require(type(tls) is dict, 'DIAGNOSTIC_INVALID')
@@ -64,6 +76,9 @@ def redacted_snapshot(observation):
                         require(type(child) is dict, 'DIAGNOSTIC_INVALID')
                         # Includes kubectl last-applied JSON and nested copies.
                         for annotation in child:
+                            if value is metadata and annotation == REVISION and revision is not None:
+                                counts['revision_preserved'] += 1
+                                continue
                             child[annotation] = REDACTED
                             counts['annotation'] += 1
                     elif name in ('env', 'httpHeaders'):
@@ -113,13 +128,20 @@ def diagnostic_bytes(binding, progress, observed_at, diagnostic, *, phase='sessi
                 and type(o.raw) is bytes and 0 < len(o.raw) <= 1024 * 1024,
                 'DIAGNOSTIC_INVALID')
         seen.add(o.key)
-        snapshot, counts = redacted_snapshot(o)
-        rows.append({'key': o.key, 'status': o.status, 'source_sha256': core.digest(o.raw),
-                     'snapshot_sha256': core.digest(snapshot),
-                     'snapshot_base64': base64.b64encode(snapshot).decode('ascii'),
-                     'redaction_counts': counts})
-    return core.encoded({'schema': 'P2-CICD-private-diagnostic-3', 'phase': phase,
+        row = {'key': o.key, 'status': o.status, 'source_sha256': core.digest(o.raw)}
+        try:
+            snapshot, counts = redacted_snapshot(o)
+        except VerificationError:
+            # Keep a body-free integrity reference, not the rejected object or error text.
+            row['redaction'] = 'REJECTED'
+        else:
+            row.update(redaction='APPLIED', snapshot_sha256=core.digest(snapshot),
+                       snapshot_base64=base64.b64encode(snapshot).decode('ascii'),
+                       redaction_counts=counts)
+        rows.append(row)
+    return core.encoded({'schema': 'P2-CICD-private-diagnostic-4', 'phase': phase,
         'redaction_profile': REDACTION_PROFILE, 'snapshot_is_original': False,
+        'redaction_complete': all(row['redaction'] == 'APPLIED' for row in rows),
         'purpose': 'DIAGNOSTIC_ONLY', 'execution_authorized': False,
         'binding_key': binding.key, 'run_id': binding.run_id, 'action': binding.action,
         'observed_at': observed_at, 'progress_key': progress.key,
