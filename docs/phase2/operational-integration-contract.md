@@ -1,5 +1,7 @@
 # #46 운영 검증기·CLI 구현 전 인계
 
+10/16 추가 후속: [TLS sender/session 결속](sender-binding.md)을 오프라인 라이브러리로 연결하고 [객체 조회 실패 진단](object-reader.md)을 보강했다. authenticated provider·운영 CLI는 계속 잔여이며 문서 아래의 초기 설계를 Runtime 완료로 읽지 않는다.
+
 10/16 후속: [고정6객체 조회 adapter](object-reader.md)를 별도 검토본으로 구현했다. bounded TLS GET·404분류·진행 상태 대조가 추가됐으며, 아래 최초 설계의 객체 조회 미구현 부분에 해당한다. 승인/플랫폼 인증·baseline admission·완료 provider와 운영 배포 CLI는 계속 잔여다.
 
 10/15 후속 로컬 검토본: [provider 비교·수명주기 오프라인 구현](operational-offline-implementation.md). 내부 타입/비교층·주입형 session과 fail-closed CLI 경계를 추가했으며 실제 승인/플랫폼/생산/object provider와 배포 CLI는 여전히 미구현이다. 아래 PR84 작성 당시 설계와 후속 구현·시험 범위를 구분한다.

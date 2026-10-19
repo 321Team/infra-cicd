@@ -26,7 +26,8 @@ class BoundSender:
 def run_session(binding, rendered, contract, validator, *, root, providers, credential,
                 sender_factory, budget_seconds, acquire=store.acquire,
                 journal_factory=store.Journal, wall=time.time,
-                monotonic=time.monotonic, sleep=time.sleep, finalize=False):
+                monotonic=time.monotonic, sleep=time.sleep, finalize=False,
+                provider_factory=None):
     """Single invocation; never auto-complete from rollout alone.
 
     finalize=True additionally requires a fresh trusted CompletionEvidence after
@@ -49,6 +50,13 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
     stage = 'INPUT_PREPARATION_FAILED'
     try:
         core.prepare(binding, rendered, contract, validator)
+        if provider_factory is not None:
+            stage = 'PROVIDER_INITIALIZATION_FAILED'
+            core.need(providers is None and callable(provider_factory),
+                      'PROVIDER_FACTORY_INVALID')
+            # A trusted factory sees the actual journal/reply progress closure,
+            # not a caller-maintained copy or a guessed empty snapshot.
+            providers = provider_factory(binding, credential, progress)
         verifier = Verifier(providers=providers, credential=credential, progress=progress,
                             budget_seconds=budget_seconds, wall=wall, monotonic=monotonic)
         stage = 'PREFLIGHT_DENIED'

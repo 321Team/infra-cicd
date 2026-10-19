@@ -12,7 +12,9 @@
 - 대상은 `fds-app`의 기존 Service2/Deployment2/Route2 exact path다. `rosa-app`은 overlay다. List/watch/query/subresource/다른 namespace·Secret·PATCH/DELETE는 거부한다. 기존 Sender의 PATCH/Deployment GET 범위는 확대하지 않았다.
 - HTTP200은 exact apiVersion/kind/name/namespace를 확인하고 **받은 JSON body bytes**를 대조기에 넘긴다. 기존 UID/spec/ownership·ACK 규칙이 유지된다.
 - HTTP404는 `v1 Status`, `Failure`, `NotFound`, 정수 code404 및 exact details.group/plural kind/name을 모두 확인한 경우만 absence(None)로 변환한다. core group의 빈 값 생략만 허용한다. 이 규칙은 [Kubernetes apimachinery v0.34.1 NewNotFound](https://github.com/kubernetes/apimachinery/blob/v0.34.1/pkg/api/errors/errors.go#L132-L144)를 참고한 구현 가정이며 실제 ROSA 원본 검증 완료를 뜻하지 않는다.
+- namespace 자체가 없을 때도 namespaced object의 같은 404가 올 수 있다. 따라서 이 adapter만으로 `fds-app` 존재·UID를 입증하지 않는다. composite provider가 같은 credential로 fresh namespace UID를 검증한 상태에서만 객체 absence를 소비한다.
 - 403/401/429/5xx/redirect/일반404/빈 응답/잘못된 TLS/JSON/timeout은 absence가 아니라 실패다. 중복 JSON key와 무한대/overflow 숫자도 거부한다. 응답 body1MiB와 wire 상한은 기존대로다.
+- JSON overflow 거부는 공유 parser 변경이므로 PATCH 응답에도 적용된다. PATCH parser 실패는 기존 `TRANSPORT_FAILED` → `WRITE_OUTCOME_UNKNOWN`으로 pending/fence를 보존한다. GET용 진단 코드를 쓰기의 확정 거부나 안전한 재시도 근거로 사용하지 않는다.
 - 각 GET 전후 전체 deadline과 Progress를 확인한다. 마지막 GET까지 성공하고 baseline+durable ACK 대조가 끝나야 ObjectEvidence를 반환한다. 성공한 최신6개 원문(404포함)은 `last_observations`에만 유지한다. 실패한 부분 집합을 증거로 승격하지 않는다. 원문·credential은 repr/오류 문구에 넣지 않는다.
 
 6 GET은 원자적 snapshot이 아니다. 동일 namespace UID/cluster identity, 실제 credential issuer/audience/900초 수명/RBAC, 승인 철회 상태, exclusive access·admission 검증은 composite provider 책임으로 남는다. baseline을 fresh GET 값으로 자동 채택하지 않는다. 한 session에서 순차 사용하며 thread-safe 공유 객체로 사용하지 않는다. `progress()`는 기존 메모리/journal 상태 조회용이며 외부 I/O를 넣으면 그 대기를 이 adapter가 취소해 주지 않는다.
@@ -29,6 +31,18 @@ python -m unittest discover -s tools/phase2 -p "test_*.py" -v
 새 MOCK은 fake TLS socket으로 정상6조회/기존 baseline/ACK 이후 변화/404분류/인증서 실패/권한 거부/부분 응답/시간초과·역행/Progress 변경/비밀 비노출 및 기존 session의6ACK→완료·실패시다음쓰기차단/기록·fence유지를 확인한다. TLS 암호화 실통신·실제 API/RBAC 증거가 아니다. 정상기준은 RC0·실패/오류0, SKIP 별도 기록이다.
 
 실패 시 다음 쓰기를 멈추고 기존 ACK/pending/fence를 보존한다. 자동 재시도·토큰 갱신·fence 해제·복구 Apply는 없다. 기존 [복구 진단](recovery-review.md)으로 판정하며 이번 코드의 rollback은 revert다. 실제 서버에 반영한 변경이 없다.
+
+## PR88 독립 리뷰 후 보완
+
+2026-10-16 KST, PR88 병합 `7fc43f1139b7ed8313e387e9652ef7ba1f212ef8` 이후의 코드 검토본이다.
+하영 리뷰 `5548467686`의 credential/deadline 시험 보강, 재환 리뷰 `5548374795`의 실패 원문·진단 권고를 반영한다.
+
+- `failure_diagnostics`는 마지막 실패의 고정 코드·실패 key와 **이미 HTTP/identity 분류를 통과한 원문만** 보관한다. 최대6개·각1MiB다. DRIFT 때6개가 남아도 `DIAGNOSTIC_ONLY`, `execution_authorized=False`이며 ObjectEvidence가 아니다. `last_observations`는 계속 성공한 전체 집합에만 사용한다.
+- 403 body·잘못된 JSON·TLS 실패 원문은 담지 않는다. TLS 인증서/timeout/401/403/429와 내부 실패는 source-controlled allowlist 코드만 반환한다. 예외 문자열·서버 message·임의 대문자 코드는 그대로 공개하지 않는다.
+- 원문은 비공개 메모리에만 남고 다음 호출 시작 시 초기화된다. durable journal이나 자동 반출 구현이 아니다. 필요 시 신뢰된 운영 연결부가 기존 비공개 증적 경로에 RUN/Binding/시각과 연결해야 하며 GitHub·stdout에 그대로 dump하지 않는다. repr에서 원문을 숨기는 것은 접근 제어나 암호화가 아니다.
+- negative test는 유효한 fake HTTP 응답을 준비하고 **credential 불일치 시 socket 호출0건**을 검사한다. deadline 시험은 지연 후 select에 전달되는 실제 잔여3초를 검사한다. 두 가드를 각각 제거하는 로컬 mutation에서 해당 시험이 실패하는 것을 확인했다. 마지막 GET deadline·다른 API group404·DRIFT 진단·원문 비노출도 추가했다.
+
+TLS sender를 session에 결속하는 별도 라이브러리 연결은 [sender binding](sender-binding.md)을 따른다. 두 구현 모두 실제 승인·플랫폼 인증 provider를 대체하지 않는다.
 
 ## 잔여
 
