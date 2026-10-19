@@ -59,6 +59,9 @@ def configuration_checked(config):
     names = (config.rendered_name, config.contract_name)
     need(all(type(n) is str and NAMES.fullmatch(n) for n in names)
          and names[0] != names[1], 'SITE_INPUT_NAME_INVALID')
+    inputs, store_root = Path(config.input_root), Path(config.store_root)
+    need(inputs != store_root and inputs not in store_root.parents
+         and store_root not in inputs.parents, 'SITE_ROOTS_OVERLAP')
 
 
 def metadata(info):

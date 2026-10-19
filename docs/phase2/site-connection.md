@@ -1,6 +1,6 @@
 # #46 현장 입력 연결 — 검토용 구현
 
-이 변경은 검토된 Python 현장 코드가 **명시적 파일·Git source·영구 store와 기존 provider/CLI를 연결**하도록 한다. 기본 CLI를 운영용으로 설정하거나 실제 대상·자격·승인 원본을 만들지 않는다. 원본 인증 adapter 다섯 개와 자격 전달 채널의 구현·검토는 별도 잔여다.
+이 변경은 검토된 Python 현장 코드가 **명시적 파일·Git source·영구 store와 기존 provider/CLI를 연결**하도록 한다. 기본 CLI를 운영용으로 설정하거나 실제 대상·자격·승인 원본을 만들지 않는다. 후속 [공개 원본 확인·익명 pipe 채널](source-authentication-channel.md)을 연결할 수 있지만 다섯 authority adapter 전체의 구현·검토는 별도 잔여다.
 
 ## 구성과 실행 위치
 
@@ -20,6 +20,8 @@
 6. 실제 바이트와 같은 credential/adapters를 기존 `RunInputs`·`OperationalApplication`으로 전달한다. 이후의 fresh 인증·6객체 조회·소유/허용범위 비교·claim/journal/TLS/session은 기존 코어를 따른다.
 
 Git blob/해시 일치는 무결성·고정 source 연결이다. clean render 생성·공급 계보·검토/승인의 진위를 증명하지 않는다. 각 인증 adapter의 I/O 기한·취소 구현 의무도 이 파일 로더로 해결되지 않는다.
+
+이 확인은 준비 시점 기준이며, 사용 시점은 기존 경계가 다시 검증한다. 입력 root와 journal/store root는 서로 다르고 서로를 포함하지 않아야 한다. 부모 경로의 group/other 쓰기 허용과 symlink는 거부한다.
 
 ## 상태·실패·정리
 

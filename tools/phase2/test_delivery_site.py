@@ -78,6 +78,15 @@ class SiteTests(SiteFixture, unittest.TestCase):
         self.assertNotIn('NOT_A_REAL_', repr(self.config))
         self.assertNotIn(self.credential.token, repr(self.credential))
 
+    def test_input_and_journal_roots_must_be_separate_without_io(self):
+        inputs = Path(self.config.input_root)
+        for store_root in (inputs, inputs / 'nested', inputs.parent):
+            with self.subTest(store_root=store_root), patch.object(site.store, 'root_open') as opened:
+                with self.assertRaisesRegex(site.SiteError, '^SITE_ROOTS_OVERLAP$'):
+                    site.build_application(replace(self.config, store_root=store_root),
+                        credential=self.credential, adapters=self.adapters)
+                opened.assert_not_called()
+
     @unittest.skipIf(os.name == 'posix', 'non-POSIX guard only')
     def test_non_posix_execution_is_rejected(self):
         with self.assertRaisesRegex(site.SiteError, '^SITE_POSIX_REQUIRED$'):
@@ -170,6 +179,18 @@ class PosixSiteTests(SiteFixture, unittest.TestCase):
         link = self.root / 'source-link'; link.symlink_to(self.root / 'source', target_is_directory=True)
         self.config = replace(self.config, source_root=link)
         self.rejected('SITE_SOURCE_UNSAFE')
+
+    def test_group_or_other_writable_source_parent_is_rejected(self):
+        # PR94 review: guard must fail for writable parents, not just symlinks.
+        parent = self.root / 'source-parent'; parent.mkdir(mode=0o700)
+        source = parent / 'repo'; source.mkdir(mode=0o700)
+        self.config = replace(self.config, source_root=source)
+        for mode in (0o720, 0o702):
+            with self.subTest(mode=mode):
+                parent.chmod(mode)
+                self.rejected('SITE_SOURCE_UNSAFE')
+                self.git.assert_not_called()
+        parent.chmod(0o700)
 
     def test_unsafe_store_is_rejected_without_claim_or_repair(self):
         (self.root / 'store').chmod(0o770)
