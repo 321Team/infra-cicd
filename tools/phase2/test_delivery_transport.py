@@ -111,6 +111,18 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(self.send(request=request), {'ok': True})
         self.assertNotIn(b'Content-Type:', self.sock.sent)
 
+    def test_write_http_401_403_429_are_always_uncertain_transport_failure(self):
+        # PR89 reviewer5557787590: GET diagnosis codes must never become
+        # evidence of a rejected/non-mutating PATCH or trigger an auto retry.
+        for status in (401, 403, 429):
+            with self.subTest(status=status):
+                self.sock = FakeSocket(response(status=status))
+                self.context.wrap_socket.return_value = self.sock
+                with self.assertRaisesRegex(transport.TransportError, '^TRANSPORT_FAILED$'):
+                    self.send()
+                self.assertEqual(bytes(self.sock.sent).count(b'PATCH '), 1)
+                self.assertTrue(self.sock.closed)
+
     def test_native_context_does_not_load_system_trust_or_enable_key_logging(self):
         with patch.dict(os.environ, {'SSLKEYLOGFILE': 'must-not-be-created',
                                      'HTTPS_PROXY': 'https://proxy.invalid'}), \
