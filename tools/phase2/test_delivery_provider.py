@@ -396,7 +396,8 @@ class DiagnosticPosixTests(unittest.TestCase):
         self.root = Path(self.tmp.name); self.root.chmod(0o700)
         self.c = ContractHarness()
         self.diagnostic = FailureDiagnostics('OBJECT_DRIFT', None,
-            (Observation(core.OBJECTS[0], 200, b'{"synthetic":"private"}'),))
+            (Observation(core.OBJECTS[0], 200, core.encoded(
+                owned(json.loads(self.c.h.render)[0], 0))),))
 
     def save(self, phase='session'):
         diagnostics.persist(self.root, self.c.h.binding, Progress(), 1000, self.diagnostic, phase=phase)
