@@ -314,6 +314,24 @@ class ProviderTests(unittest.TestCase):
         self.assertIsNotNone(self.c.storage.active)
         self.safe(out)
 
+    def test_redaction_rejection_records_body_free_drift_and_keeps_fence(self):
+        def drift():
+            self.c.h.objects[core.path_for(core.OBJECTS[0])]['spec'].update(args=SENSITIVE)
+        self.after_write = drift
+        out = self.app().run('deploy')
+        self.assertEqual(out['diagnostics'], 'RECORDED')
+        self.assertEqual(out['status'], 'STOPPED')
+        self.assertEqual(self.saved[0]['code'], 'OBJECT_DRIFT')
+        self.assertFalse(self.saved[0]['redaction_complete'])
+        row = self.saved[0]['observations'][0]
+        self.assertEqual(row['redaction'], 'REJECTED')
+        self.assertEqual(set(row), {'key', 'status', 'source_sha256', 'redaction'})
+        self.assertNotIn(SENSITIVE, json.dumps(self.saved))
+        self.assertEqual(len(self.c.h.requests), 1)
+        self.assertIsNotNone(self.c.storage.active)
+        self.assertEqual(self.c.storage.complete_calls, 0)
+        self.safe(out)
+
     def test_finish_denial_does_not_complete_even_after_rollout(self):
         self.c.providers.hooks['finish'] = lambda r, v: replace(v, disposition='UNKNOWN')
         out = self.app().run('deploy')
