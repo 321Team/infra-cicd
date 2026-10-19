@@ -5,7 +5,7 @@
 ## 구성과 실행 위치
 
 - 코드: `tools/phase2/delivery_site.py`. 호출 위치는 검토된 Linux/POSIX Runner의 저장소 루트다. 이번 작업은 해당 Runner에 접속하거나 설치하지 않는다.
-- `SiteConfiguration`에 exact Binding, 입력 root와 render/contract의 서로 다른 파일명, 해당 commit을 보유한 Git root, 공통 영구 store root, 시간 예산과 finalize 요청을 **검토된 Python 코드가 직접** 제공한다.
+- `SiteConfiguration`에 exact Binding, 입력 root와 render/contract의 서로 다른 파일명, 해당 commit을 보유한 Git root, 공통 영구 store root, 시간 예산과 finalize 요청을 **검토된 Python 코드가 직접** 제공한다. 세 root는 `..` 없는 명시적 절대 경로여야 하며 현재 작업 디렉터리에서 추정하지 않는다.
 - 같은 실행의 메모리 `BearerCredential`과 기존 `AuthorityAdapters`를 그대로 넘긴다. 문자열 token 옵션, 환경변수 탐색, kubeconfig 자동 발견, JSON/JWT·plugin·approved 플래그 로더는 없다.
 - 원본 승인·플랫폼·생산·baseline 채택·완료를 인증하는 adapter는 이미 갖춰져 있어야 한다. Python 타입·provenance 문자열·파일 해시 자체는 인증이 아니다. 이 helper는 raw 입력을 ApprovalEvidence/PlatformEvidence 등으로 변환하지 않는다.
 - 실제값이 아직 없으면 기본 차단을 유지한다. 과거 관측이나 MOCK fixture를 현장 설정으로 채우지 않는다. 기존 source/contract/host·current digest를 불필요하게 다시 제출받거나 재승인하지 않는다.

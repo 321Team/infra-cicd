@@ -53,7 +53,9 @@ def configuration_checked(config):
     need(core.finite(config.budget_seconds) and config.budget_seconds > 0
          and type(config.finalize) is bool, 'SITE_CONFIGURATION_INVALID')
     for value in (config.input_root, config.source_root, config.store_root):
-        need(isinstance(value, (str, Path)) and bool(str(value)), 'SITE_CONFIGURATION_INVALID')
+        need(isinstance(value, (str, Path)) and bool(str(value))
+             and Path(value).is_absolute() and '..' not in Path(value).parts,
+             'SITE_CONFIGURATION_INVALID')
     names = (config.rendered_name, config.contract_name)
     need(all(type(n) is str and NAMES.fullmatch(n) for n in names)
          and names[0] != names[1], 'SITE_INPUT_NAME_INVALID')
@@ -75,7 +77,8 @@ def root_stable(path, fd):
 
 
 def read_input(root, name, expected):
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+                 | getattr(os, 'O_NOCTTY', 0),
                  dir_fd=root)
     try:
         first = store.regular(fd)  # mode0600, own UID, regular, one link
@@ -88,8 +91,11 @@ def read_input(root, name, expected):
             chunks.append(chunk)
             remaining -= len(chunk)
         raw = b''.join(chunks)
-        last = store.regular(fd)
-        named = os.stat(name, dir_fd=root, follow_symlinks=False)
+        try:
+            last = os.fstat(fd)
+            named = os.stat(name, dir_fd=root, follow_symlinks=False)
+        except OSError:
+            raise SiteError('SITE_INPUT_CHANGED') from None
         need(metadata(first) == metadata(last) == metadata(named), 'SITE_INPUT_CHANGED')
         need(0 < len(raw) <= MAX_BYTES and len(raw) == last.st_size, 'SITE_INPUT_SIZE_INVALID')
         need(core.digest(raw) == expected, 'SITE_INPUT_HASH_MISMATCH')

@@ -27,9 +27,9 @@ class SiteFixture:
             p = patch.object(socket, name, side_effect=AssertionError('NETWORK_FORBIDDEN'))
             p.start(); self.addCleanup(p.stop)
         self.h = Harness()
-        self.config = site.SiteConfiguration(self.h.binding, 'NOT_A_REAL_INPUT_ROOT',
-            'rendered.yaml', 'contract.yaml', 'NOT_A_REAL_GIT_ROOT',
-            'NOT_A_REAL_STORE_ROOT', 5)
+        self.config = site.SiteConfiguration(self.h.binding, Path.cwd() / 'NOT_A_REAL_INPUT_ROOT',
+            'rendered.yaml', 'contract.yaml', Path.cwd() / 'NOT_A_REAL_GIT_ROOT',
+            Path.cwd() / 'NOT_A_REAL_STORE_ROOT', 5)
         self.credential = BearerCredential('SYNTHETIC_NON_CREDENTIAL')
         self.adapters = AuthorityAdapters(*(Mock(side_effect=AssertionError('AUTHORITY_NOT_CALLED'))
                                              for _ in range(5)))
@@ -65,7 +65,9 @@ class SiteTests(SiteFixture, unittest.TestCase):
     def test_names_and_types_rejected_without_input_io(self):
         for changes in ({'rendered_name': '../escape'}, {'contract_name': '/absolute'},
                         {'contract_name': 'rendered.yaml'}, {'rendered_name': 'x/y'},
-                        {'budget_seconds': float('inf')}, {'finalize': 'yes'}):
+                        {'budget_seconds': float('inf')}, {'budget_seconds': 'invalid'},
+                        {'finalize': 'yes'}, {'input_root': 'relative'},
+                        {'source_root': Path('.')}, {'store_root': ''}):
             with self.subTest(changes=changes), patch.object(site.store, 'root_open') as opened:
                 with self.assertRaises(site.SiteError):
                     site.build_application(replace(self.config, **changes),
