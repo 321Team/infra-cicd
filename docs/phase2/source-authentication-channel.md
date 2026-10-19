@@ -8,12 +8,14 @@
 
 | 입력 | 확인하는 것 | 확인하지 않는 것 |
 |---|---|---|
-| `CommentPin` | repository/owner numeric ID, 정확한 issue/comment ID·작성자 numeric ID·URL·수정 시각·본문 SHA256 | 작성자의 배포 승인 권한, 다른 댓글로 이뤄진 철회·대체, exact RUN/action/작업창 허용 여부 |
-| `BlobPin` | repository/owner numeric ID, full commit→tree→정확한 경로→일반 blob 연결, Git blob SHA1·원본 바이트 SHA256 | Git 작성자 문자열의 신원, clean render 생성·Build/Scan/Push 계보·P2 채택 승인 |
+| `CommentPin` | repository/owner numeric ID, 정확한 issue/comment ID·최초 게시 계정 numeric ID·URL·수정 시각·본문 SHA256 | 현재 본문 수정자의 신원·가시성/최소화 상태·배포 승인 권한, 다른 댓글의 철회·대체, exact RUN/action/작업창 허용 여부 |
+| `BlobPin` | repository/owner numeric ID, 고정 heads/ref tip과 대상 commit의 조상 관계, full commit→tree→경로→일반 blob, Git blob SHA1·원본 바이트 SHA256 | Git 작성자 문자열의 신원, clean render 생성·Build/Scan/Push 계보·P2 채택 승인 |
+
+Git 객체가 fork network에서 조회되는 것만으로 저장소 이력을 인정하지 않는다. 명시한 `anchor_ref`의 정확한 `anchor_commit`을 전후 재조회하고, compare의 base/merge-base와 상태로 대상 commit의 동일/조상 관계를 확인한다. ref 버전 고정은 새 실행 GO가 아니다. tree/commit 매핑은 GitHub TLS 원본을 신뢰하며 blob 바이트만 Git 해시로 다시 계산한다.
 
 삭제·이동·계정/저장소 교체·수정·축약 tree·symlink/submodule·비정상 JSON·304·403/404/429·TLS 오류·기한 초과는 거부한다. 모든 GET이 같은 `ReadRequest.deadline`을 소비하고 각 네트워크 교환은 최대10초다. 응답은 최대1MiB, blob은256KiB, 경로는16요소까지다. endpoint는 사전에 검토·선택한 숫자 주소가 필요하며 이 라이브러리가 DNS 조회나 승인값 선택을 하지 않는다.
 
-`SourceOriginal`에는 같은 request, 원본 reference/revision·numeric ID·원문과 응답이 남는다. 원문·응답은 repr에서 숨기고 자동 저장·출력하지 않는다. `execution_authorized`는 항상 false다. 이 결과를 `ApprovalEvidence`/`ProducerEvidence`로 간주하거나 해시·타입을 근거로 GO를 만들어서는 안 된다. GET 시점의 원본 일치이며, 조회 직후 변경이나 별도 철회 댓글을 지속 감시하는 보장은 없다. 공개 원본 조회의 API 제한에 걸리면 실패로 닫히며 자격 추가·자동 재시도로 우회하지 않는다.
+`SourceOriginal`에는 같은 request, 원본 reference/revision·numeric ID·원문과 응답이 남는다. `comment_creator_id`는 댓글 최초 생성 계정일 뿐 현재 본문 수정자가 아니며 `body_authorship_verified=false`를 유지한다. REST에서 제공하지 않는 편집자/가시성 상태를 검증했다고 표시하지 않는다. 원문·응답은 repr에서 숨기고 자동 저장·출력하지 않는다. `execution_authorized`는 항상 false다. 이 결과를 `ApprovalEvidence`/`ProducerEvidence`로 간주하거나 해시·타입을 근거로 GO를 만들어서는 안 된다. GET 시점의 원본 일치이며, 조회 직후 변경이나 별도 철회 댓글을 지속 감시하는 보장은 없다. 공개 원본 조회의 API 제한에 걸리면 실패로 닫히며 자격 추가·자동 재시도로 우회하지 않는다.
 
 ## 자격 전달과 연결
 
@@ -23,7 +25,7 @@
 
 성공·실패 때 FD를 닫고 재사용을 거부한다. 사용하지 않은 수신자도 `with` 또는 `close()`로 닫는다. `build_from_channel(config, receiver=..., deadline=..., adapters=...)`은 기존 site 구성·adapter를 확인한 뒤 자격을1회 수신하여 같은 `BearerCredential` 객체를 기존 `build_application`에 넘긴다. 구성·빌드 실패도 수신자를 닫는다. `status`나 단독 CLI에 수신 경로를 추가하지 않는다.
 
-반환 자격은 issuer/audience/서명·실제 만료·대상·RBAC를 아직 인증하지 않은 메모리 handle이다. 같은 자격을 실제 플랫폼에서 검증하는 adapter는 여전히 필요하다. 임시 버퍼 정리는 수행하지만 Python 문자열의 보안 메모리 소거를 보장하지 않는다. 신뢰된 부모·단일 소비자·FD 소유권 인계를 전제로 하며, 침해된 같은 UID 프로세스나 root에 대한 격리 장치가 아니다.
+반환 자격은 issuer/audience/서명·실제 만료·대상·RBAC를 아직 인증하지 않은 메모리 handle이다. 같은 자격을 실제 플랫폼에서 검증하는 adapter는 여전히 필요하다. 임시 버퍼 정리는 수행하지만 Python 문자열의 보안 메모리 소거를 보장하지 않는다. 이 모듈의 예외·traceback 로컬 변수·원문 응답을 crash reporter에 수집하거나 공개하지 않는다. 신뢰된 부모·단일 소비자·FD 소유권 인계를 전제로 하며, 침해된 같은 UID 프로세스나 root에 대한 격리 장치가 아니다.
 
 ## 정상·실패 판정과 후속
 
@@ -33,4 +35,4 @@
 - 실제 구성 CA/endpoint·원본 pin·자격·생산 render/계보·작업창은 입력하지 않았다. 실제값 합성, token 발급, ROSA/AWS/Runner 접속, Deploy/Runtime GO, #46 AC 완료는 없다.
 - Windows 로컬 시험은 원본 파서/주입 socket·채널 입력/정리·연결 검사를 수행한다. pipefs/readv/select·자식 FD 인계와 POSIX 경로 권한은 Linux hosted CI의 합성 시험으로 검증한다. 지원하지 않는 운영체제를 통과한 것으로 표시하지 않는다.
 
-설계 근거: [GitHub issue comment API](https://docs.github.com/en/rest/issues/comments#get-an-issue-comment), [Git blob API](https://docs.github.com/en/rest/git/blobs#get-a-blob), [Python selectors](https://docs.python.org/3/library/selectors.html), [Linux pipe 구현](https://github.com/torvalds/linux/blob/master/fs/pipe.c). 실제 단계는 최신 CI·리뷰와 별도로 기록한다.
+설계 근거: [GitHub issue comment API](https://docs.github.com/en/rest/issues/comments#get-an-issue-comment), [Git ref API](https://docs.github.com/en/rest/git/refs#get-a-reference), [compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits), [Git blob API](https://docs.github.com/en/rest/git/blobs#get-a-blob), [Python selectors](https://docs.python.org/3/library/selectors.html), [Linux pipe 구현](https://github.com/torvalds/linux/blob/master/fs/pipe.c). 실제 단계는 최신 CI·리뷰와 별도로 기록한다.

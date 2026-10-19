@@ -165,6 +165,7 @@ class LinuxChannelTests(unittest.TestCase):
                   'print(type(c).__name__); print(repr(c))')
         try:
             result = subprocess.run([sys.executable, '-c', script], pass_fds=(read,),
+                                    cwd=Path(__file__).resolve().parent,
                                     capture_output=True, text=True, timeout=4)
         finally: os.close(read)
         self.assertEqual(0, result.returncode, result.stderr)

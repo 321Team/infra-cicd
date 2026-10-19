@@ -23,6 +23,7 @@ from delivery_verifier import ReadRequest
 
 MAX_BLOB = 256 * 1024
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}')
+COMPONENT = re.compile(r'[A-Za-z0-9_.-]{1,100}')
 SHA1 = re.compile(r'[0-9a-f]{40}')
 
 
@@ -52,7 +53,7 @@ class CommentPin:
     repository: RepositoryPin
     issue_number: int
     comment_id: int
-    author_id: int
+    creator_id: int  # Account that created the comment, NOT its current editor.
     updated_at: str
     body_sha256: str
 
@@ -63,6 +64,8 @@ class BlobPin:
     commit: str
     path: str
     sha256: str
+    anchor_ref: str  # Reviewed heads/<branch>, not an inferred/default branch.
+    anchor_commit: str
 
 
 @dataclass(frozen=True)
@@ -71,10 +74,11 @@ class SourceOriginal:
     reference: str
     revision: str
     repository_id: int
-    principal_id: int | None  # Comment account; Git author text is not identity.
+    comment_creator_id: int | None  # Neither current body author nor an authority.
     body: bytes = field(repr=False)
     receipts: tuple = field(repr=False)
     execution_authorized: bool = field(default=False, init=False)
+    body_authorship_verified: bool = field(default=False, init=False)
 
 
 def repository_checked(pin):
@@ -123,7 +127,9 @@ class PublicGitHubTLS:
             # Only the exact public REST operations used by the adapter below.
             need(type(path) is str and re.fullmatch(
                 r'/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
-                r'(?:/issues/comments/[1-9][0-9]*|/git/(?:commits|trees|blobs)/[0-9a-f]{40})?', path),
+                r'(?:/issues/comments/[1-9][0-9]*|/git/(?:commits|trees|blobs)/[0-9a-f]{40}'
+                r'|/git/ref/heads/[A-Za-z0-9_.\-/]+'
+                r'|/compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}\?per_page=1)?', path),
                 'SOURCE_PATH_INVALID')
             need(all(part not in ('.', '..') for part in path.split('/')), 'SOURCE_PATH_INVALID')
             need(core.finite(deadline) and self.now() < deadline, 'SOURCE_DEADLINE_EXCEEDED')
@@ -195,7 +201,7 @@ class GitHubOriginalAdapter:
     def comment(self, request, pin):
         try:
             need(type(pin) is CommentPin and all(positive(x) for x in
-                 (pin.issue_number, pin.comment_id, pin.author_id))
+                 (pin.issue_number, pin.comment_id, pin.creator_id))
                  and type(pin.body_sha256) is str and core.HEX.fullmatch(pin.body_sha256)
                  and type(pin.updated_at) is str
                  and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', pin.updated_at),
@@ -207,16 +213,16 @@ class GitHubOriginalAdapter:
             obj = self.read(request, path, receipts)
             reference = f'https://github.com/{pin.repository.owner}/{pin.repository.name}/issues/{pin.issue_number}#issuecomment-{pin.comment_id}'
             need(type(obj.get('id')) is int and obj['id'] == pin.comment_id
-                 and type(obj.get('user', {}).get('id')) is int and obj['user']['id'] == pin.author_id
+                 and type(obj.get('user', {}).get('id')) is int and obj['user']['id'] == pin.creator_id
                  and obj.get('issue_url') == f'https://api.github.com{prefix}/issues/{pin.issue_number}'
                  and obj.get('url') == f'https://api.github.com{path}'
                  and obj.get('html_url') == reference and obj.get('updated_at') == pin.updated_at
-                 and type(obj.get('body')) is str and obj.get('minimized') in (None, False),
+                 and type(obj.get('body')) is str,
                  'SOURCE_COMMENT_CHANGED')
             body = obj['body'].encode('utf-8')
             need(core.digest(body) == pin.body_sha256, 'SOURCE_COMMENT_CHANGED')
             return SourceOriginal(request, reference, pin.updated_at + '/' + pin.body_sha256,
-                pin.repository.repository_id, pin.author_id, body, tuple(receipts))
+                pin.repository.repository_id, pin.creator_id, body, tuple(receipts))
         except Exception:
             raise SourceError('SOURCE_COMMENT_UNVERIFIED') from None
 
@@ -224,12 +230,25 @@ class GitHubOriginalAdapter:
         try:
             need(type(pin) is BlobPin and type(pin.commit) is str and SHA1.fullmatch(pin.commit)
                  and type(pin.sha256) is str and core.HEX.fullmatch(pin.sha256)
-                 and type(pin.path) is str, 'SOURCE_PIN_INVALID')
+                 and type(pin.path) is str and type(pin.anchor_ref) is str
+                 and pin.anchor_ref.startswith('heads/')
+                 and type(pin.anchor_commit) is str and SHA1.fullmatch(pin.anchor_commit),
+                 'SOURCE_PIN_INVALID')
+            ref_parts = pin.anchor_ref.split('/')
+            need(2 <= len(ref_parts) <= 16 and all(NAME.fullmatch(x) and '..' not in x
+                 and not x.endswith(('.', '.lock')) for x in ref_parts), 'SOURCE_PIN_INVALID')
             parts = pin.path.split('/')
-            need(1 <= len(parts) <= 16 and all(NAME.fullmatch(x) and x not in ('.', '..') for x in parts),
+            need(1 <= len(parts) <= 16 and all(COMPONENT.fullmatch(x) and x not in ('.', '..') for x in parts),
                  'SOURCE_PIN_INVALID')
             receipts = []
             prefix = self.repository(request, pin.repository, receipts)
+            self.anchor(request, prefix, pin, receipts)
+            comparison = self.read(request,
+                f'{prefix}/compare/{pin.anchor_commit}...{pin.commit}?per_page=1', receipts)
+            need(comparison.get('status') in ('identical', 'behind')
+                 and comparison.get('base_commit', {}).get('sha') == pin.anchor_commit
+                 and comparison.get('merge_base_commit', {}).get('sha') == pin.commit,
+                 'SOURCE_COMMIT_NOT_REACHABLE')
             commit = self.read(request, f'{prefix}/git/commits/{pin.commit}', receipts)
             need(commit.get('sha') == pin.commit, 'SOURCE_COMMIT_CHANGED')
             tree = commit.get('tree', {}).get('sha')
@@ -256,7 +275,16 @@ class GitHubOriginalAdapter:
                  and hashlib.sha1(b'blob ' + str(len(body)).encode('ascii') + b'\0' + body).hexdigest() == tree,
                  'SOURCE_BLOB_INVALID')
             reference = f'https://github.com/{pin.repository.owner}/{pin.repository.name}/blob/{pin.commit}/{pin.path}'
+            self.anchor(request, prefix, pin, receipts)
             return SourceOriginal(request, reference, pin.commit, pin.repository.repository_id,
                                   None, body, tuple(receipts))
         except Exception:
             raise SourceError('SOURCE_BLOB_UNVERIFIED') from None
+
+    def anchor(self, request, prefix, pin, receipts):
+        # Objects from another fork can resolve under this repo's Git API.
+        # Require membership in this repo's explicitly pinned ref history.
+        obj = self.read(request, f'{prefix}/git/ref/{pin.anchor_ref}', receipts)
+        need(obj.get('ref') == 'refs/' + pin.anchor_ref
+             and obj.get('object', {}).get('type') == 'commit'
+             and obj['object'].get('sha') == pin.anchor_commit, 'SOURCE_ANCHOR_CHANGED')

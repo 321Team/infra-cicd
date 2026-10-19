@@ -50,10 +50,11 @@ class OriginalTests(SourceFixture):
         with self.replies(self.repository, self.comment) as get:
             value = self.adapter.comment(self.request, self.pin)
         self.assertIs(value.request, self.request)
-        self.assertEqual(9, value.principal_id)
+        self.assertEqual(9, value.comment_creator_id)
         self.assertEqual(b'SYNTHETIC_NO_GO', value.body)
         self.assertEqual(2, len(value.receipts))
         self.assertFalse(value.execution_authorized)
+        self.assertFalse(value.body_authorship_verified)
         self.assertNotIn('SYNTHETIC_NO_GO', repr(value))
         self.assertEqual([8, 8], [call.args[1] for call in get.call_args_list])
 
@@ -61,7 +62,7 @@ class OriginalTests(SourceFixture):
         for change in ({'id': True}, {'user': {'id': 10}}, {'user': {'id': True}},
                        {'body': 'changed'}, {'updated_at': '2026-01-01T01:02:04Z'},
                        {'issue_url': 'https://api.github.com' + self.prefix + '/issues/99'},
-                       {'url': 'https://evil.invalid'}, {'minimized': {'reason': 'OUTDATED'}}):
+                       {'url': 'https://evil.invalid'}):
             with self.subTest(change=change), self.replies(self.repository, {**self.comment, **change}):
                 with self.assertRaisesRegex(source.SourceError, '^SOURCE_COMMENT_UNVERIFIED$'):
                     self.adapter.comment(self.request, self.pin)
@@ -100,14 +101,16 @@ class OriginalTests(SourceFixture):
     def blob_fixture(self):
         body = b'SYNTHETIC_BLOB_NOT_GENERATION_PROOF'
         sha = hashlib.sha1(b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest()
-        pin = source.BlobPin(self.repo, 'a' * 40, 'docs/item.json', core.digest(body))
-        replies = [self.repository, {'sha': pin.commit, 'tree': {'sha': 'b' * 40}},
+        pin = source.BlobPin(self.repo, 'a' * 40, 'docs/item.json', core.digest(body), 'heads/reviewed', 'e' * 40)
+        anchor = {'ref': 'refs/heads/reviewed', 'object': {'type': 'commit', 'sha': pin.anchor_commit}}
+        replies = [self.repository, anchor, {'status': 'behind', 'base_commit': {'sha': pin.anchor_commit},
+            'merge_base_commit': {'sha': pin.commit}}, {'sha': pin.commit, 'tree': {'sha': 'b' * 40}},
             {'sha': 'b' * 40, 'truncated': False, 'tree': [
                 {'path': 'docs', 'type': 'tree', 'mode': '040000', 'sha': 'c' * 40}]},
             {'sha': 'c' * 40, 'truncated': False, 'tree': [
                 {'path': 'item.json', 'type': 'blob', 'mode': '100644', 'sha': sha}]},
             {'sha': sha, 'encoding': 'base64', 'size': len(body),
-             'content': base64.b64encode(body).decode() + '\n'}]
+             'content': base64.b64encode(body).decode() + '\n'}, anchor]
         return pin, body, replies
 
     def test_blob_commit_tree_path_git_hash_and_sha256(self):
@@ -116,22 +119,29 @@ class OriginalTests(SourceFixture):
             value = self.adapter.blob(self.request, pin)
         self.assertEqual(body, value.body)
         self.assertEqual(pin.commit, value.revision)
-        self.assertIsNone(value.principal_id)
+        self.assertIsNone(value.comment_creator_id)
         self.assertFalse(value.execution_authorized)
-        self.assertEqual(5, get.call_count)
+        self.assertEqual(8, get.call_count)
         self.assertNotIn('SYNTHETIC_BLOB', repr(value))
+
+    def test_dot_github_path_component_is_supported_without_traversal(self):
+        pin, body, replies = self.blob_fixture()
+        replies[4]['tree'][0]['path'] = '.github'
+        with self.replies(*replies):
+            value = self.adapter.blob(self.request, replace(pin, path='.github/item.json'))
+        self.assertEqual(body, value.body)
 
     def test_blob_wrong_commit_truncated_tree_link_submodule_size_or_hash_denied(self):
         for mutation in ('commit', 'truncated', 'symlink', 'submodule', 'git-hash', 'size', 'content'):
             pin, body, replies = self.blob_fixture()
-            if mutation == 'commit': replies[1]['sha'] = 'd' * 40
-            elif mutation == 'truncated': replies[2]['truncated'] = True
-            elif mutation == 'symlink': replies[3]['tree'][0]['mode'] = '120000'
-            elif mutation == 'submodule': replies[2]['tree'][0]['type'] = 'commit'
+            if mutation == 'commit': replies[3]['sha'] = 'd' * 40
+            elif mutation == 'truncated': replies[4]['truncated'] = True
+            elif mutation == 'symlink': replies[5]['tree'][0]['mode'] = '120000'
+            elif mutation == 'submodule': replies[4]['tree'][0]['type'] = 'commit'
             elif mutation == 'git-hash':
-                replies[3]['tree'][0]['sha'] = replies[4]['sha'] = 'd' * 40
-            elif mutation == 'size': replies[4]['size'] = len(body) + 1
-            else: replies[4]['content'] = base64.b64encode(b'changed').decode()
+                replies[5]['tree'][0]['sha'] = replies[6]['sha'] = 'd' * 40
+            elif mutation == 'size': replies[6]['size'] = len(body) + 1
+            else: replies[6]['content'] = base64.b64encode(b'changed').decode()
             with self.subTest(mutation=mutation), self.replies(*replies), self.assertRaises(source.SourceError):
                 self.adapter.blob(self.request, pin)
         pin, _, replies = self.blob_fixture()
@@ -141,11 +151,33 @@ class OriginalTests(SourceFixture):
     def test_blob_traversal_mutable_ref_and_invalid_path_before_io(self):
         pin, _, _ = self.blob_fixture()
         for changes in ({'path': '../x'}, {'path': 'x//y'}, {'path': '/x'}, {'path': 'x?y'},
-                        {'commit': 'main'}, {'sha256': 'bad'}, {'path': '/'.join(['x'] * 17)}):
+                        {'commit': 'main'}, {'anchor_ref': 'heads/../x'}, {'anchor_commit': 'main'}, {'sha256': 'bad'}, {'path': '/'.join(['x'] * 17)}):
             with self.subTest(changes=changes), patch.object(self.tls, 'get') as get, \
                     self.assertRaises(source.SourceError):
                 self.adapter.blob(self.request, replace(pin, **changes))
             get.assert_not_called()
+
+    def test_fork_only_divergent_commit_or_moving_anchor_is_denied(self):
+        for mutation in ('diverged', 'ahead', 'base', 'merge-base', 'ref', 'end-ref'):
+            pin, _, replies = self.blob_fixture()
+            if mutation in ('diverged', 'ahead'): replies[2]['status'] = mutation
+            elif mutation == 'base': replies[2]['base_commit']['sha'] = 'f' * 40
+            elif mutation == 'merge-base': replies[2]['merge_base_commit']['sha'] = 'f' * 40
+            elif mutation == 'ref': replies[1] = {'ref': 'refs/heads/other', 'object': {'type': 'commit', 'sha': pin.anchor_commit}}
+            else: replies[-1] = {'ref': 'refs/heads/reviewed', 'object': {'type': 'commit', 'sha': 'f' * 40}}
+            with self.subTest(mutation=mutation), self.replies(*replies), self.assertRaisesRegex(
+                    source.SourceError, '^SOURCE_BLOB_UNVERIFIED$'):
+                self.adapter.blob(self.request, pin)
+
+    def test_comment_creator_is_not_claimed_to_be_body_editor_or_visibility(self):
+        # REST user.id is the creator. An absent/nonstandard editor/visibility
+        # field cannot become proof that this creator wrote the current body.
+        with self.replies(self.repository, {**self.comment, 'user': {'id': 9, 'login': 'renamed'},
+                                            'minimized': {'reason': 'OUTDATED'}}):
+            value = self.adapter.comment(self.request, self.pin)
+        self.assertEqual(9, value.comment_creator_id)
+        self.assertFalse(value.body_authorship_verified)
+        self.assertFalse(value.execution_authorized)
 
 
 class OriginalTLSTests(SourceFixture):

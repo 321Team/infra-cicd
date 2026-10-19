@@ -116,9 +116,8 @@ class PipeCredentialReceiver:
                     need(used <= MAX_TOKEN_BYTES, 'CHANNEL_SIZE_INVALID')
             need(0 < used <= MAX_TOKEN_BYTES and TOKEN.fullmatch(view[:used]),
                  'CHANNEL_FORMAT_INVALID')
-            token = str(view[:used], 'ascii')
             need(self.now() < deadline, 'CHANNEL_DEADLINE_EXCEEDED')
-            return BearerCredential(token)
+            return BearerCredential(str(view[:used], 'ascii'))
         except CredentialChannelError:
             raise
         except Exception:
