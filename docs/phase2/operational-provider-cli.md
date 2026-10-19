@@ -17,7 +17,7 @@ PR91은 HEAD `2c48dc1` 독립 재리뷰 뒤 merge `2610c66`으로 병합됐다. 
 
 각 authority adapter는 request의 절대 monotonic deadline 안에 반환하도록 자신의 I/O 취소·제한시간을 구현해야 한다. 조합층은 호출 전후에 검사하나 무한 대기하는 callback을 강제 종료하지 못한다. ObjectReader의 실제6객체 GET은 기존 bounded TLS 구현을 사용한다. 동기 callback의 post-call 시간 검사를 무응답 차단 성공으로 보고하지 않는다.
 
-실제 플랫폼/credential 전달·지원 인증·영구 POSIX root·실행 입력이 미확정이므로 **site entry point는 제공하지 않는다.** 기본 CLI를 배포 가능하게 바꾸거나 자격증명을 발급하지 않았다. 실제 입력은 하영 #38의 API443/CA/identity/SA 권한/UID/유효기간, 재환 #43의 승인 Registry/current/previous·clean render·공급 원본, 해당 Lead의 exact RUN/action/창에 연결한다. 기존 CA/D7/검증 자료를 다시 만들게 하지 않는다.
+후속 [현장 입력 연결](site-connection.md)은 검토된 Python 구성에서 명시적 로컬 파일/Git/store를 기존 application에 연결하는 선택적 site entry를 제공한다. **실제 플랫폼/credential 전달·지원 인증·영구 POSIX root·실행 입력과 원본 인증 adapter는 여전히 별도 조건**이다. 기본 CLI를 배포 가능하게 바꾸거나 자격증명을 발급하지 않았다. 실제 입력은 하영 #38의 API443/CA/identity/SA 권한/UID/유효기간, 재환 #43의 승인 Registry/current/previous·clean render·공급 원본, 해당 Lead의 exact RUN/action/창에 연결한다. 기존 CA/D7/검증 자료를 다시 만들게 하지 않는다.
 
 ## 생명주기와 실패·복구
 
