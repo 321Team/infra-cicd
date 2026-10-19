@@ -23,7 +23,7 @@
 2. preflight는 fresh 승인/플랫폼/공급/admitted baseline/객체만 읽는다. claim·쓰기 sender는 만들지 않는다. PREFLIGHT_OBSERVED는 검사 완료 상태이며 실행 승인이나 runtime 인수가 아니다. API 읽기 자체도 실제 운영에서는 승인 범위를 따라야 한다.
 3. deploy/restore는 기존 session의 fresh 검증→영속 claim/journal→동일 credential TLS sender→최대6 PATCH/rollout 순서를 따른다. API origin은 입력 그대로(현재 승인443), `fds-app`만 사용하고 ambient kubeconfig/P1 API fallback이 없다.
 4. platform의 credential fingerprint·CA·endpoint·issuer/audience·수명·receipt/provenance가 바뀌면 reader를 자동 교체하지 않고 STOP한다. 매 호출 실제 progress와 request deadline을 비교한다.
-5. 실패 진단은 **같은** store_root의 `<binding-key>.diagnostic.json` 한 개에만 create-once로 기록한다. root0700/파일0600·owner/no-follow/O_EXCL/fsync·readback 검산은 기존 store 경계를 재사용한다. partial file/기존 파일/저장 실패는 공개 결과 `diagnostics=FAILED`; 원문/예외/경로를 출력하지 않고 claim·fence를 해제하지 않는다.
+5. 실패 진단은 **같은** store_root의 `<binding-key>.<phase>.diagnostic.json`에 기록한다. phase는 코드가 정하는 `preflight`/`session` 두 값뿐이며, RUN·단계마다 create-once다. 사전 조회 실패와 이후 배포/restore 실패는 각각 보존하고, 같은 단계의 기존 파일은 덮어쓰지 않는다. schema `P2-CICD-private-diagnostic-2`에 phase·progress key를 기록하며, 종전 v1 파일은 이동·삭제하지 않는다. root0700/파일0600·owner/no-follow/O_EXCL/fsync·readback 검산은 기존 store 경계를 재사용한다. partial file/기존 파일/저장 실패는 공개 결과 `diagnostics=FAILED`; 원문/예외/경로를 출력하지 않고 claim·fence를 해제하지 않는다. preflight의 객체 오류는 Verifier의 예외 마스킹 뒤에도 정확한 SAFE_CODES 값만 결과에 남기고, 알 수 없는 문자열은 고정 fallback으로 처리한다.
 6. 한 application은 한 번만 preflight 또는 deploy/restore에 사용한다. 상태 조회는 I/O가 없고, 두 번째 실행·action 불일치는 쓰기 전에 거부한다. 프로세스가 바뀌어도 같은 root의 consumed RUN/target active가 재실행을 막는다. 다른 root·자동 refresh/retry/replay·force apply·fence 삭제는 없다.
 7. finalize는 완료 요청일 뿐이다. sender.close와 별도 fresh finish 증거/재검증을 거친 기존 session만 완료 marker를 기록한다. ROLLOUT_OBSERVED/SESSION_COMPLETED도 업무 Health/Smoke/Pod imageID/Delivery AC PASS가 아니다.
 
@@ -46,3 +46,11 @@ python tools/phase2/delivery_cli.py deploy
 PR89 비차단5557787590의 쓰기401/403/429 → TRANSPORT_FAILED/요청1회 시험도 추가했다. GET의 세분 진단을 PATCH의 확정 비변경 판정으로 쓰지 못하게 한다. 현재 테스트 수정은 새 후속 검토 범위이고 PR89 승인 자체를 변경하거나 전체 기존 시험을 팀원에게 다시 요구하지 않는다.
 
 새 코드/CI/독립 검토 뒤에도 실제 adapter·대상/작업창·Runtime 검증은 별도다. 이번 구현 중 AWS/ROSA/DB/Harbor/Runner/OCP/IAM/DNS/LB/token 발급·Phase1 변경·Deploy·Runtime GO는 0이다. 보호할 기존 P1 경로·운영 권한·CA/보안 통제·AC는 그대로다.
+
+## 10/19 독립 리뷰 후속
+
+재환 리뷰5566845066의 preflight→같은 RUN session 진단 충돌을 단계별 immutable 파일로 수정했다. 실제 Progress가 이미 pending/reply를 담은 첫 객체 조회는 baseline adapter 호출 전에 거부되고, CA/만료시각 pin만 바뀌어도 provider 자체가 거부하는 직접 시험을 추가했다. baseline/플랫폼 pin guard를 각각 제거하면 새 시험이 실패하는지 확인한다. 기존 전체 시험은 이 변경의 session/diagnostic 회귀 범위만 확인하며 실제 authority 구현으로 표시하지 않는다.
+
+하영 리뷰5566763852 **S1은 실제 site/Runtime 전 조건으로 남아 있다.** 진단의 base64는 마스킹이 아니며, Route 인라인 key/certificate·Deployment env 비밀을 원문 사본에 담을 수 있다. 기존 검토 MSA fe9e8277의 6객체 렌더에는 인라인 TLS key/certificate·env[].value가 없고 DATABASE_URL은 secretKeyRef다(STATIC). live baseline/이후 객체의 비밀 부재를 입증한 것은 아니다. 실제 연결 전 승인된 입력/객체 범위의 비밀 부재를 확인하거나 값 제거 처리를 구현·검토한다. raw 진단은 공개 GitHub/공개 반출 대상이 아니다.
+
+진단 운영사본 보존·삭제의 담당은 #46 이권욱이다. 운영안 권고는 반출·재해시·내용 검토·인수 완료 후7일 내 해당 사본 삭제이며, 실제 기산시각·예정일은 Runtime 카드에서 정한다. 미해결 사고/fence 복구 필요 시 삭제를 HOLD하고 이유·다음 검토 시각을 기록한다. 이는 중앙 원본·승인 digest·journal/ACK/active/state의 삭제나 팀 공용 증적 보존정책 변경이 아니다. S1 충족·실제 삭제 완료로 표시하지 않는다.

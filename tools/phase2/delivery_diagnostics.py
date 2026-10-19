@@ -12,8 +12,15 @@ from delivery_object_reader import FailureDiagnostics, Observation, SAFE_CODES
 from delivery_verifier import Progress, require
 
 
-def diagnostic_bytes(binding, progress, observed_at, diagnostic):
+def diagnostic_name(binding, phase):
     core.binding_checked(binding)
+    require(type(phase) is str and phase in ('preflight', 'session'), 'DIAGNOSTIC_INVALID')
+    return binding.key + '.' + phase + '.diagnostic.json'
+
+
+def diagnostic_bytes(binding, progress, observed_at, diagnostic, *, phase='session'):
+    core.binding_checked(binding)
+    diagnostic_name(binding, phase)
     require(type(progress) is Progress and core.finite(observed_at), 'DIAGNOSTIC_INVALID')
     require(type(diagnostic) is FailureDiagnostics and type(diagnostic.code) is str
             and diagnostic.code in SAFE_CODES
@@ -30,28 +37,29 @@ def diagnostic_bytes(binding, progress, observed_at, diagnostic):
         seen.add(o.key)
         rows.append({'key': o.key, 'status': o.status, 'sha256': core.digest(o.raw),
                      'body_base64': base64.b64encode(o.raw).decode('ascii')})
-    return core.encoded({'schema': 'P2-CICD-private-diagnostic-1',
+    return core.encoded({'schema': 'P2-CICD-private-diagnostic-2', 'phase': phase,
         'purpose': 'DIAGNOSTIC_ONLY', 'execution_authorized': False,
         'binding_key': binding.key, 'run_id': binding.run_id, 'action': binding.action,
         'observed_at': observed_at, 'progress_key': progress.key,
         'code': diagnostic.code, 'failed_key': diagnostic.failed_key, 'observations': rows})
 
 
-def persist(root, binding, progress, observed_at, diagnostic):
+def persist(root, binding, progress, observed_at, diagnostic, *, phase='session'):
     """0600/O_EXCL/no-follow/fsync; may leave a partial file on failure.
 
-    One terminal diagnostic per RUN. Existing or unsafe files cause failure;
+    One terminal diagnostic per phase per RUN. Existing or unsafe files cause failure;
     they are never silently overwritten. Raw objects stay private even on 403.
     The caller must not print exceptions or diagnostic bytes.
     """
     fd = None
     try:
-        raw = diagnostic_bytes(binding, progress, observed_at, diagnostic)
+        name = diagnostic_name(binding, phase)
+        raw = diagnostic_bytes(binding, progress, observed_at, diagnostic, phase=phase)
         path, fd = store.root_open(root)
-        expected = store.create_file(fd, binding.key + '.diagnostic.json', raw)
+        expected = store.create_file(fd, name, raw)
         require(store.inode(store.directory(fd)) == store.inode(path.lstat()),
                 'DIAGNOSTIC_ROOT_CHANGED')
-        store.file_check(fd, binding.key + '.diagnostic.json', raw, expected)
+        store.file_check(fd, name, raw, expected)
     except Exception:
         raise store.StoreError('DIAGNOSTIC_PERSIST_FAILED') from None
     finally:

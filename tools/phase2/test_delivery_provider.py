@@ -25,7 +25,7 @@ import delivery_store as store
 import delivery_transport as transport
 from delivery_object_reader import (BearerCredential, FailureDiagnostics,
                                     ObjectReader, Observation)
-from delivery_verifier import Progress, VerificationError
+from delivery_verifier import Progress, ReadRequest, VerificationError
 from test_delivery_adapter import SENSITIVE, validator
 from test_delivery_operational import ContractHarness, ORIGIN
 from test_delivery_objects import owned
@@ -83,11 +83,11 @@ class ProviderTests(unittest.TestCase):
             kwargs.update(acquire=self.c.storage.acquire,
                           journal_factory=self.c.storage.journal)
             return session.run_session(*args, **kwargs)
-        def save(root, binding, progress, now, diagnostic):
+        def save(root, binding, progress, now, diagnostic, *, phase='session'):
             if self.fail_diagnostic:
                 raise OSError(SENSITIVE)
             self.saved.append(json.loads(diagnostics.diagnostic_bytes(
-                binding, progress, now, diagnostic)))
+                binding, progress, now, diagnostic, phase=phase)))
         for target, name, kw in (
             (p, 'CommittedProducerBridge', {'return_value': validator}),
             (p, 'run_session', {'side_effect': run}),
@@ -142,6 +142,78 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(self.c.h.requests, [])
         self.assertEqual(self.reads, 6)
         self.safe(out)
+
+    def test_preflight_and_session_failure_keep_separate_immutable_diagnostics(self):
+        files = {}
+        def create_once(root, binding, progress, now, diagnostic, *, phase='session'):
+            name = diagnostics.diagnostic_name(binding, phase)
+            if name in files:
+                raise FileExistsError('SYNTHETIC_ALREADY_EXISTS')
+            raw = diagnostics.diagnostic_bytes(binding, progress, now, diagnostic, phase=phase)
+            files[name] = raw
+        with patch.object(diagnostics, 'persist', side_effect=create_once):
+            self.fail_read = 3
+            first = self.app().run('preflight')
+            self.assertEqual(first['diagnostics'], 'RECORDED', first)
+            self.assertEqual(first['error_code'], 'HTTP_FORBIDDEN')
+            before = dict(files)
+            self.fail_read = None
+            self.after_write = lambda: self.c.h.objects[core.path_for(core.OBJECTS[0])]['spec'].update(foreign=True)
+            second = self.app().run('deploy')
+        self.assertEqual(second['status'], 'STOPPED', second)
+        self.assertEqual(second['diagnostics'], 'RECORDED', second)
+        self.assertEqual(len(self.c.h.requests), 1)
+        self.assertIsNotNone(self.c.storage.active)
+        self.assertEqual(self.c.storage.complete_calls, 0)
+        self.assertEqual(len(files), 2)
+        self.assertTrue(all(files[k] == raw for k, raw in before.items()))
+        self.assertEqual({json.loads(raw)['phase'] for raw in files.values()}, {'preflight', 'session'})
+        self.assertEqual({json.loads(raw)['code'] for raw in files.values()}, {'HTTP_FORBIDDEN', 'OBJECT_DRIFT'})
+        self.safe(first); self.safe(second)
+
+    def test_unrecognized_preflight_exception_cannot_be_public_code(self):
+        with patch.object(p, 'Verifier', side_effect=VerificationError(SENSITIVE)):
+            out = self.app().run('preflight')
+        self.assertEqual(out['error_code'], 'OPERATIONAL_PREPARATION_FAILED')
+        self.safe(out)
+
+    def provider(self, progress):
+        return p.OperationalProviders(self.c.h.binding, self.credential, lambda: progress,
+            rendered=self.c.h.render, contract=self.c.h.contract, validator=validator,
+            adapters=self.adapters, diagnostic_sink=lambda *args: None,
+            wall=lambda: self.c.h.now, monotonic=lambda: self.c.h.mono)
+
+    def test_first_object_read_after_pending_or_reply_cannot_adopt_baseline(self):
+        for progress in (Progress(journal=b'{"status":"WRITE_PENDING","acknowledged":[]}'),
+                         Progress(responses=(b'{"synthetic":"observed_reply"}',))):
+            with self.subTest(progress_key=progress.key):
+                provider = self.provider(progress)
+                request = ReadRequest(self.c.h.binding, self.credential, progress, self.c.h.mono + 5)
+                provider.platform(request)
+                with self.assertRaisesRegex(VerificationError, '^BASELINE_ADMISSION_REQUIRED$'):
+                    provider.objects(request)
+                self.assertEqual(self.baselines, 0)
+                self.assertEqual(self.reads, 0)
+                self.assertIsNone(provider.object_provider)
+                provider.close()
+
+    def test_non_ip_platform_pin_change_is_rejected_by_provider_itself(self):
+        for change in ({'ca_pem': CA + b'\n'}, {'expires_at': 1901}):
+            with self.subTest(field=next(iter(change))):
+                self.c.providers.hooks['platform'] = lambda r, v: replace(
+                    v, credential_fingerprint=self.credential.fingerprint, ca_pem=CA)
+                provider = self.provider(Progress())
+                request = ReadRequest(self.c.h.binding, self.credential, Progress(), self.c.h.mono + 5)
+                provider.platform(request)
+                original_reader, original_pins = provider.reader, provider.pins
+                self.c.providers.hooks['platform'] = lambda r, v: replace(
+                    replace(v, credential_fingerprint=self.credential.fingerprint, ca_pem=CA), **change)
+                with self.assertRaisesRegex(VerificationError, '^PLATFORM_CONTEXT_CHANGED$'):
+                    provider.platform(request)
+                self.assertIs(provider.reader, original_reader)
+                self.assertEqual(provider.pins, original_pins)
+                self.assertEqual(self.c.h.requests, [])
+                provider.close()
 
     def test_action_mismatch_denies_before_authority_io(self):
         app = self.app(); out = app.run('restore')
@@ -326,12 +398,12 @@ class DiagnosticPosixTests(unittest.TestCase):
         self.diagnostic = FailureDiagnostics('OBJECT_DRIFT', None,
             (Observation(core.OBJECTS[0], 200, b'{"synthetic":"private"}'),))
 
-    def save(self):
-        diagnostics.persist(self.root, self.c.h.binding, Progress(), 1000, self.diagnostic)
+    def save(self, phase='session'):
+        diagnostics.persist(self.root, self.c.h.binding, Progress(), 1000, self.diagnostic, phase=phase)
 
     def test_private_create_once_and_original_bytes(self):
         self.save()
-        target = self.root / (self.c.h.binding.key + '.diagnostic.json')
+        target = self.root / diagnostics.diagnostic_name(self.c.h.binding, 'session')
         self.assertEqual(target.stat().st_mode & 0o777, 0o600)
         before = target.read_bytes()
         self.assertEqual(json.loads(before)['purpose'], 'DIAGNOSTIC_ONLY')
@@ -341,7 +413,7 @@ class DiagnosticPosixTests(unittest.TestCase):
 
     def test_symlink_target_cannot_be_overwritten(self):
         outside = self.root / 'keep'; outside.write_bytes(b'original')
-        link = self.root / (self.c.h.binding.key + '.diagnostic.json')
+        link = self.root / diagnostics.diagnostic_name(self.c.h.binding, 'session')
         link.symlink_to(outside)
         with self.assertRaises(store.StoreError): self.save()
         self.assertEqual(outside.read_bytes(), b'original')
@@ -349,6 +421,24 @@ class DiagnosticPosixTests(unittest.TestCase):
     def test_unsafe_root_fails_without_writing(self):
         self.root.chmod(0o777)
         with self.assertRaises(store.StoreError): self.save()
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_preflight_and_session_files_coexist_without_overwrite(self):
+        self.save('preflight')
+        target = self.root / diagnostics.diagnostic_name(self.c.h.binding, 'preflight')
+        before = target.read_bytes()
+        self.save('session')
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(len(list(self.root.iterdir())), 2)
+        for phase in ('preflight', 'session'):
+            with self.assertRaises(store.StoreError): self.save(phase)
+            saved = self.root / diagnostics.diagnostic_name(self.c.h.binding, phase)
+            self.assertEqual(saved.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(json.loads(saved.read_bytes())['phase'], phase)
+
+    def test_untrusted_phase_cannot_select_a_path(self):
+        for phase in ('../outside', '', 'deploy', None):
+            with self.assertRaises(store.StoreError): self.save(phase)
         self.assertEqual(list(self.root.iterdir()), [])
 
 

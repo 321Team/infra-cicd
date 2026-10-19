@@ -10,7 +10,7 @@ import time
 
 import delivery_adapter as core
 import delivery_diagnostics as diagnostics
-from delivery_object_reader import (BearerCredential, ObjectProvider, ObjectReader)
+from delivery_object_reader import (BearerCredential, ObjectProvider, ObjectReader, safe_code)
 from delivery_objects import ObjectReconciler
 from delivery_sender_binding import bind_tls_sender
 from delivery_verifier import (ApprovalEvidence, PlatformEvidence, ProducerEvidence,
@@ -58,6 +58,7 @@ class OperationalProviders:
         self.wall, self.monotonic = wall, monotonic
         self.reader = self.object_provider = self.pins = None
         self.diagnostic_status = 'NONE'
+        self.object_failure_code = None
         self.closed = False
 
     def request_checked(self, r):
@@ -117,7 +118,10 @@ class OperationalProviders:
             result = self.object_provider.objects(r)
             self.request_checked(r)
             return result
-        except Exception:
+        except Exception as error:
+            # Verifier intentionally masks provider exceptions. Preserve only
+            # an exact reviewed object code, never the exception or its text.
+            self.object_failure_code = safe_code(error, None)
             d = self.object_provider.failure_diagnostics
             if d is not None:
                 try:
@@ -134,6 +138,7 @@ class OperationalProviders:
     def close(self):
         self.closed = True
         self.reader = self.object_provider = self.adapters = self.credential = None
+        self.object_failure_code = None
 
 
 @dataclass(frozen=True)
@@ -165,6 +170,7 @@ class OperationalApplication:
         self.wall, self.monotonic, self.sleep = wall, monotonic, sleep
         self.used = False
         self._providers = None
+        self._diagnostic_phase = 'session'
 
     def status(self):
         return {'schema': 'P2-CICD-operational-1',
@@ -178,7 +184,8 @@ class OperationalApplication:
             rendered=self.inputs.rendered, contract=self.inputs.contract,
             validator=self._validator, adapters=self._adapters,
             diagnostic_sink=lambda b, p, t, d: diagnostics.persist(
-                self.inputs.store_root, b, p, t, d), wall=self.wall, monotonic=self.monotonic)
+                self.inputs.store_root, b, p, t, d, phase=self._diagnostic_phase),
+            wall=self.wall, monotonic=self.monotonic)
         return self._providers
 
     def run(self, command):
@@ -191,6 +198,7 @@ class OperationalApplication:
             self.used = True
             require(command in ('preflight', self.inputs.binding.action),
                     'OPERATIONAL_ACTION_MISMATCH')
+            self._diagnostic_phase = 'preflight' if command == 'preflight' else 'session'
             self._validator = CommittedProducerBridge(self.inputs.source_root, self.inputs.binding)
             if command == 'preflight':
                 core.prepare(self.inputs.binding, self.inputs.rendered, self.inputs.contract,
@@ -207,8 +215,12 @@ class OperationalApplication:
                     sender_factory=bind_tls_sender, budget_seconds=self.inputs.budget_seconds,
                     wall=self.wall, monotonic=self.monotonic, sleep=self.sleep,
                     finalize=self.inputs.finalize))
-        except Exception:
-            pass  # fixed public fields only, no provider repr/exception/input dumps
+        except Exception as error:
+            # Exact reviewed codes only; never stringify provider exceptions.
+            fallback = result['error_code']
+            if self._providers is not None and self._providers.object_failure_code is not None:
+                fallback = self._providers.object_failure_code
+            result['error_code'] = safe_code(error, fallback)
         finally:
             if self._providers is not None:
                 result['diagnostics'] = self._providers.diagnostic_status
