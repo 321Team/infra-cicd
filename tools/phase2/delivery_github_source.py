@@ -121,6 +121,11 @@ class PublicGitHubTLS:
         self._last = value
         return value
 
+    def _request_headers(self, path, deadline):
+        # Public transport remains anonymous. Reviewed private transport may
+        # supply explicitly scoped credentials without changing GET/TLS rules.
+        return b''
+
     def get(self, path, deadline):
         raw = tls = None
         try:
@@ -135,6 +140,7 @@ class PublicGitHubTLS:
             need(core.finite(deadline) and self.now() < deadline, 'SOURCE_DEADLINE_EXCEEDED')
             timer = wire.Deadline(min(10, deadline - self.now()), self.now)
             timer.end = min(timer.end, deadline)
+            extra_headers = self._request_headers(path, deadline)
             c = self._context
             need(c.verify_mode == ssl.CERT_REQUIRED and c.check_hostname
                  and c.minimum_version >= ssl.TLSVersion.TLSv1_2
@@ -154,7 +160,7 @@ class PublicGitHubTLS:
             message = (f'GET {path} HTTP/1.1\r\nHost: api.github.com\r\n'
                 'User-Agent: FDS-P2-original-reader\r\nAccept: application/vnd.github+json\r\n'
                 'X-GitHub-Api-Version: 2026-03-10\r\nAccept-Encoding: identity\r\n'
-                'Cache-Control: no-cache\r\nConnection: close\r\n\r\n').encode('ascii')
+                'Cache-Control: no-cache\r\nConnection: close\r\n').encode('ascii') + extra_headers + b'\r\n'
             offset = 0
             while offset < len(message):
                 sent = wire.tls_call(tls, lambda: tls.send(message[offset:]), timer)

@@ -76,6 +76,10 @@ class PipeCredentialReceiver:
     def __exit__(self, *unused):
         self.close()
 
+    def _credential(self, token):
+        # The ROSA site builder still accepts only this exact receiver class.
+        return BearerCredential(token)
+
     def receive(self, deadline):
         fd, self._fd = self._fd, None
         need(fd is not None, 'CHANNEL_CONSUMED')  # Never touch a reused FD number.
@@ -117,7 +121,7 @@ class PipeCredentialReceiver:
             need(0 < used <= MAX_TOKEN_BYTES and TOKEN.fullmatch(view[:used]),
                  'CHANNEL_FORMAT_INVALID')
             need(self.now() < deadline, 'CHANNEL_DEADLINE_EXCEEDED')
-            return BearerCredential(str(view[:used], 'ascii'))
+            return self._credential(str(view[:used], 'ascii'))
         except CredentialChannelError:
             raise
         except Exception:
