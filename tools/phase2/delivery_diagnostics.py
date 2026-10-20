@@ -118,12 +118,12 @@ def diagnostic_bytes(binding, progress, observed_at, diagnostic, *, phase='sessi
     require(type(diagnostic) is FailureDiagnostics and type(diagnostic.code) is str
             and diagnostic.code in SAFE_CODES
             and (diagnostic.failed_key is None or
-                 (type(diagnostic.failed_key) is tuple and diagnostic.failed_key in core.OBJECTS))
+                 (type(diagnostic.failed_key) is tuple and diagnostic.failed_key in core.objects_for(binding)))
             and type(diagnostic.observations) is tuple
-            and len(diagnostic.observations) <= len(core.OBJECTS), 'DIAGNOSTIC_INVALID')
+            and len(diagnostic.observations) <= len(core.objects_for(binding)), 'DIAGNOSTIC_INVALID')
     rows, seen = [], set()
     for o in diagnostic.observations:
-        require(type(o) is Observation and o.key in core.OBJECTS and o.key not in seen
+        require(type(o) is Observation and o.key in core.objects_for(binding) and o.key not in seen
                 and type(o.status) is int and o.status in (200, 404)
                 and type(o.raw) is bytes and 0 < len(o.raw) <= 1024 * 1024,
                 'DIAGNOSTIC_INVALID')

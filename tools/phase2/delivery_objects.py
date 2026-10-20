@@ -149,14 +149,14 @@ class ObjectReconciler:
         try:
             self.binding = binding
             self.payloads = core.prepare(binding, rendered, contract, validator)
-            require(type(baseline) is tuple and len(baseline) == len(core.OBJECTS),
+            require(type(baseline) is tuple and len(baseline) == len(core.objects_for(binding)),
                     'OBJECT_SET_INVALID')
             # Store private immutable bytes, not caller-owned dict references.
             self.baseline = tuple(None if raw is None else core.encoded(
-                normalized(decode(raw), key)) for key, raw in zip(core.OBJECTS, baseline))
+                normalized(decode(raw), key)) for key, raw in zip(core.objects_for(binding), baseline))
             self.revisions = tuple(deployment_revision(None if raw is None else decode(raw))
                 if key[:2] == ('apps/v1', 'Deployment') else 0
-                for key, raw in zip(core.OBJECTS, baseline))
+                for key, raw in zip(core.objects_for(binding), baseline))
         except VerificationError:
             raise
         except Exception:
@@ -173,18 +173,18 @@ class ObjectReconciler:
             require(binding == self.binding, 'OBJECT_BINDING_MISMATCH')
             require(type(progress) is Progress and type(progress.responses) is tuple,
                     'OBJECT_PROGRESS_INVALID')
-            require(type(observations) is tuple and len(observations) == len(core.OBJECTS),
+            require(type(observations) is tuple and len(observations) == len(core.objects_for(binding)),
                     'OBJECT_SET_INVALID')
             count = 0
             if progress.journal is not None:
                 journal = decode(progress.journal)
-                store.receipt_checked(journal, binding.key)
+                store.receipt_checked(journal, binding.key, binding=binding)
                 require(journal['status'] != 'STOPPED' and 'checkpoint_error' not in journal,
                         'OBJECT_RUN_STOPPED')
                 count = len(journal['acknowledged'])
             require(len(progress.responses) == count, 'OBJECT_REPLY_ACK_MISMATCH')
             revisions = list(self.revisions)
-            for i, (key, raw) in enumerate(zip(core.OBJECTS, observations)):
+            for i, (key, raw) in enumerate(zip(core.objects_for(binding), observations)):
                 expected = self.baseline[i]
                 ignore_revision = i < count and key[:2] == ('apps/v1', 'Deployment')
                 if i < count:

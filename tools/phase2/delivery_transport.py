@@ -191,7 +191,7 @@ class Sender:
 
     def _check_scope(self, request):
         b = self._binding
-        paths = {core.path_for(key): key for key in core.OBJECTS}
+        paths = {core.path_for(key, b): key for key in core.objects_for(b)}
         if request.method == 'GET':
             need(request.path in paths and paths[request.path][1] == 'Deployment'
                  and request.content_type == '' and request.body == b'', 'REQUEST_SCOPE_INVALID')

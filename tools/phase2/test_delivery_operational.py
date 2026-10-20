@@ -146,8 +146,8 @@ class FakeJournal:
         if 'ack' in self.claim.owner.fail and receipt['status'] == 'WRITE_ACKNOWLEDGED':
             self.failed = True
             raise RuntimeError(SENSITIVE)
-        safe = store.receipt_checked(receipt, self.claim.binding.key)
-        store.transition_checked(self.latest, safe)
+        safe = store.receipt_checked(receipt, self.claim.binding.key, binding=self.claim.binding)
+        store.transition_checked(self.latest, safe, binding=self.claim.binding)
         raw = core.encoded({'schema': 'P2-CICD-journal-1',
                             'sequence': len(self.records) + 1,
                             'binding_key': self.claim.binding.key,

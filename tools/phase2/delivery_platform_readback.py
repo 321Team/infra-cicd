@@ -58,9 +58,9 @@ class PlatformReadback:
     least_privilege_verified: bool = field(default=False, init=False)
 
 
-def capabilities():
+def capabilities(binding=None):
     result = []
-    for version, kind, name in core.OBJECTS:
+    for version, kind, name in (core.OBJECTS if binding is None else core.objects_for(binding)):
         group, api_version = version.split('/') if '/' in version else ('', version)
         resource = {'Service': 'services', 'Deployment': 'deployments', 'Route': 'routes'}[kind]
         for verb in ('get', 'patch'):
@@ -96,6 +96,8 @@ class PlatformObservationReader(wire.Sender):
             self.ca_pem = ca_pem
             self.progress, self.monotonic, self._last = progress, monotonic, None
             self.closed = False
+            self.capabilities = capabilities(binding)
+            self.access_bodies = frozenset(access_body(c) for c in self.capabilities)
         except PlatformReadbackError:
             raise
         except Exception:
@@ -134,7 +136,7 @@ class PlatformObservationReader(wire.Sender):
         else:
             need(request.method == 'POST' and request.content_type == 'application/json'
                  and ((request.path == SUBJECT_PATH and request.body == SUBJECT_BODY)
-                      or (request.path == ACCESS_PATH and request.body in ACCESS_BODIES)),
+                      or (request.path == ACCESS_PATH and request.body in self.access_bodies)),
                  'PLATFORM_READBACK_SCOPE_INVALID')
 
     def _read_response(self, sock, request, deadline):
@@ -196,7 +198,7 @@ class PlatformObservationReader(wire.Sender):
                      and value.get('status', {}).get('phase') == 'Active', 'PLATFORM_READBACK_NAMESPACE_MISMATCH')
 
             subject(); target()
-            for capability in CAPABILITIES:
+            for capability in self.capabilities:
                 body = access_body(capability)
                 raw, value = read('POST', ACCESS_PATH, body); raws.append(raw)
                 attrs = dict(zip(('group', 'version', 'resource', 'name', 'namespace', 'verb'), capability))
@@ -221,7 +223,7 @@ class PlatformObservationReader(wire.Sender):
             target(); subject(); self.check_request(request)
             need(self.now() < end, 'PLATFORM_READBACK_DEADLINE_EXCEEDED')
             return PlatformReadback(request, self.subject, self.credential, self._fingerprint,
-                                    self._ip, CAPABILITIES, tuple(raws))
+                                    self._ip, self.capabilities, tuple(raws))
         except PlatformReadbackError:
             raise
         except Exception:

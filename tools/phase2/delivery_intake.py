@@ -116,8 +116,11 @@ def evaluate(record):
             need(type(run.get(field)) is int and run[field] > 0, stage + '.' + field + ':POSITIVE_INTEGER_REQUIRED')
         reference(run.get('evidence_reference'), stage + '.evidence')
         need(run.get('result') == 'PASS', stage + ':NOT_PASS')
-    workloads = obj(root.get('workloads'), ' '.join(SERVICES), 'workloads')
-    for service in SERVICES:
+    raw_workloads = root.get('workloads')
+    services = SERVICES + ('end-page',) if (type(raw_workloads) is dict
+                 and set(raw_workloads) == set(SERVICES + ('end-page',))) else SERVICES
+    workloads = obj(raw_workloads, ' '.join(services), 'workloads')
+    for service in services:
         workload = obj(workloads.get(service), 'deployment container approved_image pushed_image '
                        'previous_approved_image health_contract_reference test_result scan_result scan_evidence_reference '
                        'rollback_reference', service)
@@ -130,9 +133,9 @@ def evaluate(record):
             need(workload.get(field) == 'PASS', service + '.' + field + ':NOT_PASS')
         for field in ('health_contract_reference', 'scan_evidence_reference', 'rollback_reference'):
             reference(workload.get(field), service + '.' + field)
-    deployments = [workloads.get(s, {}).get('deployment') for s in SERVICES
+    deployments = [workloads.get(s, {}).get('deployment') for s in services
                    if isinstance(workloads.get(s), dict)]
-    need(len(deployments) == 2 and len(set(str(x) for x in deployments)) == 2,
+    need(len(deployments) == len(services) and len(set(str(x) for x in deployments)) == len(services),
          'DISTINCT_DEPLOYMENTS_REQUIRED')
     return result(sorted(set(errors)))
 

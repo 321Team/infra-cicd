@@ -17,7 +17,7 @@ BASELINE_OBJECT_PRESENT BASELINE_OBSERVATION_INVALID'''.split())
 
 
 class FirstDeploymentBaseline:
-    """Admit only six fresh, classified 404s before this run's first write.
+    """Admit exact-profile fresh, classified 404s before this run's first write.
 
     Reviewed site code supplies its pinned ObjectReader (same credential,
     binding, CA/endpoint) after authenticating the platform and token. Reader
@@ -52,7 +52,7 @@ class FirstDeploymentBaseline:
     def __call__(self, request):
         try:
             self.check(request)
-            for key in core.OBJECTS:
+            for key in core.objects_for(request.binding):
                 self.check(request)
                 observation = self.reader.read(request, key)
                 self.check(request)
@@ -66,7 +66,7 @@ class FirstDeploymentBaseline:
             self.check(request)
             provenance_checked(self.provenance)
             return AdmittedBaseline(request, request.binding, self.provenance,
-                                    (None,) * len(core.OBJECTS))
+                                    (None,) * len(core.objects_for(request.binding)))
         except Exception as error:
             code = (error.args[0] if type(error) is VerificationError
                     and len(error.args) == 1 and type(error.args[0]) is str
