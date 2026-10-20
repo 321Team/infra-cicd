@@ -351,7 +351,9 @@ class Adapter:
              'REQUEST_SCOPE_INVALID')
         left = self.window(b)
         if first:
-            need(left >= 660, 'FIRST_WRITE_WINDOW_TOO_SHORT')
+            # Keep the legacy 6*10+600 budget. The explicit nine-object
+            # profile needs 9*10+600; this never extends either expiry.
+            need(left >= 600 + 10 * len(objects_for(b)), 'FIRST_WRITE_WINDOW_TOO_SHORT')
         path = path_for(key, b)
         if method == 'PATCH':
             path += '?fieldManager=fds-deployer'  # no force/prune/delete

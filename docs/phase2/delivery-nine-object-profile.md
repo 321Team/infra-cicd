@@ -9,6 +9,9 @@
 세 번째에 `end-page`를 명시한 Binding만 고정 9객체를 사용한다. 다른 이름·순서·중복·네 번째 이미지는 거부한다.
 Binding 필드·직렬화·key 계산을 바꾸지 않는다. 문서 수·ACK 수·저장된 PASS로 프로파일을 추론하지 않는다.
 
+예외적으로 진단 전용 `delivery_intake.evaluate`는 선언 JSON의 정확한 workload 키 2/3개를 구분해 필수 입력을 검사한다.
+이 진단은 출처 인증·Binding·실행 허가가 아니며 실제 쓰기 범위를 정하지 않는다.
+
 9객체 순서는 기존 Service2·Deployment2·Route2 뒤에 end-page Service·Deployment·Route를 붙인다.
 namespace는 `fds-app`이며 `rosa-app`은 overlay 이름이다. SA·NetworkPolicy·Secret·RBAC 쓰기는 추가하지 않는다.
 `path_for(key)`와 Binding 없이 호출하는 receipt/replay API는 기존 6객체만 허용한다.
@@ -22,7 +25,11 @@ fds-msa PR41 HEAD `06b10919c44740eac9093f6db304c71f53cbebff`의 검사기 원본
 
 ## 마감과 실패·복구
 
-TokenRequest 요구값 900초와 실제 자격/실행 승인 만료 검증은 유지한다. 첫 쓰기에는 최소 660초가 남아야 한다.
+TokenRequest 요구값 900초와 실제 자격/실행 승인 만료 검증은 유지한다.
+첫 쓰기에는 `공유 rollout 600초 + 객체 수 × PATCH 상한 10초`가 남아야 한다(legacy 6개=660초, 명시 9개=690초).
+durable intent 저장 직후 실제 송신 전에 token·실행 승인 중 짧은 만료를 다시 검사한다.
+690초는 관측·authority·완료 처리까지 성공을 보장하는 값이 아니며, 그 시간도 기존 실제 마감에 계속 결속된다.
+실제 만료·900초 자격·승인창을 늘리거나 자동 갱신하지 않는다.
 Deployment별 최대 300초, 세 Deployment 전체 rollout은 공유 600초 안에 제한한다. 갱신·자동 재시도는 없다.
 9객체별 durable intent→ACK 후에만 다음으로 진행한다. 불명확한 쓰기 결과는 정확한 pending과 fence를 보존한다.
 복구 조회는 읽기 전용이다. 자동 resume/unlock/rollback은 수행하지 않으며 별도 새 RUN·승인된 restore 입력이 필요하다.

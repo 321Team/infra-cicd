@@ -94,6 +94,28 @@ class NineObjectTests(unittest.TestCase):
         for receipt in h.checkpoints: store.receipt_checked(receipt, h.binding.key, binding=h.binding)
         with self.assertRaises(store.StoreError): store.receipt_checked(r, h.binding.key)
 
+    def test_first_write_budget_tracks_profile_and_both_expiry_limits(self):
+        for profile, left, accepted in ((6, 660, True), (6, 659, False),
+                                        (9, 690, True), (9, 689, False)):
+            for limit in ('token_expires_at', 'approval_expires_at'):
+                with self.subTest(profile=profile, left=left, limit=limit):
+                    h = Harness() if profile == 6 else nine(Harness())
+                    h.lease = replace(h.lease, **{limit: h.now + left})
+                    receipt = h.run()
+                    if accepted:
+                        self.assertEqual('ROLLOUT_OBSERVED', receipt['status'], receipt)
+                        self.assertEqual(profile, sum(q.method == 'PATCH' for q in h.requests))
+                    else:
+                        self.assertEqual('FIRST_WRITE_WINDOW_TOO_SHORT', receipt['error_code'])
+                        self.assertEqual([], h.requests)
+
+    def test_nine_window_rechecked_after_durable_intent_before_any_send(self):
+        h = nine(Harness()); h.lease = replace(h.lease, token_expires_at=h.now + 690)
+        h.before_checkpoint = lambda receipt: h.sleep(.01) if receipt['status'] == 'WRITE_PENDING' else None
+        receipt = h.run()
+        self.assertEqual('FIRST_WRITE_WINDOW_TOO_SHORT', receipt['error_code'])
+        self.assertEqual([], h.requests)
+
     def test_two_image_binding_cannot_infer_third_from_render(self):
         h = nine(Harness()); h.rebind(images=h.binding.images[:2])
         self.assertEqual('OBJECT_SET_INVALID', h.run()['error_code']); self.assertFalse(h.requests)
