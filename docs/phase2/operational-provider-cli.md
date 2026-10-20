@@ -23,6 +23,8 @@ PR91은 HEAD `2c48dc1` 독립 재리뷰 뒤 merge `2610c66`으로 병합됐다. 
 
 ## 생명주기와 실패·복구
 
+후속 [issuer·producer·finish 원본 연결](evidence-source-ports.md)은 같은 reader의 새 원본과 별도 현장 resolver 판정을 세 포트에 결속한다. 원본 receipt 바이트/계보 pin, 실제 issuer 수명, 최종 progress·독점 종료 판정을 대조하지만 실제 resolver의 의미·권위 인증 계약은 미연결이다. 기본 CLI STOP·실제 Runtime 미실행은 유지한다.
+
 1. 실제 승인된 Binding/render/contract/source를 신뢰된 통합 코드가 RunInputs로 제공한다. validator는 고정 source의 CommittedProducerBridge다. 입력 검증을 통과해야 provider가 만들어진다.
 2. preflight는 fresh 승인/플랫폼/공급/admitted baseline/객체만 읽는다. claim·쓰기 sender는 만들지 않는다. PREFLIGHT_OBSERVED는 검사 완료 상태이며 실행 승인이나 runtime 인수가 아니다. API 읽기 자체도 실제 운영에서는 승인 범위를 따라야 한다.
 3. deploy/restore는 기존 session의 fresh 검증→영속 claim/journal→동일 credential TLS sender→최대6 PATCH/rollout 순서를 따른다. API origin은 입력 그대로(현재 승인443), `fds-app`만 사용하고 ambient kubeconfig/P1 API fallback이 없다.
