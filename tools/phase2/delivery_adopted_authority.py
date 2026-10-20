@@ -119,6 +119,10 @@ class CodeAdoptedGrantResolver:
         now = max(w, self._anchor[0] + m - self._anchor[1])
         need(self.grant.starts_at <= now < self.grant.expires_at,
              'ADOPTED_GRANT_OUTSIDE_WINDOW')
+        return now
+
+    def close(self):
+        self.reader = self.credential = self.progress = None
 
     @staticmethod
     def original_checked(value, request, expected):

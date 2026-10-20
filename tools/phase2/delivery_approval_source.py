@@ -67,6 +67,10 @@ class ReviewedApprovalAdapter:
              'APPROVAL_SOURCE_DEADLINE_EXCEEDED')
         return max(wall, self._anchor[0] + mono - self._anchor[1])
 
+    def close(self):
+        # Shared readers and server-side credentials belong to the caller.
+        self.reader = self.resolver = self.credential = self.progress = None
+
     def original(self, request):
         self.check(request)
         method = self.reader.comment if type(self.pin) is CommentPin else self.reader.blob

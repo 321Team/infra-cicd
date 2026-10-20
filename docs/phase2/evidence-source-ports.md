@@ -1,5 +1,7 @@
 # #46 issuer·producer·finish 원본 연결 검토본
 
+후속 구현: [운영 의미 채택 판정기·현장 진입점](runtime-site-authority.md)이 구체적인 선택적 resolver/factory를 제공한다. 아래는 기존 원본 포트의 책임 설명이며, 실제 원본의 운영 채택·Runtime은 여전히 별도다.
+
 이 변경은 기존 source reader를 `AuthorityAdapters.platform/producer/finish`에 연결하는 선택적 코드다. **실제 발급자·생산자·종료 관측의 의미와 권위는 별도 현장 resolver가 인증해야 하며, 그 계약과 운영 채택은 아직 미연결이다.** 실제값, 자격 발급, Runtime, 실행 GO를 추가하지 않는다. 단독 CLI 기본 STOP은 유지한다.
 
 ## 구현한 부분

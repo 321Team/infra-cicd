@@ -101,6 +101,10 @@ class ObjectReader(transport.Sender):
     def __repr__(self):
         return '<P2 ObjectReader: credential redacted>'
 
+    def close(self):
+        # Local references only. A subsequent read fails the credential check.
+        self._token = self.credential = None
+
     def now(self):
         now = self.monotonic()
         require(core.finite(now) and (self._last is None or now >= self._last),
@@ -109,7 +113,7 @@ class ObjectReader(transport.Sender):
         return now
 
     def check_request(self, request):
-        require(type(request) is ReadRequest and request.binding == self._binding
+        require(self.credential is not None and type(request) is ReadRequest and request.binding == self._binding
                 and request.credential is self.credential, 'OBJECT_READ_BINDING_INVALID')
         require(core.finite(request.deadline) and self.now() < request.deadline,
                 'OBJECT_READ_DEADLINE')
