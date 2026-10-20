@@ -1,5 +1,7 @@
 # 비공개 원본 읽기·승인 authority 연결
 
+후속 검토본: [코드 채택 정책 resolver](adopted-authority.md). 실제 운영 control/채택은 미연결이며, 이 선택 후보만으로 실제 승인 권한·철회 인증이 완료되는 것은 아니다. 기본 STOP을 유지한다.
+
 PR95의 공개 원본 reader와 같은 CA/IP/SNI·제한시간·GET allowlist를 비공개 저장소에도 사용한다. 기본 CLI를 실행 가능하게 바꾸지 않으며 ambient 로그인·환경변수·파일·stdin·인자로 token을 찾지 않는다. 이 문서는 실제값을 채운 실행 카드나 실행 GO가 아니다.
 
 ## 구현한 범위
