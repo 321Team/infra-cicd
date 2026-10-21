@@ -140,6 +140,15 @@ class PosixSiteTests(SiteFixture, unittest.TestCase):
         self.git.assert_called_once_with(self.root / 'source', self.h.binding.source_commit)
         self.assertEqual([], list((self.root / 'store').iterdir()))
 
+    def test_progress_factory_is_forwarded_without_early_authority_calls(self):
+        factory=Mock(side_effect=AssertionError('AUTHORITY_FACTORY_NOT_YET_ALLOWED'))
+        app=site.build_application(self.config,credential=self.credential,authority_factory=factory)
+        self.assertIs(app._authority_factory,factory)
+        self.assertIsNone(app._adapters)
+        self.assertEqual(self.h.render,app.inputs.rendered)
+        factory.assert_not_called()
+        self.assertEqual([],list((self.root/'store').iterdir()))
+
     def test_main_prepares_before_dispatch_and_does_not_run_a_real_app(self):
         with patch.object(site.cli, 'main', return_value=2) as dispatch:
             self.assertEqual(2, site.main(['preflight'], config=self.config,

@@ -46,7 +46,7 @@ SSAR HTTP 201·대상 echo·allowed 의미를 검사하며 HTTP 200·다른 name
 receipt·완료·재시작 조회, 600초 상한, named SSAR, TLS sender, fresh 404 baseline을 포함한다.
 Windows에서는 POSIX 권한·fsync·no-follow 시험이 제외되며 Linux CI 결과와 구분한다.
 
-실제 issuer·producer·finish의 원본 의미 인증 및 site 채택 계약, 실제 end-page 승인 digest/clean render는 아직 연결되지 않았다.
+원본 의미 채택 resolver와 구체 site factory는 [후속 운영 구현](runtime-site-authority.md)에서 제공한다. 실제 issuer·producer·finish 원본의 운영 채택과 실제 end-page 승인 digest/clean render는 아직 연결되지 않았다.
 기존 앱 두 digest를 세 번째 실제 값으로 복사하거나 placeholder를 승인값으로 사용하지 않는다.
 CLI 기본 미설정 STOP은 유지한다. 이 문서·MOCK·CI 성공으로 Runtime GO, G4/G5/G6 인수 또는 티켓 종결을 부여하지 않는다.
 

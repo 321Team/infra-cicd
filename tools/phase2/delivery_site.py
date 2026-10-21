@@ -129,7 +129,7 @@ def source_checked(root, binding, contract):
         os.close(fd)
 
 
-def build_application(config, *, credential, adapters):
+def build_application(config, *, credential, adapters=None, authority_factory=None):
     """Read only explicit immutable input bytes, then compose existing core.
 
     Does not invoke adapters, acquire a claim, send API requests or infer any
@@ -138,8 +138,10 @@ def build_application(config, *, credential, adapters):
     try:
         configuration_checked(config)
         need(os.name == 'posix', 'SITE_POSIX_REQUIRED')
-        need(type(credential) is BearerCredential and type(adapters) is AuthorityAdapters
-             and all(callable(getattr(adapters, n)) for n in ADAPTERS),
+        need(type(credential) is BearerCredential
+             and ((type(adapters) is AuthorityAdapters and authority_factory is None
+                   and all(callable(getattr(adapters, n)) for n in ADAPTERS))
+                  or (adapters is None and callable(authority_factory))),
              'SITE_AUTHENTICATORS_REQUIRED')
         root, fd = store.root_open(config.input_root)
         try:
@@ -156,7 +158,7 @@ def build_application(config, *, credential, adapters):
             os.close(fd)
         inputs = RunInputs(config.binding, rendered, contract, config.source_root,
                            config.store_root, config.budget_seconds, config.finalize)
-        return OperationalApplication(inputs, credential, adapters)
+        return OperationalApplication(inputs, credential, adapters, authority_factory=authority_factory)
     except SiteError:
         raise
     except Exception:

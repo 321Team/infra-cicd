@@ -29,6 +29,33 @@ class AuthorityAdapters:
     finish: object = field(repr=False)
 
 
+class AuthorityBundle:
+    """Owned, single-use factory result. Shared source readers are NOT owned.
+
+    A factory must clean partial construction itself before returning a bundle.
+    close() releases local references only, never server-side authorization.
+    """
+    def __init__(self, adapters, owned):
+        require(type(adapters) is AuthorityAdapters and type(owned) is tuple
+                and all(callable(getattr(x, 'close', None)) for x in owned)
+                and len({id(x) for x in owned}) == len(owned),
+                'AUTHORITY_BUNDLE_INVALID')
+        self.adapters, self.owned, self.closed = adapters, owned, False
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        failed = False
+        for handle in reversed(self.owned):
+            try:
+                handle.close()
+            except Exception:
+                failed = True
+        self.adapters, self.owned = None, ()
+        require(not failed, 'AUTHORITY_CLEANUP_FAILED')
+
+
 @dataclass(frozen=True)
 class AdmittedBaseline:
     """Trusted admission result, not a schema accepted from user JSON.
@@ -137,7 +164,10 @@ class OperationalProviders:
 
     def close(self):
         self.closed = True
+        if self.reader is not None:
+            self.reader.close()
         self.reader = self.object_provider = self.adapters = self.credential = None
+        self.pins = None
         self.object_failure_code = None
 
 
@@ -159,14 +189,17 @@ class OperationalApplication:
     actual input bytes. The standalone CLI cannot load/construct an application.
     Clock/dependency keywords support isolated tests, never CLI configuration.
     """
-    def __init__(self, inputs, credential, adapters, *, wall=time.time,
+    def __init__(self, inputs, credential, adapters=None, *, authority_factory=None, wall=time.time,
                  monotonic=time.monotonic, sleep=time.sleep):
         require(type(inputs) is RunInputs and type(credential) is BearerCredential
-                and type(adapters) is AuthorityAdapters, 'OPERATIONAL_CONFIGURATION_INVALID')
+                and ((type(adapters) is AuthorityAdapters and authority_factory is None)
+                     or (adapters is None and callable(authority_factory))),
+                'OPERATIONAL_CONFIGURATION_INVALID')
         core.binding_checked(inputs.binding)
         require(core.finite(inputs.budget_seconds) and inputs.budget_seconds > 0
                 and type(inputs.finalize) is bool, 'OPERATIONAL_CONFIGURATION_INVALID')
         self.inputs, self._credential, self._adapters = inputs, credential, adapters
+        self._authority_factory, self._authority_bundle = authority_factory, None
         self.wall, self.monotonic, self.sleep = wall, monotonic, sleep
         self.used = False
         self._providers = None
@@ -180,6 +213,13 @@ class OperationalApplication:
 
     def factory(self, binding, credential, progress):
         require(self._providers is None, 'OPERATIONAL_APPLICATION_CONSUMED')
+        if self._authority_factory is not None:
+            bundle = self._authority_factory(binding, credential, progress)
+            require(type(bundle) is AuthorityBundle and not bundle.closed,
+                    'AUTHORITY_BUNDLE_INVALID')
+            # Retain before provider construction, so its failure is cleaned too.
+            self._authority_bundle = bundle
+            self._adapters = bundle.adapters
         self._providers = OperationalProviders(binding, credential, progress,
             rendered=self.inputs.rendered, contract=self.inputs.contract,
             validator=self._validator, adapters=self._adapters,
@@ -224,6 +264,15 @@ class OperationalApplication:
         finally:
             if self._providers is not None:
                 result['diagnostics'] = self._providers.diagnostic_status
-                self._providers.close()
+                try:
+                    self._providers.close()
+                except Exception:
+                    result.update(status='STOPPED', error_code='AUTHORITY_CLEANUP_FAILED')
+            if self._authority_bundle is not None:
+                try:
+                    self._authority_bundle.close()
+                except Exception:
+                    result.update(status='STOPPED', error_code='AUTHORITY_CLEANUP_FAILED')
+            self._authority_bundle = self._authority_factory = None
             self._credential = self._adapters = None
         return result

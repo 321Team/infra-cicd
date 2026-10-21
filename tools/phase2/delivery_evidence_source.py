@@ -41,6 +41,26 @@ class OriginalDecision:
     evidence: object = field(repr=False)
 
 
+def terminal_progress_checked(binding, progress):
+    """Validate actual durable terminal progress; no completion authority here."""
+    need(type(progress) is Progress and type(progress.responses) is tuple
+         and len(progress.responses) == len(core.objects_for(binding)),
+         'EVIDENCE_FINISH_PROGRESS_INCOMPLETE')
+    journal = decode(progress.journal)
+    store.receipt_checked(journal, binding.key, binding=binding)
+    need(journal['status'] == 'ROLLOUT_OBSERVED', 'EVIDENCE_FINISH_PROGRESS_INCOMPLETE')
+    uids = set()
+    for raw, key in zip(progress.responses, core.objects_for(binding)):
+        reply = decode(raw)
+        core.scope_checked(reply, binding, response=True)
+        meta = reply['metadata']
+        uid, rv = meta.get('uid'), meta.get('resourceVersion')
+        need(core.identity(reply) == key and type(uid) is str and 0 < len(uid) <= 128
+             and uid not in uids and type(rv) is str and 0 < len(rv) <= 200,
+             'EVIDENCE_FINISH_RESPONSE_INVALID')
+        uids.add(uid)
+
+
 class ReviewedEvidenceSource:
     """Opt-in connector for platform, producer or finish in AuthorityAdapters.
 
@@ -141,23 +161,7 @@ class ReviewedEvidenceSource:
         # This is the session's checked durable receipt, not the journal envelope
         # or a self-reported PASS file. Filesystem durability and fresh object
         # reconciliation remain in the existing session/store/verifier.
-        p = request.progress
-        need(type(p.responses) is tuple and len(p.responses) == len(core.objects_for(self.binding)),
-             'EVIDENCE_FINISH_PROGRESS_INCOMPLETE')
-        journal = decode(p.journal)
-        store.receipt_checked(journal, self.binding.key, binding=self.binding)
-        need(journal['status'] == 'ROLLOUT_OBSERVED',
-             'EVIDENCE_FINISH_PROGRESS_INCOMPLETE')
-        uids = set()
-        for raw, key in zip(p.responses, core.objects_for(self.binding)):
-            reply = decode(raw)
-            core.scope_checked(reply, self.binding, response=True)
-            meta = reply['metadata']
-            uid, rv = meta.get('uid'), meta.get('resourceVersion')
-            need(core.identity(reply) == key and type(uid) is str and 0 < len(uid) <= 128
-                 and uid not in uids and type(rv) is str and 0 < len(rv) <= 200,
-                 'EVIDENCE_FINISH_RESPONSE_INVALID')
-            uids.add(uid)
+        terminal_progress_checked(self.binding, request.progress)
 
     def decision(self, request, original):
         self.check(request)
