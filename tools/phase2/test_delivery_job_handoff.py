@@ -266,6 +266,12 @@ class LinuxHandoffTests(unittest.TestCase):
             with self.assertRaises(OSError): os.fstat(fd)
 
     def test_real_parent_driver_source_factory_receipt_and_cleanup(self):
+        from delivery_source_roles import plan_source_roles
+        def wire(pool):
+            self.s.wire(pool)  # SYNTHETIC native API boundary only.
+            return plan_source_roles(pool, plan=self.args['plan'],
+                finish_repositories=(self.s.repo, self.s.repo))
+        self.args['wire'] = wire
         invocation = self.call()
         owned = [invocation.receiver] + [c.receiver for c in invocation.source_session.channels]
         original = runtime.RuntimeAuthorityFactory

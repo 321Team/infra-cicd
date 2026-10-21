@@ -15,6 +15,16 @@
 
 이 전달은 같은 프로세스의 trusted Python 코드용이다. 토큰은 argv/env/log에 쓰지 않지만 Python 문자열·복사본·traceback/local 변수의 보안 삭제나 디버거로부터의 격리를 보장하지 않는다. `from None`은 일반 오류 출력에서 원본 예외 연결을 숨기는 용도이며 메모리 보호 수단이 아니다. 임의 바이트코드 사이의 비동기 신호·SIGKILL·프로세스 중단까지 사용자 공간 정리 완료를 보장하지 않는다. 명시적인 실패·callback 중단은 정리를 시도하며 프로세스 종료 시 OS가 FD를 닫아도 서버 토큰이 회수됐다는 뜻은 아니다.
 
+## 원본 reader의 역할 연결
+
+검토된 `wire(session)`에서 `delivery_source_roles.plan_source_roles`를 선택해 호출하면, 이미 채택한 plan의 **각 original/control pin에 적힌 정확한 저장소**로 기존 private reader를 연결한다. 기존 factory 순서인 approval·issuer·producer·finish·선택 baseline(4개 또는 5개)을 고정하므로 서로 다른 원본/control 저장소도 수동 tuple 순서에 의존하지 않는다. 같은 저장소는 session의 reader를 그대로 재사용하며 새 토큰을 발급하지 않는다.
+
+finish는 아직 생성되지 않은 원본 대신 **검토된 original/control 저장소 쌍만** 명시한다. 저장소 지정은 종료 사실·실제 source pin·FinishAdoptionSlot 설치가 아니다. 기존 collector 또는 observation을 쓸 때는 반환된 `readers[3]`를 해당 typed 구성의 readers에 연결하고, 그 구성을 wire 반환 dict에 넣는 기존 경로를 따른다. 누락된 실제 종료 원본은 기존 판정대로 completion을 막고 fence를 유지한다.
+
+native Actions 조회도 쓸 경우 같은 `producer_pins`를 이 함수와 `RuntimeInvocation`에 명시한다. 기존 4단계 policy와 producer facts의 reference 대응을 확인하고 해당 정확한 저장소 reader만 `producer_run_reader`로 연결한다. workflow 코드 SHA를 앱 source SHA로 추정하거나 과거 Run을 새 실행 승인으로 사용하지 않는다.
+
+이 함수는 메모리 reader 조회만 하고 원본 GET·자격 수신·TLS 호출·claim·slot 설치·authority 채택을 하지 않는다. 선택된 저장소가 session에 없거나 pin/binding이 다르면 대체 저장소를 고르지 않고 STOP한다. reader는 빌려 쓰며 닫지 않고 기존 session/driver가 계속 소유한다. 전체 원본 의미·권한·철회·기간과 finish의 실제 판정은 기존 resolver/factory가 수행한다. 이 연결을 채택하는 실제 site 값은 아직 미정이며 `SITE=None`을 유지한다.
+
 ## 정상·실패 판정과 재실행
 
 - 정상 전달은 정확한 typed invocation 반환과 driver의 기존 검사 통과까지다. 파이프 전달 성공·문법 검사·현지 close는 자격 인증·배포 성공·권한 회수·전체 AC 완료가 아니다.
@@ -36,3 +46,5 @@ PR109 리뷰의 Runner 후보 `cicd-runner01` / `server01_cicd-runner` / UID 100
 ## 오프라인 확인
 
 기존 CPython 3.12·hash-pinned PyYAML 6.0.3 시험 환경에서 checkout 루트의 `python -m unittest discover -s tools/phase2 -p 'test_delivery_job_handoff.py' -v`를 실행한다. SYNTHETIC 문자열·MemoryStore·가짜 API만 사용하며 socket 경계를 차단한다. Windows의 소유권/검증 시험과 Linux의 실제 로컬 파이프·EOF·부분 쓰기 실패·재사용 FD·driver→source→factory→receipt 연결 시험을 구분한다. Linux 전용 SKIP은 PASS로 세지 않는다. 통합 회귀는 기존 `test_*.py` 발견 명령을 사용한다. 실제 운영 Runtime은 별도 미실행이다.
+
+역할 연결 추가분은 `python -m unittest discover -s tools/phase2 -p 'test_delivery_source_roles.py' -v`로 확인한다. 서로 다른 8개 저장소의 정확한 original/control/역할 순서, 공유 저장소 재사용, 선택 baseline/Actions, 미등록 저장소·핀 불일치·잘못된 반환/오류의 차단, 정상 driver→source→factory→finish 및 실패 시 claim 전 정리를 같은 기존 fixture로 검증한다. 모두 SYNTHETIC 경계이며 실제 저장소·현장 입력을 채택한 시험이 아니다.
