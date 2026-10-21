@@ -3,11 +3,11 @@ name: P2 intake offline validation
 on:
   pull_request:
     # Exact stack bases for hosted offline tests only; no self-hosted Runner.
-    branches: [main, codex/p2-nine-object-contract-20261020, codex/p2-operational-site-auth-20261021, codex/p2-run-gate-finish-20261021, codex/p2-native-finish-decoder-20261021, codex/p2-first-deploy-inputs-20261021]
-    paths: ['tools/phase2/**', 'templates/phase2/**', '.github/workflows/p2-intake-validation.yml']
+    branches: [main, codex/p2-nine-object-contract-20261020, codex/p2-operational-site-auth-20261021, codex/p2-run-gate-finish-20261021, codex/p2-native-finish-decoder-20261021, codex/p2-first-deploy-inputs-20261021, codex/p2-source-session-20261021]
+    paths: ['tools/phase2/**', 'templates/phase2/**', '.github/workflows/p2-intake-validation.yml', '.github/workflows/p2-rosa-delivery.yml']
   push:
     branches: [main]
-    paths: ['tools/phase2/**', 'templates/phase2/**', '.github/workflows/p2-intake-validation.yml']
+    paths: ['tools/phase2/**', 'templates/phase2/**', '.github/workflows/p2-intake-validation.yml', '.github/workflows/p2-rosa-delivery.yml']
 
 permissions:
   contents: read
@@ -20,5 +20,11 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+      - name: Prepare hash-pinned offline test parser in temporary directory
+        run: |
+          python3 -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+          python3 -m pip --isolated install --disable-pip-version-check --no-input --no-deps --only-binary=:all: --require-hashes --index-url https://pypi.org/simple --target "$RUNNER_TEMP/p2-offline-yaml" -r tools/phase2/requirements-test.txt
       - name: Test P2 intake diagnostics with synthetic data only
+        env:
+          PYTHONPATH: ${{ runner.temp }}/p2-offline-yaml
         run: python3 -m unittest discover -s tools/phase2 -p 'test_*.py' -v

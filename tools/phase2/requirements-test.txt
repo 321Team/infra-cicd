@@ -1,0 +1,6 @@
+# Offline tests only, CPython 3.12 x86_64 Linux / AMD64 Windows wheels.
+# PyPI release metadata: https://pypi.org/pypi/PyYAML/6.0.3/json
+# Not a Runner/runtime install or operating dependency adoption.
+PyYAML==6.0.3 \
+    --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc \
+    --hash=sha256:5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b

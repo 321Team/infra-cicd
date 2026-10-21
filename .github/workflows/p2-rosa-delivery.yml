@@ -1,0 +1,87 @@
+name: P2 ROSA reviewed delivery
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 상태/읽기 사전검사/배포/복구 요청 (실행 GO 아님)
+        required: true
+        type: choice
+        options: [status, preflight, deploy, restore]
+        default: status
+      execute:
+        description: 검토된 실제 구성·유효 GO가 있을 때만 실행 요청
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2-rosa-delivery
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      configured: ${{ steps.site.outputs.configured }}
+    steps:
+      - name: Checkout exact workflow source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check reviewed site declaration without credentials
+        id: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B - <<'PY'
+          import json, os, sys
+          sys.path.insert(0, 'tools/phase2')
+          from delivery_job import workflow_gate
+          result = workflow_gate()
+          print(json.dumps(result, sort_keys=True))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
+              stream.write('configured=' + ('true' if result['dispatch_configured'] else 'false') + '\n')
+          raise SystemExit(0 if result['dispatch_configured'] else 2)
+          PY
+
+  delivery:
+    needs: prepare
+    if: needs.prepare.outputs.configured == 'true' && inputs.execute && inputs.command != 'status' && github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
+    # Existing registered Runner labels only. SITE=None currently blocks this job.
+    # Registration is not P2 readiness/authorization; driver checks adopted identity.
+    runs-on: [self-hosted, Linux, X64, p1-cicd, onprem, podman]
+    timeout-minutes: 30
+    env:
+      P2_JOB_COMMAND: ${{ inputs.command }}
+      P2_CODE_CHECKOUT: p2-job-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Require unused job checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "$GITHUB_WORKSPACE/$P2_CODE_CHECKOUT"
+          test ! -L "$GITHUB_WORKSPACE/$P2_CODE_CHECKOUT"
+      - name: Checkout exact reviewed workflow source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          path: ${{ env.P2_CODE_CHECKOUT }}
+          persist-credentials: false
+          clean: false
+          set-safe-directory: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+      - name: Invoke P2 driver with reviewed site and explicit request
+        working-directory: ${{ env.P2_CODE_CHECKOUT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -I -B -c 'import os, sys; sys.path.insert(0, "tools/phase2"); import delivery_job; raise SystemExit(delivery_job.main([os.environ["P2_JOB_COMMAND"], "--execute"]))'
