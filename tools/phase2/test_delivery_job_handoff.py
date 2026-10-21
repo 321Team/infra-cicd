@@ -19,6 +19,7 @@ import delivery_job_handoff as handoff
 import delivery_job_site as declaration
 import delivery_runtime_site as runtime
 import delivery_site as site
+import delivery_source_session as source_session
 import test_delivery_source_session as fixture
 from test_delivery_job import CONTEXT, RUNNER
 
@@ -201,10 +202,10 @@ class LinuxHandoffTests(unittest.TestCase):
 
     def setUp(self):
         HandoffTests.setUp(self)
-        # Remove the pure Windows fixture's pipe identity shim for real Linux.
-        self.s.doCleanups()
-        self.f = self.s.f
-        self.f.setUp(); self.addCleanup(self.f.doCleanups)
+        # Replace only the Windows identity shim. Reinitializing the fixture
+        # would split the invocation's finish slot from the app's writer slot.
+        p = patch.object(source_session, 'pipe_identity', new=handoff._identity)
+        p.start(); self.addCleanup(p.stop)
 
     def test_real_prebuffer_has_eof_noninherit_nonblock_distinct_pipes(self):
         invocation = self.call()
