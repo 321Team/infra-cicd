@@ -243,6 +243,9 @@ class RuntimeAuthorityFactory:
         binding = plan.approval.binding
         core.binding_checked(binding)
         need(binding.action == 'deploy' or plan.baseline is not None, 'RUNTIME_SITE_FIRST_DEPLOY_ONLY')
+        need(plan.producer.facts.previous_images is not None
+             or (binding.action == 'deploy' and plan.baseline is None),
+             'RUNTIME_SITE_PREVIOUS_REQUIRED')
         need(plan.issuer.grant.binding == plan.producer.grant.binding == finish_slot.binding == binding,
              'RUNTIME_SITE_BINDING_MISMATCH')
         if finish_observation is not None:
@@ -301,7 +304,8 @@ class RuntimeAuthorityFactory:
             for index, role, record in ((1, 'platform', plan.issuer), (2, 'producer', plan.producer)):
                 resolver = CodeAdoptedEvidenceResolver(role=role, grant=record.grant,
                     facts=record.facts, control_reader=self.readers[index].control,
-                    credential=credential, progress=progress, wall=self.wall, monotonic=self.monotonic)
+                    credential=credential, progress=progress, wall=self.wall, monotonic=self.monotonic,
+                    first_deployment=(role == 'producer' and plan.baseline is None))
                 owned.append(resolver)
                 port = ReviewedEvidenceSource(role=role, reader=self.readers[index].original,
                     pin=record.grant.original_pin, resolver=resolver, binding=binding,
