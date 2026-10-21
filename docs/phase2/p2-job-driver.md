@@ -27,6 +27,8 @@ P2 전용 `p2-rosa-delivery.yml`의 수동 요청을 `delivery_job.py`에서 검
 
 `JobSite.build(context, command)`는 `RuntimeInvocation` 반환 전 발생한 부분 생성 자원까지 스스로 정리한다. 반환 후에는 driver가 정확한 owned ROSA receiver / private source session만 닫는다. borrowed reader나 임의 객체의 `close`는 호출하지 않는다. 단기 토큰 발급 자체는 이 배선에 없으며, 기존 수명·최초 쓰기 예산을 연장하지 않는다. workflow 30분 timeout은 token TTL이나 GO 기간이 아니다.
 
+이미 발급된 in-memory 자격을 받는 부모 연결 함수와 용량·마감·부분 실패·운영 채택 전 잔여는 [부모 전달 연결부](owned-job-handoff.md)에 정리한다. 이 선택 함수의 추가는 SITE 구성이나 실행 승인이 아니다.
+
 ## 실패·정리·재실행
 
 - status는 native env·Git·Runner·builder·credential에 접근하지 않는다. gate는 native 메타데이터와 로컬 코드 HEAD만 읽는다. 본 문서와 시험을 확인하기 위해 운영 workflow를 dispatch하지 않는다.
