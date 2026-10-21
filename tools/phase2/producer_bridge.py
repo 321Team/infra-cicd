@@ -120,7 +120,9 @@ def strict_documents(raw, yaml):
 
     StrictLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, mapping)
     documents = list(yaml.load_all(text, Loader=StrictLoader))
-    need(len(documents) <= 6 and all(type(doc) is dict for doc in documents), 'DOCUMENT_SET_INVALID')
+    # The binding-specific exact count is checked below; parsing never opens
+    # an unbounded or receipt-derived resource profile.
+    need(len(documents) <= 9 and all(type(doc) is dict for doc in documents), 'DOCUMENT_SET_INVALID')
     # Reject non-JSON scalar types (timestamps, sets, etc.) and non-finite numbers.
     core.encoded(documents)
     return documents
@@ -155,7 +157,7 @@ class CommittedProducerBridge:
             contracts = strict_documents(contract, yaml)
             need(len(contracts) == 1, 'CONTRACT_DOCUMENT_INVALID')
             docs = strict_documents(rendered, yaml)
-            need(len(docs) == 6, 'DOCUMENT_SET_INVALID')
+            need(len(docs) == len(core.objects_for(b)), 'DOCUMENT_SET_INVALID')
             # Execute only the exact reviewed blob in fresh globals. No .pyc or
             # checkout imports; the checker imports the consumer's pinned yaml.
             module = {'__name__': '_p2_reviewed_producer_checker',

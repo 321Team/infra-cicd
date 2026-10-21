@@ -142,14 +142,14 @@ class ReviewedEvidenceSource:
         # or a self-reported PASS file. Filesystem durability and fresh object
         # reconciliation remain in the existing session/store/verifier.
         p = request.progress
-        need(type(p.responses) is tuple and len(p.responses) == len(core.OBJECTS),
+        need(type(p.responses) is tuple and len(p.responses) == len(core.objects_for(self.binding)),
              'EVIDENCE_FINISH_PROGRESS_INCOMPLETE')
         journal = decode(p.journal)
-        store.receipt_checked(journal, self.binding.key)
+        store.receipt_checked(journal, self.binding.key, binding=self.binding)
         need(journal['status'] == 'ROLLOUT_OBSERVED',
              'EVIDENCE_FINISH_PROGRESS_INCOMPLETE')
         uids = set()
-        for raw, key in zip(p.responses, core.OBJECTS):
+        for raw, key in zip(p.responses, core.objects_for(self.binding)):
             reply = decode(raw)
             core.scope_checked(reply, self.binding, response=True)
             meta = reply['metadata']

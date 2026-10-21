@@ -88,7 +88,7 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
             reply = sender.send(request)
             if request.method == 'PATCH':
                 raw = core.encoded(reply)
-                core.need(len(raw) <= 1024 * 1024 and len(responses) < len(core.OBJECTS),
+                core.need(len(raw) <= 1024 * 1024 and len(responses) < len(core.objects_for(binding)),
                           'RESPONSE_LIMIT_EXCEEDED')
                 responses.append(raw)
             return reply

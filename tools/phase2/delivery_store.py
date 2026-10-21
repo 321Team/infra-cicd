@@ -17,7 +17,7 @@ import delivery_adapter as core
 ERRORS = frozenset('''BINDING_INVALID ACTION_INVALID IDENTITY_INVALID HASH_INVALID
 SOURCE_INVALID API_INVALID ROUTE_HOST_INVALID IMAGES_INVALID OBJECT_SCOPE_INVALID SERVICE_EXPOSURE_FORBIDDEN
 NAMESPACE_INVALID RENDER_METADATA_INVALID ROUTE_CONTRACT_MISMATCH IMAGE_CONTRACT_MISMATCH
-POD_IDENTITY_INVALID EGRESS_LABEL_INVALID INPUT_SIZE_INVALID INPUT_HASH_MISMATCH
+POD_IDENTITY_INVALID EGRESS_LABEL_INVALID END_PAGE_INPUT_FORBIDDEN INPUT_SIZE_INVALID INPUT_HASH_MISMATCH
 RENDER_VALIDATOR_FAILED RENDER_CHECK_FAILED OBJECT_SET_INVALID DUPLICATE_OBJECT INPUT_INVALID
 CHECKPOINT_FAILED CLOCK_UNAVAILABLE CLOCK_INVALID AUTHORIZATION_DENIED TOKEN_REQUEST_INVALID
 CREDENTIAL_INVALID AUTH_WINDOW_INVALID AUTHORITY_CHANGED CLOCK_REVERSED AUTH_EXPIRED
@@ -106,7 +106,16 @@ def create_file(parent, name, raw):
         os.close(fd)
 
 
-def receipt_checked(receipt, binding_key):
+def receipt_checked(receipt, binding_key, *, binding=None):
+    # Without authenticated Binding context accept only the legacy six-object
+    # shape. Never infer a larger scope from untrusted receipt/ACK contents.
+    if binding is not None:
+        core.binding_checked(binding)
+        need(binding.key == binding_key, 'RECEIPT_BINDING_INVALID')
+    objects = core.OBJECTS if binding is None else core.objects_for(binding)
+    services = core.SERVICES if binding is None else core.services_for(binding)
+    identities = tuple('/'.join(key) for key in objects)
+    count = len(objects)
     need(type(receipt) is dict and (set(receipt) == FIELDS or
          set(receipt) == FIELDS | {'checkpoint_error'}), 'RECEIPT_FIELDS_INVALID')
     need(receipt['schema'] == 'P2-CICD-apply-core-1' and receipt['binding_key'] == binding_key,
@@ -120,18 +129,18 @@ def receipt_checked(receipt, binding_key):
     need('checkpoint_error' not in receipt or receipt['checkpoint_error'] == 'CHECKPOINT_FAILED',
          'RECEIPT_ERROR_INVALID')
     ack, rollout = receipt['acknowledged'], receipt['rollout']
-    need(type(ack) is list and len(ack) <= 6 and ack == list(IDENTITIES[:len(ack)]),
+    need(type(ack) is list and len(ack) <= count and ack == list(identities[:len(ack)]),
          'RECEIPT_ACK_INVALID')
-    need(type(rollout) is list and len(rollout) <= 2
-         and rollout == list(core.SERVICES[:len(rollout)]), 'RECEIPT_ROLLOUT_INVALID')
+    need(type(rollout) is list and len(rollout) <= len(services)
+         and rollout == list(services[:len(rollout)]), 'RECEIPT_ROLLOUT_INVALID')
     pending = receipt['pending']
-    need(pending is None or (len(ack) < 6 and pending == IDENTITIES[len(ack)]),
+    need(pending is None or (len(ack) < count and pending == identities[len(ack)]),
          'RECEIPT_PENDING_INVALID')
     if receipt['status'] == 'ROLLOUT_OBSERVED':
-        need(len(ack) == 6 and len(rollout) == 2 and pending is None
+        need(len(ack) == count and len(rollout) == len(services) and pending is None
              and receipt['error_code'] is None and 'checkpoint_error' not in receipt,
              'RECEIPT_TERMINAL_INVALID')
-    need(not rollout or len(ack) == 6, 'RECEIPT_ROLLOUT_INVALID')
+    need(not rollout or len(ack) == count, 'RECEIPT_ROLLOUT_INVALID')
     if receipt['status'] == 'PREPARED':
         need(not ack and not rollout and pending is None, 'RECEIPT_PHASE_INVALID')
     if receipt['status'] == 'WRITE_PENDING':
@@ -142,7 +151,8 @@ def receipt_checked(receipt, binding_key):
     return copy.deepcopy(receipt)
 
 
-def transition_checked(previous, current):
+def transition_checked(previous, current, *, binding=None):
+    count = len(core.OBJECTS if binding is None else core.objects_for(binding))
     if previous is None:
         need(current['status'] in ('PREPARED', 'STOPPED')
              and not current['acknowledged'] and not current['rollout']
@@ -161,7 +171,7 @@ def transition_checked(previous, current):
     elif current['status'] == 'WRITE_ACKNOWLEDGED':
         need((previous['status'] == 'WRITE_PENDING' and len(after) == len(before) + 1
               and next_rolls == rolls)
-             or (previous['status'] == 'WRITE_ACKNOWLEDGED' and len(after) == len(before) == 6
+             or (previous['status'] == 'WRITE_ACKNOWLEDGED' and len(after) == len(before) == count
                  and len(next_rolls) == len(rolls) + 1), 'JOURNAL_TRANSITION_INVALID')
     elif current['status'] == 'ROLLOUT_OBSERVED':
         need(previous['status'] == 'WRITE_ACKNOWLEDGED' and after == before
@@ -324,8 +334,8 @@ class Journal:
         try:
             self.check()
             need(len(self.records) < 64, 'JOURNAL_LIMIT_REACHED')
-            safe = receipt_checked(receipt, self.claim.binding.key)
-            transition_checked(self.latest, safe)
+            safe = receipt_checked(receipt, self.claim.binding.key, binding=self.claim.binding)
+            transition_checked(self.latest, safe, binding=self.claim.binding)
             number = len(self.records) + 1
             raw = core.encoded({'schema': 'P2-CICD-journal-1', 'sequence': number,
                                 'binding_key': self.claim.binding.key,

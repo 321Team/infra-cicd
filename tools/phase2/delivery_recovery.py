@@ -58,7 +58,7 @@ def binding_from_bytes(raw):
         raise RecoveryError('BINDING_INVALID') from None
 
 
-def replay(records, binding_key):
+def replay(records, binding_key, *, binding=None):
     """Reconstruct validated receipt state in memory, never reopen a writer."""
     need(type(records) is list and len(records) <= 64, 'JOURNAL_LIMIT_INVALID')
     previous_hash = latest = None
@@ -72,8 +72,8 @@ def replay(records, binding_key):
              and record['previous_sha256'] == previous_hash, 'JOURNAL_CHAIN_INVALID')
         try:
             need(core.encoded(record) == raw, 'RECORD_ENCODING_INVALID')
-            current = store.receipt_checked(record['receipt'], binding_key)
-            store.transition_checked(latest, current)
+            current = store.receipt_checked(record['receipt'], binding_key, binding=binding)
+            store.transition_checked(latest, current, binding=binding)
         except RecoveryError:
             raise
         except Exception:
@@ -84,7 +84,7 @@ def replay(records, binding_key):
 
 def decision(binding, records, *, active, complete):
     """Content-only inspection shared by the POSIX reader and offline tests."""
-    latest, last_hash = replay(records, binding.key)
+    latest, last_hash = replay(records, binding.key, binding=binding)
     if complete is not None:
         expected = {'schema': 'P2-CICD-complete-1', 'binding_key': binding.key,
                     'last_checkpoint_sha256': last_hash}

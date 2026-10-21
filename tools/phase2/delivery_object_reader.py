@@ -116,7 +116,7 @@ class ObjectReader(transport.Sender):
 
     def _check_scope(self, request):
         require(request.method == 'GET' and request.body == b'' and request.content_type == ''
-                and request.path in {core.path_for(k) for k in core.OBJECTS},
+                and request.path in {core.path_for(k, self._binding) for k in core.objects_for(self._binding)},
                 'OBJECT_READ_SCOPE_INVALID')
 
     def __call__(self, request):
@@ -129,7 +129,7 @@ class ObjectReader(transport.Sender):
 
     def _read_response(self, sock, request, deadline):
         status, raw, obj = transport.read_json_response(sock, request, deadline, (200, 404))
-        key = next(k for k in core.OBJECTS if core.path_for(k) == request.path)
+        key = next(k for k in core.objects_for(self._binding) if core.path_for(k, self._binding) == request.path)
         if status == 200:
             require(core.identity(obj) == key and obj['metadata'].get('namespace') == core.NAMESPACE,
                     'OBJECT_READ_IDENTITY_INVALID')
@@ -148,12 +148,12 @@ class ObjectReader(transport.Sender):
     def read(self, request, key):
         try:
             self.check_request(request)
-            require(type(key) is tuple and key in core.OBJECTS, 'OBJECT_READ_SCOPE_INVALID')
+            require(type(key) is tuple and key in core.objects_for(self._binding), 'OBJECT_READ_SCOPE_INVALID')
             seconds = min(10, request.deadline - self.now())
             deadline = transport.Deadline(seconds, self.now)
             deadline.end = min(deadline.end, request.deadline)
             wire = core.Request(self._binding.key, self._fingerprint, self._binding.api_origin,
-                                self._binding.ca_sha256, 'GET', core.path_for(key), '', b'', seconds)
+                                self._binding.ca_sha256, 'GET', core.path_for(key, self._binding), '', b'', seconds)
             observation = self._exchange(wire, deadline)
             self.check_request(request)
             return observation
@@ -187,7 +187,7 @@ class ObjectProvider:
             require(type(request.progress) is Progress, 'OBJECT_PROGRESS_INVALID')
             expected = request.progress.key
             require(self.progress() == request.progress, 'OBJECT_PROGRESS_CHANGED')
-            for key in core.OBJECTS:
+            for key in core.objects_for(request.binding):
                 failed_key = key
                 require(self.progress() == request.progress, 'OBJECT_PROGRESS_CHANGED')
                 observations.append(self.reader.read(request, key))

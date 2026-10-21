@@ -20,6 +20,9 @@ OBJECTS = (('v1', 'Service', 'transaction-api'), ('v1', 'Service', 'fds-engine')
            ('apps/v1', 'Deployment', 'fds-engine'),
            ('route.openshift.io/v1', 'Route', 'transaction-api-api'),
            ('route.openshift.io/v1', 'Route', 'transaction-api-readyz'))
+END_PAGE_OBJECTS = (('v1', 'Service', 'end-page'),
+                    ('apps/v1', 'Deployment', 'end-page'),
+                    ('route.openshift.io/v1', 'Route', 'end-page'))
 TLS = {'termination': 'edge', 'insecureEdgeTerminationPolicy': 'Redirect'}
 HEX = re.compile(r'[0-9a-f]{64}')
 HOST = re.compile(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
@@ -116,6 +119,24 @@ class Request:
     timeout_seconds: float
 
 
+def services_for(b):
+    """Two exact profiles, selected by an explicit Binding, never render/ACK count.
+
+    No new Binding field/key encoding: existing six-object records keep their
+    exact identity. The third image is not a default or a permission grant.
+    """
+    need(type(b) is Binding and type(b.images) is tuple and len(b.images) in (2, 3),
+         'IMAGES_INVALID')
+    names = SERVICES if len(b.images) == 2 else SERVICES + ('end-page',)
+    need(all(type(pair) is tuple and len(pair) == 2 and pair[0] == name
+             for name, pair in zip(names, b.images)), 'IMAGES_INVALID')
+    return names
+
+
+def objects_for(b):
+    return OBJECTS if len(services_for(b)) == 2 else OBJECTS + END_PAGE_OBJECTS
+
+
 def binding_checked(b):
     need(type(b) is Binding, 'BINDING_INVALID')
     need(b.action in ('deploy', 'restore'), 'ACTION_INVALID')
@@ -134,8 +155,7 @@ def binding_checked(b):
          and b.api_origin == f'https://{u.hostname}' + (f':{u.port}' if u.port else ''),
          'API_INVALID')
     need(host(b.route_host), 'ROUTE_HOST_INVALID')
-    need(type(b.images) is tuple and len(b.images) == 2, 'IMAGES_INVALID')
-    for name, pair in zip(SERVICES, b.images):
+    for name, pair in zip(services_for(b), b.images):
         need(type(pair) is tuple and len(pair) == 2 and pair[0] == name,
              'IMAGES_INVALID')
         image = pair[1]
@@ -148,7 +168,7 @@ def identity(obj):
 
 
 def scope_checked(obj, b, *, response=False):
-    need(type(obj) is dict and identity(obj) in OBJECTS, 'OBJECT_SCOPE_INVALID')
+    need(type(obj) is dict and identity(obj) in objects_for(b), 'OBJECT_SCOPE_INVALID')
     m = obj['metadata']
     need(m['namespace'] == NAMESPACE and not m.get('deletionTimestamp'), 'NAMESPACE_INVALID')
     if not response:
@@ -157,6 +177,12 @@ def scope_checked(obj, b, *, response=False):
     if obj['kind'] == 'Route':
         need(obj['spec']['host'] == b.route_host and obj['spec']['tls'] == TLS,
              'ROUTE_CONTRACT_MISMATCH')
+        if m['name'] == 'end-page':
+            need(obj['spec'].get('path') == '/end'
+                 and obj['spec'].get('to') == {'kind': 'Service', 'name': 'end-page', 'weight': 100}
+                 and obj['spec'].get('port') == {'targetPort': 'http'}
+                 and obj['spec'].get('wildcardPolicy', 'None') == 'None',
+                 'ROUTE_CONTRACT_MISMATCH')
     if obj['kind'] == 'Service':
         spec = obj['spec']
         need(type(spec) is dict and spec.get('type', 'ClusterIP') == 'ClusterIP'
@@ -187,6 +213,15 @@ def scope_checked(obj, b, *, response=False):
         labels = obj['spec']['template']['metadata'].get('labels', {})
         need(labels.get('onprem-egress') == ('true' if name == 'transaction-api' else None),
              'EGRESS_LABEL_INVALID')
+        if name == 'end-page':
+            # End-page needs only emptyDir and Downward API metadata. No DB,
+            # Secret/ConfigMap/host/PVC/projected credential or token mount.
+            need(not containers[0].get('env') and not containers[0].get('envFrom')
+                 and type(pod.get('volumes', [])) is list
+                 and all(type(v) is dict and 'name' in v
+                         and (set(v) <= {'name', 'emptyDir'} and type(v.get('emptyDir')) is dict
+                              or set(v) <= {'name', 'downwardAPI'} and type(v.get('downwardAPI')) is dict)
+                         for v in pod.get('volumes', [])), 'END_PAGE_INPUT_FORBIDDEN')
 
 
 def prepare(b, rendered, contract, validator):
@@ -214,23 +249,24 @@ def prepare(b, rendered, contract, validator):
              and report['approved_route_host'] == b.route_host
              and report['rendered_sha256'] == b.rendered_sha256
              and report['contract_sha256'] == b.contract_sha256, 'RENDER_CHECK_FAILED')
-        need(type(docs) in (list, tuple) and len(docs) == 6, 'OBJECT_SET_INVALID')
+        objects = objects_for(b)
+        need(type(docs) in (list, tuple) and len(docs) == len(objects), 'OBJECT_SET_INVALID')
         by_id = {}
         for obj in docs:
             scope_checked(obj, b)
             need(identity(obj) not in by_id, 'DUPLICATE_OBJECT')
             by_id[identity(obj)] = encoded(obj)
-        need(set(by_id) == set(OBJECTS), 'OBJECT_SET_INVALID')
+        need(set(by_id) == set(objects), 'OBJECT_SET_INVALID')
         # Immutable payloads prevent mutation by caller/checkpoint after validation.
-        return tuple(by_id[key] for key in OBJECTS)
+        return tuple(by_id[key] for key in objects)
     except Stop:
         raise
     except Exception:
         raise Stop('INPUT_INVALID') from None
 
 
-def path_for(key):
-    need(key in OBJECTS, 'OBJECT_SCOPE_INVALID')
+def path_for(key, binding=None):
+    need(key in (OBJECTS if binding is None else objects_for(binding)), 'OBJECT_SCOPE_INVALID')
     api, kind, name = key
     root = '/api/v1' if api == 'v1' else '/apis/' + api
     plural = {'Service': 'services', 'Deployment': 'deployments', 'Route': 'routes'}[kind]
@@ -311,12 +347,14 @@ class Adapter:
         need(self.active, 'SESSION_INACTIVE')
         need(method in ('GET', 'PATCH'), 'METHOD_INVALID')
         need((method == 'PATCH' and key in self.payloads and body == self.payloads[key])
-             or (method == 'GET' and key in OBJECTS and key[1] == 'Deployment' and body == b''),
+             or (method == 'GET' and key in objects_for(b) and key[1] == 'Deployment' and body == b''),
              'REQUEST_SCOPE_INVALID')
         left = self.window(b)
         if first:
-            need(left >= 660, 'FIRST_WRITE_WINDOW_TOO_SHORT')
-        path = path_for(key)
+            # Keep the legacy 6*10+600 budget. The explicit nine-object
+            # profile needs 9*10+600; this never extends either expiry.
+            need(left >= 600 + 10 * len(objects_for(b)), 'FIRST_WRITE_WINDOW_TOO_SHORT')
+        path = path_for(key, b)
         if method == 'PATCH':
             path += '?fieldManager=fds-deployer'  # no force/prune/delete
         req = Request(b.key, self.lease.credential_fingerprint, b.api_origin, b.ca_sha256,
@@ -346,18 +384,19 @@ class Adapter:
         except Exception:
             raise Stop('WRITE_RESPONSE_INVALID' if method == 'PATCH' else 'READ_RESPONSE_INVALID') from None
 
-    def wait_ready(self, b, key, applied):
+    def wait_ready(self, b, key, applied, rollout_deadline=None):
         start = self.tick()
+        end = start + 300 if rollout_deadline is None else min(start + 300, rollout_deadline)
         desired = applied['spec']['replicas']
         generation = applied['metadata']['generation']
         need(type(desired) is int and desired > 0 and type(generation) is int and generation > 0,
              'DEPLOYMENT_RESPONSE_INVALID')
         while True:
-            left = 300 - (self.tick() - start)
+            left = end - self.tick()
             need(finite(left) and left > 0, 'ROLLOUT_TIMEOUT')
             obj = self.request(b, key, 'GET', timeout=min(10, left))
             self.window(b)
-            need(self.tick() - start < 300, 'ROLLOUT_TIMEOUT')
+            need(self.tick() < end, 'ROLLOUT_TIMEOUT')
             need(obj['metadata']['uid'] == applied['metadata']['uid']
                  and obj['metadata']['generation'] == generation
                  and obj['spec'] == applied['spec'], 'DEPLOYMENT_DRIFT')
@@ -372,7 +411,7 @@ class Adapter:
                     and all(type(status.get(k, 0)) is int and status.get(k, 0) == 0 for k in
                             ('unavailableReplicas', 'terminatingReplicas'))):
                 return
-            delay = min(2, self.window(b), 300 - (self.tick() - start))
+            delay = min(2, self.window(b), end - self.tick())
             need(delay > 0, 'ROLLOUT_TIMEOUT')
             try:
                 self.sleep(delay)
@@ -384,14 +423,15 @@ class Adapter:
         self.used = True
         try:
             payloads = prepare(b, rendered, contract, validator)
-            self.payloads = dict(zip(OBJECTS, payloads))
+            objects = objects_for(b)
+            self.payloads = dict(zip(objects, payloads))
             self.active = True
             self.receipt['binding_key'] = b.key
             self.window(b)
             self.receipt['status'] = 'PREPARED'
             self.save()
             deployments = []
-            for index, (key, payload) in enumerate(zip(OBJECTS, payloads)):
+            for index, (key, payload) in enumerate(zip(objects, payloads)):
                 self.window(b)
                 self.receipt.update(status='WRITE_PENDING', pending='/'.join(key))
                 self.save()  # durable intent before any send, including the first
@@ -402,8 +442,9 @@ class Adapter:
                 self.window(b)
                 if key[1] == 'Deployment':
                     deployments.append((key, obj))
+            rollout_deadline = self.tick() + 600
             for key, applied in deployments:
-                self.wait_ready(b, key, applied)
+                self.wait_ready(b, key, applied, rollout_deadline)
                 self.receipt['rollout'].append(key[2])
                 self.save()
             self.receipt['status'] = 'ROLLOUT_OBSERVED'
