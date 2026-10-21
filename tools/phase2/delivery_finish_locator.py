@@ -6,7 +6,7 @@ source publication, policy loader or default semantic decoder.
 """
 import base64
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import re
@@ -43,10 +43,13 @@ class LocatedOriginal:
     body_meaning_authenticated: bool = field(default=False, init=False)
 
 
-def timestamp(value):
+def timestamp(value, code='FINISH_LOCATOR_COMMENT_INVALID'):
     need(type(value) is str and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', value),
-         'FINISH_LOCATOR_COMMENT_INVALID')
-    return datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ')
+         code)
+    try:
+        return datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise FinishLocatorError(code) from None
 
 
 def comment_payload(obj, location, comment_id, prefix):
@@ -80,7 +83,10 @@ def _not_completion(raw):
     schema = value.get('schema') if type(value) is dict else None
     if type(schema) is str:
         need(not (schema.startswith(('P1-', 'P2-CICD-private-diagnostic-'))
-             or schema in ('P2-CICD-session-1', 'P2-CICD-operational-1')),
+             or schema in ('P2-CICD-session-1', 'P2-CICD-operational-1',
+                'P2-CICD-complete-1', 'P2-CICD-recovery-inspection-1',
+                'P2-CICD-journal-1', 'P2-CICD-apply-core-1',
+                'P2-CICD-claim-1', 'P2-CICD-active-1')),
              'FINISH_LOCATOR_NOT_COMPLETION_ORIGINAL')
 
 
@@ -131,6 +137,15 @@ class NativeFinishLocator:
         need(type(value) is dict, 'FINISH_LOCATOR_METADATA_INVALID')
         return value
 
+    def metadata_time(self, request, value):
+        # GitHub envelope time is a rejection guard, NOT publication time,
+        # body meaning, exclusive-end authority or a substitute for FinishFacts.
+        observed = timestamp(value, 'FINISH_LOCATOR_METADATA_TIME_INVALID').timestamp()
+        now = self.check(request)
+        need(core.finite(observed) and self.policy.starts_at <= observed <= now,
+             'FINISH_LOCATOR_METADATA_OUTSIDE_WINDOW')
+        return observed
+
     def ref(self, request, prefix, location, receipts):
         obj = self.read(request, f'{prefix}/git/ref/{location.anchor_ref}', receipts)
         need(obj.get('ref') == 'refs/' + location.anchor_ref and type(obj.get('object')) is dict
@@ -144,6 +159,8 @@ class NativeFinishLocator:
         obj = self.read(request, f'{prefix}/git/commits/{commit}', receipts)
         need(obj.get('sha') == commit and type(obj.get('tree')) is dict,
              'FINISH_LOCATOR_COMMIT_INVALID')
+        need(type(obj.get('committer')) is dict, 'FINISH_LOCATOR_METADATA_TIME_INVALID')
+        self.metadata_time(request, obj['committer'].get('date'))
         tree = obj['tree'].get('sha')
         parts = location.path.split('/')
         for index, part in enumerate(parts):
@@ -181,6 +198,7 @@ class NativeFinishLocator:
         else:
             obj = self.read(request, f'{prefix}/issues/comments/{self.comment_id}', receipts)
             updated_at, raw = comment_payload(obj, loc, self.comment_id, prefix)
+            self.metadata_time(request, updated_at)
             pin = CommentPin(loc.repository, loc.issue_number, self.comment_id, loc.creator_id, updated_at, core.digest(raw))
             original = self.reader.comment(request, pin)
         self.check(request)

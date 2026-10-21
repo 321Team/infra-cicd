@@ -6,6 +6,7 @@ proposed producer format, operating configuration or actual completion proof.
 import base64
 import copy
 from dataclasses import replace
+from datetime import datetime, timezone
 import hashlib
 import json
 import ssl
@@ -54,7 +55,8 @@ class NativeLocatorTests(SourceFixture):
         self.data={
             self.prefix:{'id':123,'owner':{'id':321},'full_name':'synthetic-owner/synthetic-repo','private':False},
             self.prefix+'/git/ref/heads/reviewed':{'ref':'refs/heads/reviewed','object':{'type':'commit','sha':'a'*40}},
-            self.prefix+'/git/commits/'+'a'*40:{'sha':'a'*40,'tree':{'sha':'b'*40}},
+            self.prefix+'/git/commits/'+'a'*40:{'sha':'a'*40,'tree':{'sha':'b'*40},
+                'committer':{'date':'1970-01-01T00:16:00Z'},'author':{'date':'1969-01-01T00:00:00Z'}},
             self.prefix+'/git/trees/'+'b'*40:{'sha':'b'*40,'truncated':False,'tree':[
                 {'path':'docs','type':'tree','mode':'040000','sha':'c'*40}]},
             self.prefix+'/git/trees/'+'c'*40:{'sha':'c'*40,'truncated':False,'tree':[
@@ -64,7 +66,7 @@ class NativeLocatorTests(SourceFixture):
             self.prefix+'/compare/'+'a'*40+'...'+'a'*40+'?per_page=1':{'status':'identical',
                 'base_commit':{'sha':'a'*40},'merge_base_commit':{'sha':'a'*40}},
             self.prefix+'/issues/comments/8':{'id':8,'user':{'id':9},'body':self.body.decode(),
-                'created_at':'2026-01-01T00:00:00Z','updated_at':'2026-01-01T01:02:03Z',
+                'created_at':'1970-01-01T00:15:00Z','updated_at':'1970-01-01T00:16:00Z',
                 'url':'https://api.github.com'+self.prefix+'/issues/comments/8',
                 'issue_url':'https://api.github.com'+self.prefix+'/issues/7',
                 'html_url':'https://github.com/synthetic-owner/synthetic-repo/issues/7#issuecomment-8'}}
@@ -120,11 +122,14 @@ class NativeLocatorTests(SourceFixture):
         for changed in ({'id':True},{'user':{'id':True}},{'user':{'id':10}},
             {'issue_url':'https://api.github.com'+self.prefix+'/issues/99'},
             {'html_url':'https://github.com/synthetic-owner/synthetic-repo/pull/7#issuecomment-8'},
-            {'url':'https://evil.invalid'},{'created_at':'2026-02-01T00:00:00Z'},
+            {'url':'https://evil.invalid'},{'created_at':'1970-01-01T00:17:00Z'},
             {'updated_at':'2026-99-01T00:00:00Z'},{'body':''},{'body':'x'*(source.MAX_BLOB+1)}):
             self.mutate=lambda p,o:o|changed if '/comments/' in p else o
-            with self.subTest(fields=list(changed)),patch.object(self.tls,'get',side_effect=self.api):
-                with self.assertRaises(locator.FinishLocatorError):self.make()(self.request)
+            with self.subTest(fields=list(changed)),patch.object(self.tls,'get',side_effect=self.api),\
+                 patch.object(self.adapter,'comment',wraps=self.adapter.comment) as fresh:
+                with self.assertRaisesRegex(locator.FinishLocatorError,'^FINISH_LOCATOR_COMMENT_INVALID$'):
+                    self.make()(self.request)
+                fresh.assert_not_called()
         self.assertEqual([],self.decoded)
 
     def test_comment_edit_after_discovery_is_not_relocated_or_retried(self):
@@ -139,6 +144,9 @@ class NativeLocatorTests(SourceFixture):
         self.assertEqual([],self.decoded)
 
     def test_blob_ref_change_truncated_duplicate_link_and_malformed_native_data_stop(self):
+        codes={'ref':'REF_CHANGED','truncated':'TREE_INVALID','duplicate':'TREE_INVALID',
+            'symlink':'TREE_INVALID','submodule':'TREE_INVALID','commit':'COMMIT_INVALID',
+            'size':'BLOB_INVALID','base64':'UNVERIFIED','git-hash':'BLOB_INVALID'}
         for mode in ('ref','truncated','duplicate','symlink','submodule','commit','size','base64','git-hash'):
             self.calls.clear()
             def mutate(path,obj):
@@ -154,8 +162,11 @@ class NativeLocatorTests(SourceFixture):
                     if mode=='git-hash':obj['content']=base64.b64encode(b'x'*obj['size']).decode()
                 return obj
             self.mutate=mutate
-            with self.subTest(mode=mode),patch.object(self.tls,'get',side_effect=self.api):
-                with self.assertRaises(locator.FinishLocatorError):self.make()(self.request)
+            with self.subTest(mode=mode),patch.object(self.tls,'get',side_effect=self.api),\
+                 patch.object(self.adapter,'blob',wraps=self.adapter.blob) as fresh:
+                with self.assertRaisesRegex(locator.FinishLocatorError,'^FINISH_LOCATOR_'+codes[mode]+'$'):
+                    self.make()(self.request)
+                fresh.assert_not_called()
         self.assertEqual([],self.decoded)
 
     def test_pinned_fresh_read_detects_branch_change_after_initial_ref_barrier(self):
@@ -169,7 +180,10 @@ class NativeLocatorTests(SourceFixture):
 
     def test_p1_session_and_diagnostic_json_cannot_be_promoted_by_a_permissive_decoder(self):
         for schema in ('P1-CICD-deploy-session-1','P2-CICD-session-1',
-                       'P2-CICD-operational-1','P2-CICD-private-diagnostic-4'):
+                       'P2-CICD-operational-1','P2-CICD-private-diagnostic-4',
+                       'P2-CICD-complete-1','P2-CICD-recovery-inspection-1',
+                       'P2-CICD-journal-1','P2-CICD-apply-core-1',
+                       'P2-CICD-claim-1','P2-CICD-active-1'):
             self.body=core.encoded({'schema':schema,'status':'PASS'});self.setup_api()
             with self.subTest(schema=schema),patch.object(self.tls,'get',side_effect=self.api):
                 with self.assertRaisesRegex(locator.FinishLocatorError,'NOT_COMPLETION_ORIGINAL'):
@@ -222,6 +236,64 @@ class NativeLocatorTests(SourceFixture):
             self.assertEqual(1,get.call_count);self.assertNotIn(SENSITIVE,str(error.exception))
             with self.assertRaisesRegex(locator.FinishLocatorError,'CONSUMED'):native(self.request)
             self.assertEqual(1,get.call_count)
+
+    def test_native_time_is_explicit_utc_without_local_timezone_interpretation(self):
+        self.assertEqual(timezone.utc, locator.timestamp('1970-01-01T00:16:00Z').tzinfo)
+        self.assertEqual(960, locator.timestamp('1970-01-01T00:16:00Z').timestamp())
+        for value in (None, True, 960, '1970-01-01T00:16:00+00:00',
+                      '1970-01-01T00:16:00.001Z', '1970-02-30T00:00:00Z', '1970-01-01T00:00:60Z'):
+            with self.subTest(value=value),self.assertRaisesRegex(locator.FinishLocatorError,'^FINISH_LOCATOR_METADATA_TIME_INVALID$'):
+                locator.timestamp(value,'FINISH_LOCATOR_METADATA_TIME_INVALID')
+
+    def set_metadata(self, value):
+        if type(self.policy.location) is collector.CommentLocation:
+            self.data[self.prefix+'/issues/comments/8']['updated_at']=value
+            self.data[self.prefix+'/issues/comments/8']['created_at']='1970-01-01T00:00:00Z'
+        else:
+            self.data[self.prefix+'/git/commits/'+'a'*40]['committer']={'date':value}
+
+    def test_source_metadata_older_than_window_or_in_future_stops_before_pin_reader(self):
+        for comment in (False, True):
+            if comment:self.comment_mode()
+            for value in (self.policy.starts_at-1,self.h.now+1,self.policy.expires_at):
+                self.set_metadata(datetime.fromtimestamp(value,timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+                method='comment' if comment else 'blob'
+                with self.subTest(comment=comment,time=value),patch.object(self.tls,'get',side_effect=self.api),\
+                     patch.object(self.adapter,method,wraps=getattr(self.adapter,method)) as fresh:
+                    with self.assertRaisesRegex(locator.FinishLocatorError,'^FINISH_LOCATOR_METADATA_OUTSIDE_WINDOW$'):
+                        self.make()(self.request)
+                    fresh.assert_not_called()
+        self.assertEqual([],self.decoded)
+
+    def test_metadata_at_window_start_and_now_is_accepted_without_author_time(self):
+        for comment in (False,True):
+            if comment:self.comment_mode()
+            for value in (self.policy.starts_at,self.h.now):
+                self.set_metadata(datetime.fromtimestamp(value,timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+                with self.subTest(comment=comment,time=value),patch.object(self.tls,'get',side_effect=self.api):
+                    record=self.make()(self.request)
+                self.assertEqual(self.progress.key,record.facts.progress_key)
+
+    def test_missing_commit_metadata_or_invalid_type_stops_at_locator_layer(self):
+        key=self.prefix+'/git/commits/'+'a'*40
+        for committer in (None,True,{}, {'date':True},{'date':'1970-02-30T00:00:00Z'}):
+            self.data[key]['committer']=committer
+            with self.subTest(committer=committer),patch.object(self.tls,'get',side_effect=self.api),\
+                 patch.object(self.adapter,'blob',wraps=self.adapter.blob) as fresh:
+                with self.assertRaisesRegex(locator.FinishLocatorError,'^FINISH_LOCATOR_METADATA_TIME_INVALID$'):
+                    self.make()(self.request)
+                fresh.assert_not_called()
+        self.assertEqual([],self.decoded)
+
+    def test_comment_metadata_keeps_body_time_check_and_run_progress_check(self):
+        self.comment_mode()
+        # A current native envelope does NOT upgrade stale semantic facts.
+        self.set_metadata(datetime.fromtimestamp(self.h.now,timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+        self.body_data['observed_at']=self.policy.starts_at-1
+        self.body=core.encoded(self.body_data)
+        self.data[self.prefix+'/issues/comments/8']['body']=self.body.decode()
+        with patch.object(self.tls,'get',side_effect=self.api):
+            with self.assertRaises(locator.FinishLocatorError):self.make()(self.request)
 
     def test_private_repository_uses_its_existing_explicit_reader_and_denies_other_repo(self):
         credential=GitHubReadCredential('SYNTHETIC_GITHUB_SOURCE_TOKEN_000',self.repo,self.request.deadline + 1)

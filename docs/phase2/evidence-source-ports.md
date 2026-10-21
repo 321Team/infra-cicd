@@ -12,7 +12,7 @@
 2. source → 별도 trusted resolver → source → resolver 순서로 같은 ReadRequest·credential·progress·절대 monotonic deadline을 유지한다. 두 원본은 각각 새 객체여야 하며 두 판정은 동일해야 한다. 원본의 `execution_authorized`·`body_authorship_verified`는 계속 false다.
 3. issuer/platform은 원본 receipt **바이트 자체**와 Binding 해시, 동일 자격 handle/fingerprint, CA·숫자 IP, issuer/audience 필드, 실제 발급·만료 시각과 900초 이하 수명을 대조한다. 플랫폼 관측 PR98의 별도 issuer 입력으로도 사용할 수 있는 포트이나 PR98을 이 변경에서 자동 채택하지 않는다.
 4. producer는 같은 원본 바이트·공급 receipt 해시·source/contract/render/checker pin을 대조한다. 해시나 기존 `CommittedProducerBridge`만으로 clean 생성·Build/Scan/Push·current/previous 채택을 입증했다고 표시하지 않는다.
-5. finish는 로컬 session의 실제 progress가 최종 `ROLLOUT_OBSERVED`·6 ACK·2 rollout·pending 없음·checkpoint 오류 없음인지 먼저 확인한다. 6개 실제 관측 응답은 고정 객체 순서·scope·UID/resourceVersion을 검사한다. 그 뒤 별도 원본의 fresh resolver 판정이 같은 progress key·`EXCLUSIVE_ACCESS_ENDED`여야 한다. 로컬 journal이 독점 종료 원본을 대신하지 않고, `sender.close`만으로 권한 회수나 다른 세션 종료를 주장하지 않는다.
+5. finish는 로컬 session의 실제 progress가 최종 `ROLLOUT_OBSERVED`·명시 Binding의 ACK/rollout 전부·pending 없음·checkpoint 오류 없음인지 먼저 확인한다. 기존 6객체/2이미지 또는 end-page를 포함한 9객체/3이미지 profile의 실제 관측 응답은 해당 고정 객체 순서·scope·UID/resourceVersion을 검사한다. 그 뒤 별도 원본의 fresh resolver 판정이 같은 progress key·`EXCLUSIVE_ACCESS_ENDED`여야 한다. 로컬 journal이 독점 종료 원본을 대신하지 않고, `sender.close`만으로 권한 회수나 다른 세션 종료를 주장하지 않는다.
 
 모든 포트는 기존 `OriginalDecision(original, evidence)`의 exact 원본·request를 확인하고 반환한다. Platform/producer pin은 원본 receipt blob이어야 한다. 공개 성공 요약 댓글을 receipt로 변환하지 않는다. finish 원본은 검토된 blob 또는 exact 댓글을 쓸 수 있지만 실제 완료 관측·권위·기존 AC와의 대응은 resolver의 책임이다. 타입/문자열/해시만으로 이 책임이 충족되지 않는다.
 
