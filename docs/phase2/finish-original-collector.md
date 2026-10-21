@@ -51,4 +51,6 @@ python -m unittest discover -s tools/phase2 -p test_*.py -v
 
 Windows는 동기 worker 대역으로 정책·strict frame·원본/control·상태/세션/fence를 시험한다. Linux CI는 실제 fork/pipe·32KiB·hang/exit/EOF·자식/그룹 정리·FD 보존 및 실제 session/provider와 collector를 모의 연결한다. 네트워크·DNS는 금지한다. Linux 로컬 프로세스 시험을 실제 ROSA/Runner Runtime으로 표시하지 않는다.
 
-**남은 운영 연결:** 실제 native 종료 원본 형식의 locator 구현/채택과 실물 원본·권위 근거, 실제 source/credential/endpoint·권한·현장 구성, 승인된 정상/실패 배포·복구·Health/Rule Smoke 인수. collector/IPC 프레임을 만들었다는 이유로 이 입력이 확보됐거나 #46 AC가 충족됐다고 선언하지 않는다. 실제값 합성·Runtime·새 GO·티켓 종결은 수행하지 않았다.
+GitHub native blob/댓글의 실제 버전 탐색·pin 재검증 구현은 [종료 원본 locator](native-finish-locator.md)에서 이어진다. 이 탐색과 실제 종료 본문의 의미 해석은 구분한다.
+
+**남은 운영 연결:** 실제 종료 원본의 본문 형식 decoder 구현/채택과 실물 원본·권위 근거, 실제 source/credential/endpoint·권한·현장 구성, 승인된 정상/실패 배포·복구·Health/Rule Smoke 인수. collector/IPC 프레임이나 GitHub 탐색 코드를 만들었다는 이유로 이 입력이 확보됐거나 #46 AC가 충족됐다고 선언하지 않는다. 실제값 합성·Runtime·새 GO·티켓 종결은 수행하지 않았다.
