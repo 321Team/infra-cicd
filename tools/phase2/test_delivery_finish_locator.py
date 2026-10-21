@@ -182,6 +182,7 @@ class NativeLocatorTests(SourceFixture):
         for schema in ('P1-CICD-deploy-session-1','P2-CICD-session-1',
                        'P2-CICD-operational-1','P2-CICD-private-diagnostic-4',
                        'P2-CICD-complete-1','P2-CICD-recovery-inspection-1',
+                       'P2-CICD-post-close-observation-1',
                        'P2-CICD-journal-1','P2-CICD-apply-core-1',
                        'P2-CICD-claim-1','P2-CICD-active-1'):
             self.body=core.encoded({'schema':schema,'status':'PASS'});self.setup_api()

@@ -23,6 +23,16 @@ class BoundSender:
     close: object = field(repr=False)
 
 
+@dataclass(frozen=True)
+class SenderClosed:
+    """Session-local successful close, NOT token/other-session revocation."""
+    credential: object = field(repr=False)
+    binding_key: str
+    progress_key: str
+    wall: float
+    monotonic: float
+
+
 def run_session(binding, rendered, contract, validator, *, root, providers, credential,
                 sender_factory, budget_seconds, acquire=store.acquire,
                 journal_factory=store.Journal, wall=time.time,
@@ -110,6 +120,11 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
             stage = 'COMPLETION_DENIED'
             claim.check()
             journal.check()
+            if getattr(providers, 'wants_finish_observation', False) is True:
+                # Only this actual close-success path creates the local event.
+                # Legacy providers/default behavior do not acquire a new hook.
+                providers.sender_closed(SenderClosed(credential, binding.key,
+                    progress().key, effective_wall(), monotonic()))
             verifier.finish(binding)
             claim.check()
             journal.check()

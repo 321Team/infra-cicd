@@ -72,7 +72,7 @@ class AdmittedBaseline:
 
 class OperationalProviders:
     def __init__(self, binding, credential, progress, *, rendered, contract,
-                 validator, adapters, diagnostic_sink, wall, monotonic):
+                 validator, adapters, diagnostic_sink, wall, monotonic, observation_sink=None):
         core.binding_checked(binding)
         require(type(credential) is BearerCredential and callable(progress)
                 and type(adapters) is AuthorityAdapters
@@ -87,6 +87,20 @@ class OperationalProviders:
         self.diagnostic_status = 'NONE'
         self.object_failure_code = None
         self.closed = False
+        self.observation_sink, self._sender_closed = observation_sink, None
+
+    @property
+    def wants_finish_observation(self):
+        from delivery_finish_observation import ReadbackFinishAuthority
+        return self.adapters is not None and type(self.adapters.finish) is ReadbackFinishAuthority
+
+    def sender_closed(self, event):
+        from delivery_session import SenderClosed
+        require(self.wants_finish_observation and self._sender_closed is None
+                and type(event) is SenderClosed and event.credential is self.credential
+                and event.binding_key == self.binding.key and event.progress_key == self.progress().key,
+                'FINISH_CLOSE_EVENT_INVALID')
+        self._sender_closed = event
 
     def request_checked(self, r):
         require(not self.closed and type(r) is ReadRequest and r.binding == self.binding
@@ -160,6 +174,15 @@ class OperationalProviders:
             raise
 
     def finish(self, r):
+        if self.wants_finish_observation:
+            self.request_checked(r)
+            value = self.adapters.finish.finish_observed(r, self._sender_closed,
+                self.object_provider, self.observation_sink)
+            self.request_checked(r)
+            require(type(value) is CompletionEvidence and value.request is r,
+                    'AUTHORITY_EVIDENCE_INVALID')
+            provenance_checked(value.provenance)
+            return value
         return self.read('finish', r, CompletionEvidence)
 
     def close(self):
@@ -169,6 +192,7 @@ class OperationalProviders:
         self.reader = self.object_provider = self.adapters = self.credential = None
         self.pins = None
         self.object_failure_code = None
+        self.observation_sink = self._sender_closed = None
 
 
 @dataclass(frozen=True)
@@ -225,8 +249,13 @@ class OperationalApplication:
             validator=self._validator, adapters=self._adapters,
             diagnostic_sink=lambda b, p, t, d: diagnostics.persist(
                 self.inputs.store_root, b, p, t, d, phase=self._diagnostic_phase),
+            observation_sink=lambda b, raw: self.persist_observation(b, raw),
             wall=self.wall, monotonic=self.monotonic)
         return self._providers
+
+    def persist_observation(self, binding, raw):
+        from delivery_finish_observation import persist
+        persist(self.inputs.store_root, binding, raw)
 
     def run(self, command):
         result = {'schema': 'P2-CICD-operational-1', 'status': 'STOPPED',

@@ -221,7 +221,8 @@ class RuntimeAuthorityFactory:
     Readers are borrowed. Caller owns their credentials/lifecycle.
     """
     def __init__(self, plan, readers, finish_slot, *, wall=time.time, monotonic=time.monotonic,
-                 finish_capture=None,producer_pins=None,producer_run_reader=None,finish_collection=None):
+                 finish_capture=None,producer_pins=None,producer_run_reader=None,finish_collection=None,
+                 finish_observation=None):
         need(type(plan) is RuntimeAuthorityPlan and type(plan.approval) is AdoptedGrant
              and type(plan.issuer) is EvidenceAdoption and type(plan.producer) is EvidenceAdoption
              and type(plan.issuer.facts) is IssuerFacts and type(plan.producer.facts) is ProducerFacts
@@ -244,6 +245,16 @@ class RuntimeAuthorityFactory:
         need(binding.action == 'deploy' or plan.baseline is not None, 'RUNTIME_SITE_FIRST_DEPLOY_ONLY')
         need(plan.issuer.grant.binding == plan.producer.grant.binding == finish_slot.binding == binding,
              'RUNTIME_SITE_BINDING_MISMATCH')
+        if finish_observation is not None:
+            from delivery_finish_observation import FinishObservationConfig
+            need(type(finish_observation) is FinishObservationConfig
+                 and finish_capture is None and finish_collection is None and not finish_slot.installed,
+                 'FINISH_OBSERVATION_CONFIGURATION_INVALID')
+            try:
+                finish_observation.check(binding)
+            except Exception:
+                raise RuntimeSiteError('FINISH_OBSERVATION_CONFIGURATION_INVALID') from None
+            need(finish_observation.readers == readers[3], 'FINISH_OBSERVATION_READERS_MISMATCH')
         if finish_collection is not None:
             # Local import avoids a module cycle; config has no live credential
             # or progress until this factory is invoked by the actual session.
@@ -267,6 +278,7 @@ class RuntimeAuthorityFactory:
         self.wall, self.monotonic, self.used = wall, monotonic, False
         self.finish_capture,self.producer_pins,self.producer_run_reader=finish_capture,producer_pins,producer_run_reader
         self.finish_collection=finish_collection
+        self.finish_observation=finish_observation
 
     def __call__(self, binding, credential, progress):
         need(not self.used and type(credential) is BearerCredential
@@ -334,8 +346,12 @@ class RuntimeAuthorityFactory:
                 capture=self.finish_collection.bind(binding,credential,progress,
                     wall=self.wall,monotonic=self.monotonic)
                 owned.append(capture)
-            finish = DeferredFinish(binding, credential, progress, self.slot,
-                                     self.readers[3], self.wall, self.monotonic,capture)
+            if self.finish_observation is not None:
+                finish = self.finish_observation.bind(binding, credential, progress,
+                    wall=self.wall, monotonic=self.monotonic)
+            else:
+                finish = DeferredFinish(binding, credential, progress, self.slot,
+                                         self.readers[3], self.wall, self.monotonic,capture)
             owned.append(finish)
             bundle = AuthorityBundle(AuthorityAdapters(approval, platform, producer, baseline, finish), tuple(owned))
             transferred = True
@@ -353,11 +369,12 @@ class RuntimeAuthorityFactory:
             self.plan = self.readers = self.slot = None
             self.finish_capture=self.producer_pins=self.producer_run_reader=None
             self.finish_collection=None
+            self.finish_observation=None
 
 
 def main(argv=None, *, config=None, plan=None, readers=None, finish_slot=None,
          receiver=None, handoff_deadline=None,finish_capture=None,
-         producer_pins=None,producer_run_reader=None,finish_collection=None):
+         producer_pins=None,producer_run_reader=None,finish_collection=None,finish_observation=None):
     parser = cli.SafeParser(description='Reviewed-code runtime site entry point; no default target.')
     parser.add_argument('command', choices=('status', 'preflight', 'deploy', 'restore'))
     # Ownership transfers only for an exact receiver, never an arbitrary close callback.
@@ -369,7 +386,8 @@ def main(argv=None, *, config=None, plan=None, readers=None, finish_slot=None,
             return site.blocked('RUNTIME_SITE_UNCONFIGURED')
         site.configuration_checked(config)
         factory = RuntimeAuthorityFactory(plan, readers, finish_slot,finish_capture=finish_capture,
-            producer_pins=producer_pins,producer_run_reader=producer_run_reader,finish_collection=finish_collection)
+            producer_pins=producer_pins,producer_run_reader=producer_run_reader,finish_collection=finish_collection,
+            finish_observation=finish_observation)
         need(config.binding == plan.approval.binding, 'RUNTIME_SITE_BINDING_MISMATCH')
         if args.command == 'status':
             # No file reads, authority calls, credential receipt, sockets or claim.
