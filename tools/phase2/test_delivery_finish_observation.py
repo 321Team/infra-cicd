@@ -156,6 +156,47 @@ class ObservationTests(unittest.TestCase):
         self.read_hook = change
         self.stopped(self.app().run('deploy')); self.assertEqual([], self.saved)
 
+    def rollout_fixture(self):
+        # Directly exercise the rollout layer: stale generation must not be
+        # masked by an earlier UID/spec/reconciler failure in an end-to-end test.
+        obj=next(d for d in json.loads(self.h.render) if d['kind']=='Deployment')
+        obj['metadata']['generation']=2
+        count=obj['spec']['replicas']
+        obj['status']={'observedGeneration':2,'replicas':count,'updatedReplicas':count,
+                       'readyReplicas':count,'availableReplicas':count}
+        obs._rollout(core.encoded(obj))
+        return obj
+
+    def test_rollout_observed_generation_stale_rejected_at_rollout_layer(self):
+        obj=self.rollout_fixture();obj['status']['observedGeneration']=1
+        with self.assertRaisesRegex(obs.FinishObservationError, '^FINISH_OBSERVATION_ROLLOUT_NOT_READY$'):
+            obs._rollout(core.encoded(obj))
+
+    def test_rollout_unavailable_or_terminating_nonzero_rejected_at_rollout_layer(self):
+        for field in ('unavailableReplicas','terminatingReplicas'):
+            obj=self.rollout_fixture();obj['status'][field]=1
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    obs.FinishObservationError, '^FINISH_OBSERVATION_ROLLOUT_NOT_READY$'):
+                obs._rollout(core.encoded(obj))
+
+    def test_rollout_progress_deadline_exceeded_rejected_at_rollout_layer(self):
+        obj=self.rollout_fixture();obj['status']['conditions']=[{
+            'type':'Progressing','status':'False','reason':'ProgressDeadlineExceeded'}]
+        with self.assertRaisesRegex(obs.FinishObservationError, '^FINISH_OBSERVATION_ROLLOUT_INVALID$'):
+            obs._rollout(core.encoded(obj))
+
+    def test_sender_closed_duplicate_event_rejected_while_provider_is_live(self):
+        original=provider.OperationalProviders.sender_closed;denied=[]
+        def twice(p,event):
+            original(p,event)
+            with self.assertRaisesRegex(VerificationError, '^FINISH_CLOSE_EVENT_INVALID$'):
+                original(p,event)
+            denied.append(True)
+        with patch.object(provider.OperationalProviders,'sender_closed',new=twice):
+            out=self.app().run('deploy')
+        self.assertEqual('SESSION_COMPLETED',out['status'],out)
+        self.assertEqual([True],denied);self.assertEqual(1,len(self.saved))
+
     def test_scope_withdrawal_after_persistence_keeps_original_and_fence(self):
         def save(root, binding, raw):
             self.saved.append((binding, raw)); self.base.raws['control'] = b'SYNTHETIC_WITHDRAWN'

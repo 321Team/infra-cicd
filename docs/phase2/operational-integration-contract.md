@@ -47,6 +47,8 @@ provider의 읽기 작업에도 deadline을 적용하고 그 경과 시간을 �
 
 restore는 앱별 previous-approved 렌더와 별도 action/승인을 사용한다. 새 승인/새 RUN만 갖추었다고 기존 active 충돌을 우회할 수는 없다. 먼저 기존 회차를 검토해야 한다.
 
+최초 P2 배포의 명시적 `previous 없음`은 [최초 입력 연결](first-deployment-inputs.md)대로 소비한다. 공식 runtime factory의 deploy+FirstDeploymentBaseline 경로에서 정확한 6/9 객체가 모두 fresh NotFound일 때만 가능하며, 기존 대상 재배포·restore의 previous 요구를 면제하지 않는다. source/current/clean lineage·scope/자격 검사는 유지하고, 실패 시 기존 pending/fence 보존·사람 대조 없이 가짜 previous나 자동 restore를 만들지 않는다.
+
 ## 통합 MOCK의 다음 검증 범위
 
 이번에는 문서만 바꿨으므로 기존 135건을 다시 돌리지 않았다. 아래는 **새 통합 구현 이후의 시험 설계**이며 PASS 결과가 아니다. 동일 코어 시험은 재사용하고 provider 연결과 프로세스 수명주기만 추가한다. 시험은 합성 provider·fake sender/clock·격리 POSIX 임시 저장소에서 수행하며 실제 AWS/ROSA/DNS/token 발급은 호출하지 않는다.

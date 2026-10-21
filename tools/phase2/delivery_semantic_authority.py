@@ -47,7 +47,9 @@ class IssuerFacts:
 @dataclass(frozen=True)
 class ProducerFacts:
     images: tuple = field(repr=False)
-    previous_images: tuple = field(repr=False)
+    # Explicitly code-adopted absence for a FIRST empty-target deploy only;
+    # never default/missing input, empty tuple, or copied current images.
+    previous_images: tuple | None = field(repr=False)
     source_commit: str = field(repr=False)
     contract_sha256: str = field(repr=False)
     rendered_sha256: str = field(repr=False)
@@ -85,18 +87,21 @@ class CodeAdoptedEvidenceResolver:
     The actual deployment grant is checked by the separate approval adapter.
     """
     def __init__(self, *, role, grant, facts, control_reader, credential, progress,
-                 wall=time.time, monotonic=time.monotonic):
+                 wall=time.time, monotonic=time.monotonic, first_deployment=False):
         self.authority, self.closed = None, False
         try:
             kind = {'platform': IssuerFacts, 'producer': ProducerFacts, 'finish': FinishFacts}.get(role)
             need(kind is not None and type(grant) is AdoptedGrant and type(facts) is kind
                  and type(credential) is BearerCredential, 'SEMANTIC_POLICY_INVALID')
+            need(type(first_deployment) is bool and (role == 'producer' or not first_deployment),
+                 'SEMANTIC_FIRST_DEPLOY_POLICY_INVALID')
             need(role == 'finish' or type(grant.original_pin) is BlobPin,
                  'SEMANTIC_RECEIPT_BLOB_REQUIRED')
             self.authority = CodeAdoptedGrantResolver(grant=grant, control_reader=control_reader,
                 credential=credential, progress=progress, wall=wall, monotonic=monotonic)
             self.role, self.grant, self.facts = role, grant, facts
             self.credential, self.progress, self.closed = credential, progress, False
+            self.first_deployment = first_deployment
             if role == 'platform':
                 self.issuer_checked()
             elif role == 'producer':
@@ -141,11 +146,17 @@ class CodeAdoptedEvidenceResolver:
         need((f.images, f.source_commit, f.contract_sha256, f.rendered_sha256, f.checker_sha256)
              == (b.images, b.source_commit, b.contract_sha256, b.rendered_sha256, CHECKER_SHA256),
              'SEMANTIC_PRODUCER_BINDING_MISMATCH')
-        # Previous-approved is an explicit complete immutable profile, not a
-        # mutable tag or a default copied from current. Same digest may be valid.
-        core.binding_checked(replace(b, images=f.previous_images))
-        need(tuple(x[0] for x in f.previous_images) == core.services_for(b),
-             'SEMANTIC_PRODUCER_PREVIOUS_INVALID')
+        if f.previous_images is None:
+            # #43 explicitly accepts no previous P2 digest on the first deploy.
+            # Runtime site must additionally select FirstDeploymentBaseline,
+            # which admits ONLY fresh exact-profile 404s before the first write.
+            need(self.first_deployment and b.action == 'deploy',
+                 'SEMANTIC_PRODUCER_FIRST_DEPLOY_REQUIRED')
+        else:
+            # Explicit full immutable profile, never a mutable/partial fallback.
+            core.binding_checked(replace(b, images=f.previous_images))
+            need(tuple(x[0] for x in f.previous_images) == core.services_for(b),
+                 'SEMANTIC_PRODUCER_PREVIOUS_INVALID')
         need(all(text(x, 2048) for x in (f.test_reference, f.build_reference,
              f.scan_reference, f.push_reference, f.clean_render_reference, f.adoption_reference)),
              'SEMANTIC_PRODUCER_LINEAGE_MISSING')

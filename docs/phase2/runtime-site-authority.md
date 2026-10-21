@@ -19,7 +19,7 @@
 | 대상 | 구현된 대조 | 운영 연결 시 필요한 실제 근거 |
 |---|---|---|
 | issuer | 원본 바이트/receipt, 동일 자격 지문, issuer/audience, 실제 발급·만료, 요청 900초·실제 수명 900초 이하, CA·숫자 IP, RBAC/Route 원본 참조 | 실제 발급·권한 원본의 의미와 신뢰를 채택한 구성 |
-| producer | Binding의 source/contract/render/checker·current 이미지 전체, previous 이미지의 서비스 순서·불변 digest, Test/Build/Scan/Push·clean render·P2 채택 참조 | 그 참조가 같은 공급 계보라는 실제 원본 검토 |
+| producer | Binding의 source/contract/render/checker·current 이미지 전체, previous 전체 profile 또는 명시 채택한 최초 부재, Test/Build/Scan/Push·clean render·P2 채택 참조 | 그 참조가 같은 공급 계보라는 실제 원본 검토. [최초 부재](first-deployment-inputs.md)는 deploy+빈 대상의 exact 404 baseline 경로에서만 허용 |
 | finish | 같은 RUN/action, 실제 durable terminal progress의 key, 모든 ACK/응답·UID·rollout, 관측 시각과 후속/독점 종료 원본 | 실제 실행 후 생성된 원본과 그 의미·판정권 |
 | 기존 객체 기준선 | 별도 채택 원본·control 재조회 사이에 동일 자격으로 GET하고 승인된 UID/spec/owner와 비교 | 복구/기존 객체의 허용 소유·사양 검토. fresh GET을 자동 승인하지 않음 |
 
