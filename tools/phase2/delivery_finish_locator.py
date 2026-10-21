@@ -85,6 +85,7 @@ def _not_completion(raw):
         need(not (schema.startswith(('P1-', 'P2-CICD-private-diagnostic-'))
              or schema in ('P2-CICD-session-1', 'P2-CICD-operational-1',
                 'P2-CICD-complete-1', 'P2-CICD-recovery-inspection-1',
+                'P2-CICD-post-close-observation-1',
                 'P2-CICD-journal-1', 'P2-CICD-apply-core-1',
                 'P2-CICD-claim-1', 'P2-CICD-active-1')),
              'FINISH_LOCATOR_NOT_COMPLETION_ORIGINAL')

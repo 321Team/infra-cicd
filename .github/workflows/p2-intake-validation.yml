@@ -2,8 +2,8 @@ name: P2 intake offline validation
 
 on:
   pull_request:
-    # PR100/101/102 stack dependencies: exact bases for offline tests only.
-    branches: [main, codex/p2-nine-object-contract-20261020, codex/p2-operational-site-auth-20261021, codex/p2-run-gate-finish-20261021]
+    # Exact stack bases for hosted offline tests only; no self-hosted Runner.
+    branches: [main, codex/p2-nine-object-contract-20261020, codex/p2-operational-site-auth-20261021, codex/p2-run-gate-finish-20261021, codex/p2-native-finish-decoder-20261021]
     paths: ['tools/phase2/**', 'templates/phase2/**', '.github/workflows/p2-intake-validation.yml']
   push:
     branches: [main]
