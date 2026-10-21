@@ -378,7 +378,15 @@ class RuntimeAuthorityFactory:
 
 def main(argv=None, *, config=None, plan=None, readers=None, finish_slot=None,
          receiver=None, handoff_deadline=None,finish_capture=None,
-         producer_pins=None,producer_run_reader=None,finish_collection=None,finish_observation=None):
+         producer_pins=None,producer_run_reader=None,finish_collection=None,finish_observation=None,
+         source_session=None):
+    if source_session is not None:
+        from delivery_source_session import run_site
+        return run_site(argv, source_session=source_session, config=config, plan=plan,
+            readers=readers, finish_slot=finish_slot, receiver=receiver,
+            handoff_deadline=handoff_deadline, finish_capture=finish_capture,
+            producer_pins=producer_pins, producer_run_reader=producer_run_reader,
+            finish_collection=finish_collection, finish_observation=finish_observation)
     parser = cli.SafeParser(description='Reviewed-code runtime site entry point; no default target.')
     parser.add_argument('command', choices=('status', 'preflight', 'deploy', 'restore'))
     # Ownership transfers only for an exact receiver, never an arbitrary close callback.
