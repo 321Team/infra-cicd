@@ -29,7 +29,7 @@ PR101의 빈 `FinishAdoptionSlot`을 실제로 채울 시점이 main 경로에�
 
 `runtime.main(..., finish_capture=..., producer_pins=..., producer_run_reader=...)`에서 두 연결을 명시적으로 전달할 수 있다. status는 callback·source 조회·pipe 수신을 하지 않는다. preflight도 finish를 호출하지 않으며 실제 적용·종료의 승인이 아니다. 이미 유효한 slot이 있으면 새 capture 없이 기존 원본을 재검증한다. capture 미설정/실패/초과/진행 변경/미래 시각/잘못된 자료는 STOP, fence 유지이고 실패한 capture를 자동 재시도하지 않는다. 기본 단독 CLI STOP은 유지한다.
 
-collector의 I/O는 **그 구현이 request.deadline 안에서 취소·완료해야 한다.** wrapper의 호출 전후 시계 검사만으로 무한 대기하는 Python callback을 강제 취소하지 않는다. 실제 collector 구현·원본 형식/권한의 운영 채택은 아직 구성하지 않았으며 이를 합성해 실행 가능 상태로 만들지 않는다. collector와 source reader는 부모 소유다. adapter close는 로컬 참조 정리이며 실제 토큰 회수가 아니다.
+collector의 I/O는 **그 구현이 request.deadline 안에서 취소·완료해야 한다.** wrapper의 호출 전후 시계 검사만으로 무한 대기하는 Python callback을 강제 취소하지 않는다. 후속 [종료 원본 collector](finish-original-collector.md)는 Linux 별도 프로세스의 실제 원본/control 인증과 단회 hard timeout·kill/reap을 구현한다. 실제 native 원본 형식의 locator·권위/운영 채택은 별도 입력이며 이를 합성해 실행 가능 상태로 만들지 않는다. collector와 source reader는 부모 소유다. adapter close는 로컬 참조 정리이며 실제 토큰 회수가 아니다.
 
 ## 실패 경로와 오프라인 시험
 
