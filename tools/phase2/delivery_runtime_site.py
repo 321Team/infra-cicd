@@ -25,6 +25,7 @@ from delivery_provider import AuthorityAdapters, AuthorityBundle, AdmittedBaseli
 from delivery_semantic_authority import (CodeAdoptedEvidenceResolver, IssuerFacts,
                                          ProducerFacts, FinishFacts, terminal_checked)
 from delivery_verifier import Progress, Provenance, ReadRequest
+from delivery_actions_source import ActionsRunSource, ActionsCheckedProducer, policy_checked
 
 
 class RuntimeSiteError(RuntimeError):
@@ -122,6 +123,10 @@ class FinishAdoptionSlot:
         core.binding_checked(binding)
         self.binding, self._record = binding, None
 
+    @property
+    def installed(self):
+        return self._record is not None
+
     def install(self, record, progress):
         need(self._record is None, 'FINISH_ADOPTION_ALREADY_INSTALLED')
         need(type(record) is EvidenceAdoption and type(record.grant) is AdoptedGrant
@@ -145,13 +150,41 @@ class FinishAdoptionSlot:
 
 
 class DeferredFinish:
-    def __init__(self, binding, credential, progress, slot, readers, wall, monotonic):
+    def __init__(self, binding, credential, progress, slot, readers, wall, monotonic, capture=None):
+        need(capture is None or callable(capture),'FINISH_CAPTURE_CONFIGURATION_INVALID')
         self.binding, self.credential, self.progress = binding, credential, progress
         self.slot, self.readers, self.wall, self.monotonic = slot, readers, wall, monotonic
+        self.capture,self.capture_called,self._last,self._anchor=capture,False,None,None
+
+    def check(self,request):
+        need(self.credential is not None and type(request) is ReadRequest
+             and request.binding==self.binding and request.credential is self.credential
+             and self.progress()==request.progress,'FINISH_ADOPTION_REQUEST_INVALID')
+        wall,mono=self.wall(),self.monotonic()
+        need(core.finite(wall) and core.finite(mono) and (self._last is None or
+             wall>=self._last[0] and mono>=self._last[1]),'FINISH_CAPTURE_CLOCK_INVALID')
+        self._last=wall,mono
+        if self._anchor is None:self._anchor=wall,mono
+        need(core.finite(request.deadline) and mono<request.deadline,'FINISH_CAPTURE_DEADLINE_EXCEEDED')
+        return max(wall,self._anchor[0]+mono-self._anchor[1])
 
     def __call__(self, request):
-        need(self.credential is not None and request.credential is self.credential
-             and self.progress() == request.progress, 'FINISH_ADOPTION_REQUEST_INVALID')
+        self.check(request)
+        terminal_checked(self.binding,request.progress)
+        self.check(request)  # Terminal validation time also consumes the deadline.
+        if not self.slot.installed and self.capture is not None:
+            need(not self.capture_called,'FINISH_CAPTURE_CONSUMED')
+            self.capture_called=True  # A failed/late capture is never retried.
+            try:
+                record=self.capture(request)
+            except Exception:
+                raise RuntimeSiteError('FINISH_CAPTURE_FAILED') from None
+            now=self.check(request)
+            need(type(record) is EvidenceAdoption and type(record.facts) is FinishFacts
+                 and core.finite(record.facts.observed_at) and record.facts.observed_at<=now,
+                 'FINISH_CAPTURE_RESULT_INVALID')
+            # Actual progress, then the unchanged source/control authentication.
+            self.slot.install(record,request.progress)
         record = self.slot.get(request)  # Missing/partial completion performs no source I/O.
         resolver = port = None
         try:
@@ -177,7 +210,7 @@ class DeferredFinish:
             need(not failed, 'FINISH_ADOPTION_CLEANUP_FAILED')
 
     def close(self):
-        self.credential = self.progress = self.slot = self.readers = None
+        self.credential = self.progress = self.slot = self.readers = self.capture = None
 
 
 class RuntimeAuthorityFactory:
@@ -187,7 +220,8 @@ class RuntimeAuthorityFactory:
     No baseline means first deployment only, with fresh classified absence.
     Readers are borrowed. Caller owns their credentials/lifecycle.
     """
-    def __init__(self, plan, readers, finish_slot, *, wall=time.time, monotonic=time.monotonic):
+    def __init__(self, plan, readers, finish_slot, *, wall=time.time, monotonic=time.monotonic,
+                 finish_capture=None,producer_pins=None,producer_run_reader=None):
         need(type(plan) is RuntimeAuthorityPlan and type(plan.approval) is AdoptedGrant
              and type(plan.issuer) is EvidenceAdoption and type(plan.producer) is EvidenceAdoption
              and type(plan.issuer.facts) is IssuerFacts and type(plan.producer.facts) is ProducerFacts
@@ -195,6 +229,16 @@ class RuntimeAuthorityFactory:
              and type(readers) is tuple and len(readers) == (4 if plan.baseline is None else 5)
              and all(type(x) is SourceReaders for x in readers)
              and callable(wall) and callable(monotonic), 'RUNTIME_SITE_PLAN_INVALID')
+        need(finish_capture is None or callable(finish_capture),'FINISH_CAPTURE_CONFIGURATION_INVALID')
+        need((producer_pins is None)==(producer_run_reader is None),'ACTIONS_CONFIGURATION_INVALID')
+        if producer_pins is not None:
+            policy_checked(producer_pins)
+            need(type(producer_run_reader) in (GitHubOriginalAdapter,PrivateGitHubOriginalAdapter),
+                 'ACTIONS_CONFIGURATION_INVALID')
+            f=plan.producer.facts
+            need(tuple(p.producer_reference for p in producer_pins)==(
+                f.test_reference,f.build_reference,f.scan_reference,f.push_reference),
+                'ACTIONS_PRODUCER_REFERENCE_MISMATCH')
         binding = plan.approval.binding
         core.binding_checked(binding)
         need(binding.action == 'deploy' or plan.baseline is not None, 'RUNTIME_SITE_FIRST_DEPLOY_ONLY')
@@ -209,6 +253,7 @@ class RuntimeAuthorityFactory:
             r.check()
         self.plan, self.readers, self.slot = plan, readers, finish_slot
         self.wall, self.monotonic, self.used = wall, monotonic, False
+        self.finish_capture,self.producer_pins,self.producer_run_reader=finish_capture,producer_pins,producer_run_reader
 
     def __call__(self, binding, credential, progress):
         need(not self.used and type(credential) is BearerCredential
@@ -237,6 +282,15 @@ class RuntimeAuthorityFactory:
                     pin=record.grant.original_pin, resolver=resolver, binding=binding,
                     credential=credential, progress=progress, wall=self.wall, monotonic=self.monotonic)
                 owned.append(port); ports.append(port)
+            producer=ports[1]
+            if self.producer_pins is not None:
+                gate=ActionsRunSource(reader=self.producer_run_reader,pins=self.producer_pins,
+                    binding=binding,credential=credential,progress=progress,monotonic=self.monotonic)
+                owned.append(gate)
+                f=plan.producer.facts
+                producer=ActionsCheckedProducer(source=producer,gate=gate,references=(
+                    f.test_reference,f.build_reference,f.scan_reference,f.push_reference))
+                owned.append(producer)
             facts = plan.issuer.facts
             observer = PlatformObservationReader(binding, credential=credential,
                 expected_subject=plan.subject, progress=progress, ca_pem=facts.ca_pem,
@@ -263,9 +317,9 @@ class RuntimeAuthorityFactory:
                 baseline=CodeAdoptedBaseline(plan.baseline,baseline_source,object_reader,progress)
                 owned.append(baseline)
             finish = DeferredFinish(binding, credential, progress, self.slot,
-                                     self.readers[3], self.wall, self.monotonic)
+                                     self.readers[3], self.wall, self.monotonic,self.finish_capture)
             owned.append(finish)
-            bundle = AuthorityBundle(AuthorityAdapters(approval, platform, ports[1], baseline, finish), tuple(owned))
+            bundle = AuthorityBundle(AuthorityAdapters(approval, platform, producer, baseline, finish), tuple(owned))
             transferred = True
             return bundle
         except Exception:
@@ -279,10 +333,12 @@ class RuntimeAuthorityFactory:
                         pass
             # Do not retain site plans/readers after transferring ownership.
             self.plan = self.readers = self.slot = None
+            self.finish_capture=self.producer_pins=self.producer_run_reader=None
 
 
 def main(argv=None, *, config=None, plan=None, readers=None, finish_slot=None,
-         receiver=None, handoff_deadline=None):
+         receiver=None, handoff_deadline=None,finish_capture=None,
+         producer_pins=None,producer_run_reader=None):
     parser = cli.SafeParser(description='Reviewed-code runtime site entry point; no default target.')
     parser.add_argument('command', choices=('status', 'preflight', 'deploy', 'restore'))
     # Ownership transfers only for an exact receiver, never an arbitrary close callback.
@@ -293,7 +349,8 @@ def main(argv=None, *, config=None, plan=None, readers=None, finish_slot=None,
         if config is None:
             return site.blocked('RUNTIME_SITE_UNCONFIGURED')
         site.configuration_checked(config)
-        factory = RuntimeAuthorityFactory(plan, readers, finish_slot)
+        factory = RuntimeAuthorityFactory(plan, readers, finish_slot,finish_capture=finish_capture,
+            producer_pins=producer_pins,producer_run_reader=producer_run_reader)
         need(config.binding == plan.approval.binding, 'RUNTIME_SITE_BINDING_MISMATCH')
         if args.command == 'status':
             # No file reads, authority calls, credential receipt, sockets or claim.

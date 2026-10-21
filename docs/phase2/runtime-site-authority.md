@@ -1,5 +1,7 @@
 # #46 운영 인증 판정·현장 진입점 구현
 
+후속: [native Run·종료 관측 연결](native-run-finish-connection.md)은 선택적 Test/Build/Scan/Push Run 관측과 sender.close 뒤 finish 인수 hook을 제공한다. 아래의 실제 원본·운영 채택 및 Runtime 구분은 유지한다.
+
 이 변경은 운영용 **코드 구현과 오프라인 검증**이다. 기존 callback 경계에 구체적인 원본 의미 채택 판정기와 현장 연결 factory를 제공한다. 실제 원본·자격·운영값 채택, Runtime 실행, 정상/실패 배포·Health/Rule·복구 인수는 별도이며 #46은 In Progress다.
 
 ## 구현 범위와 신뢰 전제
