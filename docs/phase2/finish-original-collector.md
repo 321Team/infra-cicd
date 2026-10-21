@@ -13,7 +13,9 @@ PR102의 `finish_capture` 실행 지점에 연결할 collector 구현이다. 실
 - `locate(request)`: 기존 native 원본의 의미와 권위를 채택한 **검토된 사이트 코드**. 실제 종료 이후 확보한 `EvidenceAdoption`을 반환한다. 파일/JSON/CLI/env에서 임의 권한을 로드하는 callback이 아니며, 실제 원본 없이 예측 facts·해시를 만들 수 없다. 기존 원본 형식을 해석하는 역할이므로 새 생산자 양식·새 GO·별도 서명 키를 요구하지 않는다.
 - `max_seconds`: 원본 조회와 프로세스 회수에 쓸 시간 상한. 0.05~120초 범위의 명시적 코드 설정이며 실제 승인의 기간을 늘리지 않는다.
 
-`runtime.main`의 기존 `finish_capture` 인자에 collector 객체를 전달한다. actual progress closure를 아는 부모가 구성해야 한다. core/기본 CLI에 기본 collector나 환경 탐색·자동 설정은 추가하지 않았다. 부모가 collector와 borrowed reader의 수명을 관리한다. collector의 `close()`는 로컬 참조만 버리며 공유 reader·실제 토큰·운영 권한을 회수하지 않는다.
+실제 main 경로에는 자격·progress를 아직 갖지 않은 `FinishCollectorConfig(policy, readers, locate, max_seconds)`를 `runtime.main(..., finish_collection=...)`으로 전달한다. `RuntimeAuthorityFactory`가 자격 수신 뒤 실제 session progress closure를 알게 되는 시점에 collector를 bind하고 bundle 소유로 등록한다. 따라서 부모가 미래 progress를 만들거나 sender.close를 교체해 설치할 필요가 없다. policy Binding과 원본/control reader가 해당 factory의 finish 설정과 같아야 하며 기존 `finish_capture`와 동시 지정은 거부한다.
+
+기존 `finish_capture` callback 경로는 유지한다. core/기본 CLI에 기본 collector나 환경 탐색·자동 설정은 추가하지 않았다. factory가 만든 collector는 성공·실패·부분 구성 후 bundle이 로컬 참조를 정리하고, borrowed reader의 수명은 부모가 관리한다. collector의 `close()`는 공유 reader·실제 토큰·운영 권한을 회수하지 않는다. status에서는 자격 수신·bind·worker가 모두 0회이고 preflight도 worker를 호출하지 않는다.
 
 실제 호출 순서는 다음과 같다.
 

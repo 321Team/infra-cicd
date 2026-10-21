@@ -5,6 +5,8 @@ Linux tests below exercise real process/pipe supervision and actual session
 composition, without touching AWS/ROSA/Runner or real credentials.
 """
 from dataclasses import replace
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -22,6 +24,7 @@ import delivery_finish_worker as worker
 import delivery_runtime_site as runtime
 from delivery_github_source import CommentPin, SourceOriginal
 from delivery_object_reader import BearerCredential
+from delivery_credential_channel import PipeCredentialReceiver
 from delivery_semantic_authority import FinishFacts
 from delivery_verifier import Progress
 from test_delivery_adapter import Harness, SENSITIVE
@@ -189,7 +192,7 @@ class CollectorSessionTests(unittest.TestCase):
     def setUp(self):
         self.base = prior.RuntimeSiteTests('runTest'); self.base.setUp(); self.addCleanup(self.base.doCleanups)
 
-    def app(self, locate=None):
+    def config(self, locate=None):
         b = self.base; g = b.grants['finish']
         policy = collector.FinishCollectionPolicy(g.binding, collector.BlobLocation(
             g.original_pin.repository, g.original_pin.path, g.original_pin.anchor_ref),
@@ -198,18 +201,24 @@ class CollectorSessionTests(unittest.TestCase):
             self.assertEqual(1, b.p.c.sender_closes)
             return runtime.EvidenceAdoption(g, FinishFacts(r.binding.run_id, r.binding.action,
                 r.progress.key, b.h.now, 'synthetic:followup', 'synthetic:exclusive-end'))
-        capture = collector.AuthenticatedFinishCollector(policy=policy,
-            readers=runtime.SourceReaders(b.reader, b.reader), credential=b.credential,
-            progress=lambda:b.captured[0][1](), locate=locate or native, max_seconds=0.4,
-            wall=lambda:b.h.now, monotonic=lambda:b.h.mono)
-        return b.app(install=False, factory=b.factory(b.slot, finish_capture=capture))
+        return collector.FinishCollectorConfig(policy, runtime.SourceReaders(b.reader, b.reader),
+                                                locate or native, 0.4)
+
+    def app(self, locate=None):
+        b=self.base
+        return b.app(install=False, factory=b.factory(b.slot, finish_collection=self.config(locate)))
 
     def test_real_session_collector_auth_and_parent_reauth_release_only_after_close(self):
-        with patch.object(worker, 'run_once', side_effect=lambda work, **kw:work()):
+        captures=[];original=collector.AuthenticatedFinishCollector.close
+        def close(handle):captures.append(handle);original(handle)
+        with patch.object(worker, 'run_once', side_effect=lambda work, **kw:work()),patch.object(
+            collector.AuthenticatedFinishCollector,'close',new=close):
             out = self.app().run('deploy')
         self.assertEqual('SESSION_COMPLETED', out['status'], out)
         self.assertEqual('RELEASED', out['fence'])
         self.assertEqual(4, sum(p.path == 'finish' for _,p in self.base.read_calls))
+        self.assertEqual(1,len(captures)); self.assertTrue(captures[0].closed)
+        self.assertIsNone(captures[0].credential)
 
     def test_source_changed_between_worker_handoff_and_parent_auth_retains_fence(self):
         def child(work, **kw):
@@ -228,6 +237,45 @@ class CollectorSessionTests(unittest.TestCase):
                 self.assertFalse(case.base.slot.installed)
                 self.assertEqual(0, case.base.p.c.sender_calls)
             finally:case.doCleanups()
+
+    def main(self, command):
+        b=self.base; reads=tuple(runtime.SourceReaders(b.reader,b.reader) for _ in range(4))
+        original=runtime.RuntimeAuthorityFactory; output=io.StringIO()
+        read,write=os.pipe();os.close(write);receiver=PipeCredentialReceiver(read)
+        def factory(*args,**kw):
+            return original(*args,**kw,wall=lambda:b.h.now,monotonic=lambda:b.h.mono)
+        def build(config,*,credential,authority_factory):
+            self.assertIs(credential,b.credential)
+            return b.app(install=False,factory=authority_factory)
+        with patch.object(receiver,'receive',return_value=b.credential) as receive, patch.object(
+            runtime,'RuntimeAuthorityFactory',side_effect=factory), patch.object(runtime.site,
+            'build_application',side_effect=build), contextlib.redirect_stdout(output):
+            rc=runtime.main([command],config=b.config(),plan=b.plan(),readers=reads,finish_slot=b.slot,
+                receiver=receiver,handoff_deadline=b.h.mono+10,finish_collection=self.config())
+        self.assertIsNone(receiver._fd)
+        return rc,json.loads(output.getvalue()),receive.call_count
+
+    def test_actual_main_binds_collector_after_receipt_to_same_credential_and_progress(self):
+        with patch.object(worker,'run_once',side_effect=lambda work,**kw:work()):
+            rc,out,received=self.main('deploy')
+        self.assertEqual(0,rc,out);self.assertEqual('SESSION_COMPLETED',out['status'])
+        self.assertEqual(1,received);self.assertEqual(1,self.base.p.c.storage.complete_calls)
+
+    def test_main_status_no_credential_receipt_worker_source_or_claim(self):
+        with patch.object(worker,'run_once') as run:
+            rc,out,received=self.main('status');run.assert_not_called()
+        self.assertEqual(0,rc);self.assertEqual('CONFIGURED_NOT_VERIFIED',out['status'])
+        self.assertEqual(0,received);self.assertEqual([],self.base.read_calls)
+        self.assertEqual([],self.base.p.c.storage.claims)
+
+    def test_collection_config_rejects_binding_reader_mismatch_and_callback_overlap_before_io(self):
+        b=self.base;config=self.config()
+        bad=replace(config,policy=replace(config.policy,binding=replace(config.policy.binding,action='restore')))
+        foreign=runtime.SourceReaders(b.reader,Mock())
+        for kwargs in ({'finish_collection':bad}, {'finish_collection':replace(config,readers=foreign)},
+                       {'finish_collection':config,'finish_capture':lambda r:None}):
+            with self.subTest(kwargs=list(kwargs)),self.assertRaises(runtime.RuntimeSiteError):b.factory(b.slot,**kwargs)
+        self.assertEqual([],b.read_calls)
 
     @unittest.skipUnless(sys.platform == 'linux', 'Linux fork integration only')
     def test_linux_real_collector_child_and_session_complete_without_live_network(self):

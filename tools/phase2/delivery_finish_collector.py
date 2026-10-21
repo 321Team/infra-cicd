@@ -60,6 +60,29 @@ class FinishCollectionPolicy:
     expires_at: float
 
 
+@dataclass(frozen=True)
+class FinishCollectorConfig:
+    """Unbound code configuration; actual credentials/progress arrive in factory."""
+    policy: FinishCollectionPolicy = field(repr=False)
+    readers: SourceReaders = field(repr=False)
+    locate: object = field(repr=False)
+    max_seconds: float
+
+    def check(self):
+        policy_checked(self.policy)
+        need(type(self.readers) is SourceReaders and callable(self.locate)
+             and core.finite(self.max_seconds) and 0.05 <= self.max_seconds <= 120,
+             'FINISH_COLLECTOR_CONFIGURATION_INVALID')
+        self.readers.check()
+
+    def bind(self, binding, credential, progress, *, wall, monotonic):
+        self.check()
+        need(binding == self.policy.binding, 'FINISH_COLLECTOR_REQUEST_INVALID')
+        return AuthenticatedFinishCollector(policy=self.policy, readers=self.readers,
+            credential=credential, progress=progress, locate=self.locate, max_seconds=self.max_seconds,
+            wall=wall, monotonic=monotonic)
+
+
 def policy_checked(policy):
     need(type(policy) is FinishCollectionPolicy)
     core.binding_checked(policy.binding)
