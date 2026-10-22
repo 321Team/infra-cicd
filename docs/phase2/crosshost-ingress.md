@@ -10,7 +10,8 @@
 | 구분 | 현재 상태 |
 | --- | --- |
 | peer receipt 대조, job/Binding/nonce 결속, bounded frame 수신, 1회 소비 | 구현·오프라인 시험 |
-| 메모리 bundle → 기존 Linux 익명 pipe → typed invocation/driver | 구현·Linux 오프라인 연결 시험 대상 |
+| 메모리 bundle → 기존 Linux 익명 pipe → typed invocation/driver | 구현·Linux 오프라인 연결 시험 통과 |
+| 명시한 pipe FD 전송/수신 adapter·JobSite.build 부모 helper | 구현·운영 설정과 분리한 오프라인 시험 |
 | 실제 SSH 인증·현재 host key·정확한 job 부모와의 rendezvous | 미채택: 권욱·재환이 현장 운반부와 job 소유권을 연결 |
 | 실제 issuer 위치·발급 권한·SA UID/만료·CA/IP와 자격 전달 | 미채택: 하영 플랫폼 입력과 권욱의 운영 구성 연결 |
 | source/control·승인 원본·Binding·finish 범위/경로 | 기존 명시 입력을 재사용하며 미확정 값은 그대로 유지 |
@@ -86,3 +87,44 @@ Linux 시험은 실제 로컬 익명 pipe의 인계와 driver/factory/finish 정
 Windows에서는 이 Linux 시험을 SKIP으로 표시한다. 실제 SSH·발급·서버/Runner 접속·배포는 하지 않는다.
 hosted offline CI의 정확한 stack base만 추가하며 운영 workflow·P1 workflow·권한은 변경하지 않는다.
 STATIC/MOCK/CI의 성공은 RUNTIME·독립 REVIEW·MERGE·최종 인수와 별개다.
+
+## 전송 스트림과 job 부모 helper
+
+`delivery_crosshost_pipe.py`는 **이미 검토된 transport 소유자가 명시적으로 넘긴
+Linux pipe end**에만 접근한다. `pipe_ingress_channel(read_fd, authenticate=...,
+deadline=..., monotonic=...)`는 기존 core의 정확한 `ReviewedIngressChannel`을 반환한다.
+`OwnedPipeWriter(write_fd, deadline=..., monotonic=...).send(request, expected_peer=...,
+authenticate=..., rosa_token=..., source_tokens=...)`는 같은 프레임을 한 번 보내고 writer를 닫는다.
+송신 callback에는 공개 요청의 복사본만 주며 변조된 복사본으로 본문을 바꾸지 않는다.
+
+- FD 0/1/2·bool·일반 파일·잘못된 pipe 방향은 인수하지 않는다. 실제 pipe 타입/방향을
+  확인한 직후 소유권을 인수하며 이후 구성 실패도 그 end를 닫는다. 그 전 거부는 caller가 정리한다.
+- caller는 별도 alias/다른 writer가 없는 독점 소유권을 넘겨야 한다. 같은 UID의 임의 코드가
+  몰래 FD를 닫거나 alias를 만들 수 없다는 격리 보장은 없다. 복제한 borrowed FD를 조용히 채택하지 않는다.
+- 인수한 FD에는 `CLOEXEC/NONBLOCK`을 설정한다. `poll`로 높은 FD 번호도 지원하고
+  같은 절대 마감 안에서 부분 read/write·EAGAIN/EINTR을 처리한다. FD의 dev/inode/접근 방향이
+  달라지면 I/O를 거부하고 재사용된 새 객체를 정리 대상으로 삼지 않는다. 락과 nonblocking I/O는
+  이 객체를 통한 close와 I/O를 조율하며 외부 코드의 임의 FD 교체까지 원자적으로 막지 않는다.
+- 부분 write 이후 실패는 writer를 닫아 수신자가 잘린 본문/EOF로 거부하도록 한다.
+  같은 메시지를 새 FD에 자동으로 재전송하지 않는다. send 성공은 로컬 write/close이며
+  원격 수용·자격 인증·서버 revoke나 배포 성공을 나타내는 ACK가 아니다.
+
+monotonic 마감은 **각 프로세스가 속한 호스트의 로컬 시계**를 기준으로 명시한다.
+이 숫자를 다른 호스트의 절대 시각으로 직렬화하지 않으며 자동 변환·새 수명 부여도 하지 않는다.
+현장 transport가 기존 token 만료·승인/첫 write 예산을 고려한 각 측 마감과 정리 책임을 연결해야 한다.
+같은 호스트의 시험 시계를 공유한 결과는 두 호스트의 시계·전송 시간 검증이 아니다.
+
+`delivery_job_parent.ParentJobBuilder`는 검토된 `JobSite.build`에 명시적으로 넣을 수 있는
+1회 callable이다. config/plan/finish slot·명령/context를 확인한 뒤 공개 `publish_ready` →
+새 요청/마감 확인 → `open_channel` → core 수신 → 기존 handoff 순서로 연결한다.
+publish callback이 받은 요청을 바꿔도 저장된 job/nonce는 바뀌지 않는다. publish/open 실패는
+해당 receiver를 닫아 무효화한다. 부분 자원을 만들고 반환 전에 실패한 callback은 그 부분을 스스로 정리한다.
+open이 정확한 channel을 반환하면 마감이 지났어도 core가 해당 channel 정리를 맡는다.
+bundle은 부모가 참조를 정리하고, 성공 반환한 invocation만 기존 driver가 소유한다.
+status/gate는 기존 driver 규칙대로 builder·전송부를 호출하지 않는다.
+
+이 helper는 SSH 프로세스·rendezvous 경로·listener를 만들지 않고 임의 프로세스도 종료하지 않는다.
+실제 전송 소유자가 SSH 인증·현재 host key·정확한 job 부모와 연결되는 pipe·프로세스 정리와
+callback의 유한 복귀를 보장해야 한다. 실제 issuer/권한·운영 채택값·실행 GO는 계속 별개다.
+오프라인에서는 스레드의 SYNTHETIC 송신 → 실제 로컬 pipe → 부모 helper → core →
+기존 별도 pipe/driver/factory/finish를 검증하며 현장 연결 완료로 보고하지 않는다.
