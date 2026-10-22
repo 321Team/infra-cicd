@@ -36,4 +36,4 @@ core는 같은 native job/Binding/nonce·repository 순서와 프레임/EOF를 �
 
 `test_delivery_unix_ingress.py`는 SYNTHETIC token/원본/API와 Linux **로컬** Unix socket만 사용한다. kernel peer UID·read 전 거부, 마감·프레임/EOF·잘림, accept/정리 실패·지연, 실제 overflow 설정/합성 namespace 변환·unsigned UID, 기존 ParentJobBuilder→로컬 pipe→native driver→source factory/finish 연결을 검사한다. Windows에서는 Linux16건을 명시적으로 SKIP하고 순수 구성/마감5건을 실행한다. 실제 namespace/계정/UID를 변경하지 않는다. SKIP을 통과로 세지 않으며 Linux hosted CI의 해당 HEAD 로그를 별도로 확인한다.
 
-설계 중 제안한 pathname listener 전체 구현은 실제 경로·소유권 입력과 분리하기 위해 추가하지 않았다. 실제 listener·SSH bridge·current host key·운영 SITE는 계속 잔여이며, 이 코드는 연결 가능한 한 부분의 STATIC/MOCK/CI 결과다. 실제값 합성·SSH/서버 접속·자격 발급·Runtime·AC 인수를 뜻하지 않는다.
+설계 중 제안한 pathname listener 전체 구현은 실제 경로·소유권 입력과 분리하기 위해 추가하지 않았다. filesystem 경로 없이 Linux abstract listener 생성/부모 정리를 연결하는 명시적인 후속 후보는 [job rendezvous 소유권](owned-job-rendezvous.md)에 정리한다. 실제 listener/rendezvous·SSH bridge·current host key·운영 SITE의 채택은 계속 잔여이며, 이 코드는 연결 가능한 한 부분의 STATIC/MOCK/CI 결과다. 실제값 합성·SSH/서버 접속·자격 발급·Runtime·AC 인수를 뜻하지 않는다.
