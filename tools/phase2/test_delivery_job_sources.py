@@ -181,6 +181,22 @@ class JobSourceWiringTests(unittest.TestCase):
         # Mock-return credentials were never transferred; the test owns them.
         self.assertTrue(all(not c._closed for c in self.f.made))
 
+    def test_observation_scope_original_or_control_repository_mismatch_is_rejected_before_receive(self):
+        # PR114 independent review: keep the approved parent HEAD unchanged and
+        # prove its observation-mode repository guard in this follow-up PR.
+        scope = self.base.grants['finish']
+        self.router(finish=wiring.ObservationRoute(scope, observation.FOLLOWUPS))
+        for field in ('original_pin', 'control_pin'):
+            with self.subTest(field=field):
+                wrong = replace(scope, **{field: replace(getattr(scope, field), repository=self.other)})
+                with self.assertRaises(wiring.JobSourcesError):
+                    self.router(finish=wiring.ObservationRoute(wrong, observation.FOLLOWUPS))
+        self.assertEqual([], self.f.blobs)
+        self.assertEqual([], self.base.h.requests)
+        self.assertEqual([], self.base.p.c.storage.claims)
+        for receiver in self.f.receivers:
+            receiver.receive.assert_not_called()
+
     def test_actual_factory_uses_wiring_and_original_control_authentication(self):
         self.router()
         rc, result = self.f.call(plan=self.f.prepared())
