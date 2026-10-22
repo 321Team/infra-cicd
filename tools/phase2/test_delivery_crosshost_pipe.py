@@ -108,6 +108,33 @@ class PipeTests(unittest.TestCase):
         bundle=r.receive(self.channel(read));self.addCleanup(bundle.close);thread.join(3)
         self.assertEqual([True],result);self.assertFalse(thread.is_alive())
 
+    def test_supplier_authenticated_before_real_local_pipe_to_job_parent(self):
+        received = []
+        read, write = self.pair()
+        writer = stream.OwnedPipeWriter(write, deadline=self.deadline, monotonic=lambda:self.f.h.mono)
+        def publish(request, deadline):
+            def authenticate(*args):
+                received.append('auth'); return self.peer
+            def supply(copy, cap):
+                received.append('supply')
+                self.assertEqual(request, copy); self.assertEqual(deadline, cap)
+                return (self.f.credential.token,
+                    [dict(repository=r,token=fixture.fixture.TOKEN) for r in request['repositories']])
+            self.sender = self.background(lambda:writer.send_from_supplier(request,
+                expected_peer=self.peer, authenticate=authenticate, provide_credentials=supply))
+        builder = parent.ParentJobBuilder(config=self.f.config(), plan=self.f.plan(),
+            finish_slot=self.f.slot, expected_peer=self.peer, routes=self.routes,
+            deadline=self.deadline, wire=self.s.wire, publish_ready=publish,
+            open_channel=lambda *args:self.channel(read), monotonic=lambda:self.f.h.mono)
+        marker = object()
+        with patch.object(handoff,'build_owned_invocation',return_value=marker):
+            self.assertIs(marker,builder(CONTEXT,'preflight'))
+        thread, results = self.sender; thread.join(3)
+        self.assertFalse(thread.is_alive()); self.assertEqual([True],results)
+        self.assertEqual(['auth','supply'],received)
+        for fd in (read,write):
+            with self.assertRaises(OSError): os.fstat(fd)
+
     def test_invalid_pipe_direction_or_nonpipe_is_never_taken_or_closed(self):
         read,write=self.pair();regular=os.open(os.devnull,os.O_RDONLY);self.addCleanup(os.close,regular)
         for fd in (True,0,1,2,None,'3',regular,read):

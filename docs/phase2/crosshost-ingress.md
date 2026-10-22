@@ -128,3 +128,32 @@ status/gate는 기존 driver 규칙대로 builder·전송부를 호출하지 않
 callback의 유한 복귀를 보장해야 한다. 실제 issuer/권한·운영 채택값·실행 GO는 계속 별개다.
 오프라인에서는 스레드의 SYNTHETIC 송신 → 실제 로컬 pipe → 부모 helper → core →
 기존 별도 pipe/driver/factory/finish를 검증하며 현장 연결 완료로 보고하지 않는다.
+
+## 송신 인증 이후의 지연 자격 공급
+
+`OwnedPipeWriter.send_from_supplier(request, expected_peer=..., authenticate=...,
+provide_credentials=...)`는 실제값과 분리된 송신 생산부 연결이다. 기존 `send`는
+이미 준비된 자격을 넘기는 호환 API로 유지한다. 두 메서드는 같은 1회 소비 상태를 쓴다.
+
+새 경로는 공개 요청 검증·복사 → 전송 상대 인증과 정확한 peer 대조 → 열린 writer와
+기존 절대 마감 확인 → 공급 callback 1회 → 마감 재확인 → 기존 frame 검증·bounded
+write·close/EOF 순서다. 인증과 공급 callback에는 각각 새 공개 요청 복사본을 넘겨
+앞 callback의 변경이 다음 callback이나 실제 frame의 job/nonce를 바꾸지 못하게 한다.
+공급 callback은 정확한 `(rosa_token: str, source_tokens: list)` tuple을 반환하며,
+source 항목의 repository/token·순서·문법은 기존 frame 계약 그대로 검증한다.
+
+검토된 공급부가 실제 발급 권한·대상 audience·승인 원본·자격 만료를 독립적으로 확인해야 한다.
+이 helper는 인증 순서를 연결할 뿐 발급·IAM·실행 권한을 부여하거나 새 token 수명을 만들지 않는다.
+callback은 같은 호스트의 절대 monotonic 마감을 사용하고 유한 시간 안에 복귀하며,
+실패 전 자신이 만든 부분 자원은 스스로 정리해야 한다. argv/env/파일/로그로 비밀을 전달하거나
+pipe alias·fork 상속으로 writer의 독점 소유/EOF 계약을 깨뜨려서는 안 된다.
+
+인증 실패나 공급 전 만료는 공급 호출 0회·비밀 write 0이다. 공급이 시도된 뒤 실패하거나
+취소·만료되면 이미 발급된 자격이 남아 있을 수 있다. `supply_attempted`는 callback 진입
+여부만 보존하며 발급 성공·전달/수용·서버 revoke의 증거가 아니다. 호출자는 이 값과
+공급부 원본으로 발급/철회 상태를 확인해야 하고 자동 재발급·재전송하지 않는다.
+동기 callback의 무한 대기를 helper가 강제 선점하지 못하며, Python 참조 해제는 보안 소거가 아니다.
+
+추가 시험은 socket을 차단한 SYNTHETIC 공급·만료/오류/동시 호출과 Linux 로컬 pipe에서
+부모 helper까지의 연결을 확인한다. `SITE=None`, 실제 issuer·SSH host key·CA/IP/UID·승인값,
+운영 workflow는 채우지 않으며 이 변경의 RUNTIME은 미실행이다.
