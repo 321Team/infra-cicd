@@ -113,6 +113,10 @@ class SourceRoleWiring(_NoCopy):
     def binding(self):
         return self._binding
 
+    @property
+    def roles(self):
+        return tuple(route.role for route in self._routes)
+
     def check_channels(self, binding, routes):
         """Before public readiness: required repositories must be explicitly routed."""
         from delivery_crosshost_ingress import SourceRoute
