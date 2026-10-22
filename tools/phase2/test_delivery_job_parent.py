@@ -77,6 +77,21 @@ class ParentTests(unittest.TestCase):
         materialize.assert_not_called()
         self.assertTrue(prepared._closed); self.assertIsNone(prepared._materialize)
 
+    def test_source_repository_or_binding_mismatch_stops_before_public_ready_and_credential_handoff(self):
+        import delivery_job_sources as wiring
+        from delivery_github_source import RepositoryPin
+        repo = self.s.repo
+        other = RepositoryPin('synthetic', 'unreceived', 4567, 9876)
+        for wrong_binding in (False, True):
+            binding = self.f.h.binding if not wrong_binding else replace(
+                self.f.h.binding, run_id='SYNTHETIC_DIFFERENT_RUN')
+            wire = wiring.SourceRoleWiring(binding=binding, routes=tuple(
+                wiring.RoleRoute(role, other if role == 'platform' and not wrong_binding else repo, repo)
+                for role in wiring.ROLES), wall=lambda:self.f.h.now, monotonic=lambda:self.f.h.mono)
+            builder = self.builder(wire=wire)
+            with self.assertRaises(parent.ParentBuildError): builder(CONTEXT, 'deploy')
+            self.publish.assert_not_called(); self.open.assert_not_called()
+
     def test_shape_context_action_slot_or_plan_rejected_before_publication(self):
         cases=[(dict(config=None),CONTEXT,'deploy'),(dict(plan=None),CONTEXT,'deploy'),
                (dict(finish_slot=None),CONTEXT,'deploy'),

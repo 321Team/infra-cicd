@@ -181,6 +181,9 @@ def run_site(argv, *, source_session, config, plan, readers, finish_slot, receiv
                 plan = prepared.resolve(credential=credential, source=source, roles=roles,
                                         deadline=deadline)
                 need(source.now() < deadline, 'SOURCE_SESSION_HANDOFF_EXPIRED')
+            from delivery_job_sources import SourceRoleWiring
+            if type(source.wire) is SourceRoleWiring:
+                source.wire.check_plan(plan)  # Shape/routing, not source/control authentication.
             factory = runtime.RuntimeAuthorityFactory(plan, roles['readers'], finish_slot,
                 finish_capture=finish_capture, producer_pins=producer_pins,
                 producer_run_reader=roles.get('producer_run_reader'),

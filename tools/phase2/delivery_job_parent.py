@@ -59,6 +59,9 @@ class ParentJobBuilder(ingress._NoCopy):
                  'P2_PARENT_CONFIGURATION_INVALID')
             if type(self._plan) is runtime.PreparedAuthorityPlan:
                 self._plan.bind_context(context)
+            from delivery_job_sources import SourceRoleWiring
+            if type(self._wire) is SourceRoleWiring:
+                self._wire.check_channels(self._config.binding, self._routes)
             receiver = ingress.CrossHostIngress(context=context, binding=self._config.binding,
                 expected_peer=self._peer, routes=self._routes, deadline=self._deadline,
                 monotonic=self._clock)

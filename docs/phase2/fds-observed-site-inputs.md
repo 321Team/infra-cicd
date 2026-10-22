@@ -48,6 +48,8 @@
 
 새로운 플랫폼 양식·중복 서명·동일 시험을 담당자에게 추가 요구하지 않는다. 이미 수신한 원본의 해당 부분만 재사용하고 새로 생기는 발급/종료 관측만 연결한다.
 
+후속 [job 원본·control·finish routing](job-source-routing.md)은 수신한 저장소별 reader를 기존 역할과 실제로 채택된 종료 scope/locator 설정에 연결한다. ready 전 저장소 topology와 수신 후 plan의 실제 원본/control 저장소를 대조하며 운영값·원문 의미·원격 인증 성공을 만들지 않는다.
+
 ## 검증과 단계
 
 신규 시험은 관측된 공개 pin과 명시적인 **SYNTHETIC** per-run fixture를 분리한다. fixture는 실제값·승인값·실행 증적이 아니다. 네트워크/DNS를 금지하고 UUID 혼동, source/render/CA/subject drift, 인자 누락, callback 미실행, 기존 객체 자동 채택 금지와 기존 parent 연계를 검사한다.

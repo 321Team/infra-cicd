@@ -147,6 +147,9 @@ def connect_parent(*, config, finish_slot, expected_peer, routes, deadline,
     result. No token is issued and no concrete live transport is supplied here.
     """
     _binding_checked(config)
+    from delivery_job_sources import SourceRoleWiring
+    if type(wire) is SourceRoleWiring:
+        need(wire.binding == config.binding)
     need((plan is None and callable(materialize_plan))
          or (plan is not None and materialize_plan is None))
     if plan is not None:
