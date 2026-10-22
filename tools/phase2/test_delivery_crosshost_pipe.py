@@ -82,15 +82,15 @@ class PipeTests(unittest.TestCase):
         with self.assertRaises(OSError):os.fstat(read)
 
     def test_partial_stream_writes_large_frame_and_eof_are_received_exactly_once(self):
-        r=self.receiver();read,write=self.pair();writer=stream.OwnedPipeWriter(write,deadline=self.deadline,monotonic=lambda:self.f.h.mono)
+        r=self.receiver();request=r.request();read,write=self.pair();writer=stream.OwnedPipeWriter(write,deadline=self.deadline,monotonic=lambda:self.f.h.mono)
         native=os.write
         def partial(fd,raw):return native(fd,raw[:7])
         with patch.object(os,'write',side_effect=partial) as writing:
-            thread,result=self.background(lambda:self.send(writer,r.request(),rosa_token='SYNTHETIC_'+('X'*12000)))
+            thread,result=self.background(lambda:self.send(writer,request,rosa_token='SYNTHETIC_'+('X'*12000)))
             bundle=r.receive(self.channel(read));self.addCleanup(bundle.close);thread.join(3)
         self.assertFalse(thread.is_alive());self.assertEqual([True],result)
         self.assertEqual(12010,len(bundle._rosa));self.assertGreater(writing.call_count,2)
-        with self.assertRaisesRegex(stream.PipeStreamError,'CONSUMED'):self.send(writer,{'ignored':True})
+        with self.assertRaisesRegex(stream.PipeStreamError,'CONSUMED'):self.send(writer,request)
         for fd in (read,write):
             with self.assertRaises(OSError):os.fstat(fd)
 
