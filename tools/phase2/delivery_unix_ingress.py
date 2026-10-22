@@ -5,6 +5,8 @@ No socket/listener/path creation, host lookup, SSH, issuer, credential loader,
 default peer, configured SITE, process signalling or filesystem cleanup.
 """
 import json
+import os
+import re
 import socket
 import struct
 import sys
@@ -12,6 +14,8 @@ import threading
 
 import delivery_adapter as core
 import delivery_crosshost_ingress as ingress
+
+_SOCKET_TYPE = socket.socket
 
 
 class UnixIngressError(RuntimeError):
@@ -26,7 +30,7 @@ def need(ok, code='P2_UNIX_CONFIGURATION_INVALID'):
 def _shape(sock):
     # Ownership is not taken for a foreign object, TCP socket or wrong platform.
     need(sys.platform == 'linux' and hasattr(socket, 'SO_PEERCRED')
-         and type(sock) is socket.socket and sock.family == socket.AF_UNIX
+         and type(sock) is _SOCKET_TYPE and sock.family == socket.AF_UNIX
          and sock.type == socket.SOCK_STREAM)
 
 
@@ -46,9 +50,33 @@ class _Budget:
 
 
 def _configuration(request, uid, peer):
-    need(type(uid) is int and uid > 0 and type(peer) is ingress.PeerIdentity)
+    need(type(uid) is int and 0 < uid < 0xFFFFFFFF and type(peer) is ingress.PeerIdentity)
     peer.check(); ingress._request(request)
     return json.loads(json.dumps(request))  # Value-bound, caller cannot mutate it.
+
+
+def _overflow_uid():
+    # Local Linux kernel identity setting, not a supplied policy/approval file.
+    fd = os.open('/proc/sys/kernel/overflowuid', os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        raw = os.read(fd, 32)
+    finally:
+        os.close(fd)
+    need(re.fullmatch(rb'[0-9]{1,10}\n?', raw) is not None, 'P2_UNIX_PEER_REJECTED')
+    value = int(raw)
+    need(value < 0xFFFFFFFF, 'P2_UNIX_PEER_REJECTED')
+    return value
+
+
+def _peer_credentials(sock):
+    # Unmapped namespace IDs collapse to this current setting; never authorize
+    # that ambiguous UID. No guessed 65534 default or /proc configuration write.
+    before = _overflow_uid()
+    raw = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('iII'))
+    pid, uid, gid = struct.unpack('iII', raw)  # pid_t signed, uid_t/gid_t unsigned.
+    need(before == _overflow_uid() and pid > 0 and uid != before
+         and uid < 0xFFFFFFFF and gid < 0xFFFFFFFF, 'P2_UNIX_PEER_REJECTED')
+    return pid, uid, gid
 
 
 class _Connection:
@@ -66,8 +94,7 @@ class _Connection:
                 self.budget.remaining(deadline)
                 ingress._request(request)
                 need(request == self.request, 'P2_UNIX_TARGET_REJECTED')
-                raw = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i'))
-                pid, uid, gid = struct.unpack('3i', raw)
+                pid, uid, gid = _peer_credentials(self.sock)
                 need(pid > 0 and uid == self.uid and gid >= 0, 'P2_UNIX_PEER_REJECTED')
                 self.budget.remaining(deadline)
                 self.authenticated = True
@@ -175,7 +202,9 @@ def accept_unix_ingress_channel(listener, *, request, expected_uid, peer, deadli
         result = _connected(connection, request, expected_uid, peer, budget)
         connection = None  # Channel now owns it; no peer-controlled FD number.
     except BaseException as exc:
-        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+        if type(exc) is UnixIngressError and exc.args == ('P2_UNIX_CLEANUP_FAILED',):
+            error = 'P2_UNIX_CLEANUP_FAILED'  # A later no-op close cannot clear uncertainty.
+        elif isinstance(exc, (KeyboardInterrupt, SystemExit)):
             interrupted = exc
         else:
             error = 'P2_UNIX_ACCEPT_FAILED'

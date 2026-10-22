@@ -6,6 +6,7 @@ import io
 import json
 import os
 import socket
+import struct
 import sys
 import threading
 import time
@@ -24,6 +25,8 @@ import delivery_source_session as source
 import delivery_unix_ingress as unix
 import test_delivery_source_session as fixture
 from test_delivery_job import CONTEXT, RUNNER
+
+REAL_SOCKET = socket.socket
 
 
 def request():
@@ -55,7 +58,7 @@ class UnixPolicyTests(unittest.TestCase):
 
     def test_configuration_does_not_accept_root_bool_wire_identity_or_bad_request(self):
         peer = ingress.PeerIdentity('synthetic', 'synthetic-local')
-        for uid in (0, -1, True, None, '1001'):
+        for uid in (0, -1, True, None, '1001', 0xFFFFFFFF, 0x100000000):
             with self.assertRaises(unix.UnixIngressError): unix._configuration(request(), uid, peer)
         with self.assertRaises(unix.UnixIngressError):
             unix._configuration(request(), 1001, {'principal': 'synthetic'})
@@ -76,6 +79,12 @@ class UnixPolicyTests(unittest.TestCase):
 class UnixSocketTests(unittest.TestCase):
     def setUp(self):
         self.s = fixture.SourceSessionTests('runTest'); self.s.setUp(); self.addCleanup(self.s.doCleanups)
+        # Existing runtime fixture blocks every socket. Permit only LOCAL Unix
+        # sockets here; TCP/UDP creation and DNS/connection helpers stay blocked.
+        def local_socket(family=socket.AF_INET, kind=socket.SOCK_STREAM, proto=0, fileno=None):
+            if family != socket.AF_UNIX: raise AssertionError('OUTBOUND_NETWORK_FORBIDDEN')
+            return REAL_SOCKET(family, kind, proto, fileno=fileno)
+        p = patch.object(socket, 'socket', new=local_socket); p.start(); self.addCleanup(p.stop)
         self.f = self.s.f
         self.peer = ingress.PeerIdentity('synthetic-local-uid', 'synthetic-local-socket')
         self.deadline = self.f.h.mono + 5
@@ -119,7 +128,7 @@ class UnixSocketTests(unittest.TestCase):
         channel = unix.unix_ingress_channel(server, request=r.request(), expected_uid=os.geteuid() + 1,
             peer=self.peer, deadline=self.deadline, monotonic=self.clock)
         client.sendall(self.frame(r.request()))
-        with patch.object(socket.socket, 'recv', side_effect=AssertionError('SECRET_READ_FORBIDDEN')) as read:
+        with patch.object(REAL_SOCKET, 'recv', side_effect=AssertionError('SECRET_READ_FORBIDDEN')) as read:
             with self.assertRaises(ingress.IngressError): r.receive(channel)
             read.assert_not_called()
         self.assertEqual(-1, server.fileno()); self.assertEqual([], self.f.p.c.storage.claims)
@@ -217,6 +226,54 @@ class UnixSocketTests(unittest.TestCase):
                 unix.accept_unix_ingress_channel(listener, request=request(), expected_uid=os.geteuid(),
                     peer=self.peer, deadline=self.deadline, monotonic=self.clock)
         self.assertEqual(b'', client.recv(1))
+
+    def test_actual_overflow_setting_is_read_and_ambiguous_peer_uid_is_rejected(self):
+        current = unix._overflow_uid(); self.assertIs(type(current), int)
+        server, client = self.pair(); req = self.receiver().request()
+        uid = current if current > 0 else os.geteuid()
+        channel = unix.unix_ingress_channel(server, request=req, expected_uid=uid,
+            peer=self.peer, deadline=self.deadline, monotonic=self.clock)
+        owner = channel.authenticate.__self__
+        # Kernel conversion is modeled, not a new user namespace or real UID.
+        with patch.object(unix, '_overflow_uid', return_value=uid), \
+             patch.object(REAL_SOCKET, 'getsockopt', return_value=struct.pack('iII', 4242, uid, uid)):
+            with self.assertRaisesRegex(unix.UnixIngressError, 'PEER_REJECTED'):
+                channel.authenticate(req, self.deadline)
+        self.assertFalse(owner.authenticated); self.assertTrue(channel.close())
+
+    def test_unsigned_large_peer_uid_and_changed_overflow_setting(self):
+        for changed in (False, True):
+            server, client = self.pair(); req = self.receiver().request()
+            channel = unix.unix_ingress_channel(server, request=req, expected_uid=3000000000,
+                peer=self.peer, deadline=self.deadline, monotonic=self.clock)
+            with patch.object(unix, '_overflow_uid', side_effect=[65534, 65533 if changed else 65534]), \
+                 patch.object(REAL_SOCKET, 'getsockopt', return_value=struct.pack('iII', 4242, 3000000000, 3000000000)):
+                if changed:
+                    with self.assertRaisesRegex(unix.UnixIngressError, 'PEER_REJECTED'):
+                        channel.authenticate(req, self.deadline)
+                else: self.assertEqual(self.peer, channel.authenticate(req, self.deadline))
+            self.assertTrue(channel.close())
+
+    def test_inner_connection_cleanup_failure_cannot_become_generic_accept_failure(self):
+        listener, address = self.listener(); client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sockets.append(client); client.connect(address)
+        calls = []
+        original = unix._connected
+        def invalid(sock, *args):
+            self.f.h.mono = self.deadline  # _connected fails and attempts close.
+            return original(sock, *args)
+        close = unix._close
+        def uncertain_once(sock):
+            ok = close(sock)
+            if sock is not listener and not calls:
+                calls.append(1); return False
+            return ok
+        with patch.object(unix, '_connected', side_effect=invalid), \
+             patch.object(unix, '_close', side_effect=uncertain_once):
+            with self.assertRaisesRegex(unix.UnixIngressError, '^P2_UNIX_CLEANUP_FAILED$'):
+                unix.accept_unix_ingress_channel(listener, request=request(), expected_uid=os.geteuid(),
+                    peer=self.peer, deadline=self.deadline, monotonic=self.clock)
+        self.assertEqual(-1, listener.fileno()); self.assertEqual(b'', client.recv(1))
 
     def test_actual_unix_accept_parent_pipe_native_driver_source_factory_finish(self):
         from delivery_source_roles import plan_source_roles
