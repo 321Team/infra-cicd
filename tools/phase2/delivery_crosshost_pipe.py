@@ -204,6 +204,7 @@ class OwnedPipeWriter(ingress._NoCopy):
     def __init__(self, fd, *, deadline, monotonic=time.monotonic):
         self._end = _PipeEnd(fd, write=True, deadline=deadline, monotonic=monotonic)
         self._used, self._lock = False, threading.Lock()
+        self._supply_attempted = False
 
     def __repr__(self):
         return '<P2 owned frame writer: private, single-use, no remote receipt>'
@@ -213,13 +214,42 @@ class OwnedPipeWriter(ingress._NoCopy):
             self._used = True
         return self._end.close()
 
+    @property
+    def supply_attempted(self):
+        """Supplier entry only; never evidence of issuance, delivery or revoke."""
+        with self._lock:
+            return self._supply_attempted
+
     def send(self, request, *, expected_peer, authenticate, rosa_token, source_tokens):
+        """Send prepared values; supply_attempted does not imply new issuance."""
+        return self._send(request, expected_peer=expected_peer, authenticate=authenticate,
+            provide_credentials=lambda *_: (rosa_token, source_tokens))
+
+    def send_from_supplier(self, request, *, expected_peer, authenticate, provide_credentials):
+        """Authenticate the waiting peer before invoking a trusted supplier once.
+
+        The supplier receives a fresh public request and this host's unchanged
+        absolute deadline. It must independently authorize credential supply,
+        return exactly (rosa_token, source_tokens), and clean its partial
+        resources on failure. It must return within that deadline; this helper
+        cannot preempt a synchronous callback or revoke issued credentials.
+        After any attempted supply, the owner must reconcile issued credentials
+        on failure/cancellation; no automatic retry is safe. supply_attempted
+        remains True even when the callback raises before returning a result.
+        No issuer, grant, actual values or supplier is installed by default.
+        """
+        return self._send(request, expected_peer=expected_peer, authenticate=authenticate,
+            provide_credentials=provide_credentials)
+
+    def _send(self, request, *, expected_peer, authenticate, provide_credentials):
         with self._lock:
             need(not self._used, 'P2_STREAM_CONSUMED')
             self._used = True
         error = interrupted = None
+        credentials = rosa_token = source_tokens = None
         try:
-            need(type(expected_peer) is ingress.PeerIdentity and callable(authenticate),
+            need(type(expected_peer) is ingress.PeerIdentity and callable(authenticate)
+                 and callable(provide_credentials),
                  'P2_STREAM_CONFIGURATION_INVALID')
             expected_peer.check()
             ingress._request(request)
@@ -230,6 +260,16 @@ class OwnedPipeWriter(ingress._NoCopy):
             peer = authenticate(copy.deepcopy(expected), self._end._deadline)
             self._end.check_time()
             need(type(peer) is ingress.PeerIdentity and peer == expected_peer, 'P2_STREAM_PEER_REJECTED')
+            with self._end._lock:
+                self._end._current()  # A previously closed/reused writer cannot request credentials.
+                self._end.check_time()
+            with self._lock:
+                self._supply_attempted = True
+            credentials = provide_credentials(copy.deepcopy(expected), self._end._deadline)
+            self._end.check_time()
+            need(type(credentials) is tuple and len(credentials) == 2,
+                 'P2_STREAM_CONFIGURATION_INVALID')
+            rosa_token, source_tokens = credentials
             self._end.write_all(ingress.encode_frame(expected,
                 rosa_token=rosa_token, source_tokens=source_tokens))
         except BaseException as exc:
@@ -238,6 +278,7 @@ class OwnedPipeWriter(ingress._NoCopy):
             code = exc.args[0] if type(exc) in (PipeStreamError, ingress.IngressError) and len(exc.args) == 1 else None
             error = code if type(code) is str and code in SAFE_CODES | ingress.SAFE_CODES else 'P2_STREAM_SEND_FAILED'
         finally:
+            credentials = rosa_token = source_tokens = None  # Reference release, not secure erasure/revoke.
             if not self._end.close():
                 error, interrupted = 'P2_STREAM_CLEANUP_FAILED', None
             if error is None:
