@@ -47,16 +47,18 @@ class ParentJobBuilder(ingress._NoCopy):
             need(not self._used, 'P2_PARENT_CONSUMED')
             self._used = True
         receiver = bundle = None
+        transferred = False
         try:
             need(type(context) is job.JobContext, 'P2_PARENT_CONFIGURATION_INVALID')
             context.check()
             site.configuration_checked(self._config)  # Shape only; no input file read.
-            need(type(self._plan) is runtime.RuntimeAuthorityPlan
-                 and self._plan.approval.binding == self._config.binding
+            need(runtime.plan_binding(self._plan) == self._config.binding
                  and type(self._slot) is runtime.FinishAdoptionSlot
                  and self._slot.binding == self._config.binding
                  and type(command) is str and command in ('preflight', self._config.binding.action),
                  'P2_PARENT_CONFIGURATION_INVALID')
+            if type(self._plan) is runtime.PreparedAuthorityPlan:
+                self._plan.bind_context(context)
             receiver = ingress.CrossHostIngress(context=context, binding=self._config.binding,
                 expected_peer=self._peer, routes=self._routes, deadline=self._deadline,
                 monotonic=self._clock)
@@ -64,9 +66,11 @@ class ParentJobBuilder(ingress._NoCopy):
             channel = self._open(receiver.request(), self._deadline)  # Fresh request + deadline recheck.
             # receive owns exact channels even if open consumed the remaining time.
             bundle = receiver.receive(channel)
-            return bundle.build_invocation(context, command, config=self._config, plan=self._plan,
+            value = bundle.build_invocation(context, command, config=self._config, plan=self._plan,
                 finish_slot=self._slot, wire=self._wire, handoff_deadline=self._deadline,
                 finish_capture=self._capture, producer_pins=self._pins)
+            transferred = True
+            return value
         except BaseException as exc:
             if isinstance(exc, KeyboardInterrupt):
                 raise KeyboardInterrupt() from None
@@ -80,3 +84,5 @@ class ParentJobBuilder(ingress._NoCopy):
                 bundle.close()  # Detach refs; successful invocation remains driver-owned.
             if receiver is not None:
                 receiver.close()
+            if not transferred and type(self._plan) is runtime.PreparedAuthorityPlan:
+                self._plan.close()

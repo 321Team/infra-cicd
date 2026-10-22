@@ -127,13 +127,17 @@ class RuntimeInvocation:
     def check(self, context, command):
         need(not self._used and not self._closed and type(self.context) is JobContext
              and self.context == context, 'P2_JOB_INVOCATION_REJECTED')
-        need(type(self.config) is site.SiteConfiguration and type(self.plan) is runtime.RuntimeAuthorityPlan
+        need(type(self.config) is site.SiteConfiguration
+             and type(self.plan) in (runtime.RuntimeAuthorityPlan, runtime.PreparedAuthorityPlan)
              and type(self.receiver) is PipeCredentialReceiver
              and (self.source_session is None or type(self.source_session) is PrivateSourceSession),
              'P2_JOB_INVOCATION_REJECTED')
         site.configuration_checked(self.config)
-        need(self.plan.approval.binding == self.config.binding
+        need(runtime.plan_binding(self.plan) == self.config.binding
              and command in ('preflight', self.config.binding.action), 'P2_JOB_ACTION_REJECTED')
+        if type(self.plan) is runtime.PreparedAuthorityPlan:
+            need(type(self.source_session) is PrivateSourceSession, 'P2_JOB_INVOCATION_REJECTED')
+            self.plan.bind_context(context)
 
     def kwargs(self):
         return {name: getattr(self, name) for name in ('config', 'plan', 'finish_slot', 'receiver',
@@ -145,7 +149,8 @@ class RuntimeInvocation:
             return self._cleanup_ok
         object.__setattr__(self, '_closed', True)
         for handle, exact in ((self.source_session, PrivateSourceSession),
-                              (self.receiver, PipeCredentialReceiver)):
+                              (self.receiver, PipeCredentialReceiver),
+                              (self.plan, runtime.PreparedAuthorityPlan)):
             if type(handle) is exact:
                 try:
                     result = handle.close()

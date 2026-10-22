@@ -76,6 +76,19 @@ class ObservedSiteTests(unittest.TestCase):
         self.assertIsNone(declaration.SITE)
         for callback in self.callbacks: callback.assert_not_called()
 
+    def test_post_handoff_plan_preparation_is_inert_and_mutually_exclusive(self):
+        materialize = Mock(side_effect=AssertionError('MATERIALIZE_FORBIDDEN'))
+        args = self.parent_args | {'plan': None, 'materialize_plan': materialize}
+        with patch.object(Path, 'open', side_effect=AssertionError('FILE_IO_FORBIDDEN')):
+            builder = fds.connect_parent(**args)
+        self.assertIs(type(builder._plan), runtime.PreparedAuthorityPlan)
+        self.assertEqual(self.config.binding, builder._plan.binding)
+        materialize.assert_not_called()
+        self.assertIsNone(declaration.SITE)
+        with self.assertRaises(fds.FdsSiteInputError):
+            fds.connect_parent(**(args | {'plan': self.plan}))
+        builder._plan.close()
+
     def test_import_is_inert_and_explicit_ca_is_exact_public_root(self):
         with patch.object(Path, 'open', side_effect=AssertionError('FILE_IO_FORBIDDEN')):
             importlib.reload(fds)

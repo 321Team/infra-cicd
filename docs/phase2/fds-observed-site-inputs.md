@@ -26,11 +26,15 @@
 ## 사용 위치와 순서
 
 1. 검토된 Runner/job 부모 코드에서 `build_configuration`을 호출한다. 실제 `run_id`, platform/supply 원본 SHA, 절대 input/source/store 경로, 파일명, 실행 예산과 finalize 여부를 **모두 명시 인자**로 전달한다. 함수는 파일을 읽거나 디렉터리를 만들지 않는다. 안전한 POSIX 파일·Git source·실제 바이트 검증은 기존 loader가 담당한다.
-2. 기존 형식의 실제 `RuntimeAuthorityPlan`을 별도로 검토·채택한다. `validate_plan`은 고정 profile과의 일치만 검사하며 인증 판정이 아니다. 현재 token fingerprint/iat/exp/groups/IP·원본/control은 호출자가 실제 자료로 제공해야 한다.
-3. 실제 `FinishAdoptionSlot`, 인증된 peer/routes, 절대 deadline, wire/publish/open/monotonic callback을 명시해 `connect_parent`로 기존 부모에 연결한다. 생성 시 callback을 호출하지 않는다. 실제 실행 시 기존 부모의 native job·단일 사용·deadline·채널·정리 검사가 그대로 적용된다.
+2. 이미 완성된 `RuntimeAuthorityPlan` 또는 명시적인 `materialize_plan(context, credential, source, roles, deadline)` 중 하나만 `connect_parent`에 전달한다. 후자는 자격을 받기 전에 미래 issuer 사실을 만들 필요가 없도록 준비 순서를 분리한다. `validate_plan`은 고정 profile 대조이며 인증 판정은 아니다. 실제 token fingerprint/iat/exp/groups/IP·원본/control은 실행 시 실제 자료에서 채택한다.
+3. 실제 `FinishAdoptionSlot`, 인증된 peer/routes, 절대 deadline, wire/publish/open/monotonic callback을 명시한다. 생성 시 callback을 호출하지 않는다. `PreparedAuthorityPlan` 경로는 native job/Runner 확인 → 공개 ready → 기존 peer 인증·메모리 수신 → ROSA와 private source 자격 수신 → 원본 reader 연결 → **계획 완성 callback 1회** → 기존 authority factory 순서다. ready는 자격 발급·배포 승인이나 issuer 인증 증거가 아니다.
 4. 이번 first-empty-target profile은 `previous=None`만 대조하고 기존 `FirstDeploymentBaseline`의 fresh GET/404 조건을 유지한다. **수동 C 배포 후 기존 객체가 있으면 차단**한다. 실제 기존 객체·UID·owner/spec 및 previous에 대한 검토 없이 baseline을 생성하거나 current를 previous로 복사하지 않는다. restore/end-page를 포함하지 않는다.
 
 실패 시 고정 코드로 중단한다. 생성 실패는 외부 자원을 만들지 않으며, 실행 중 실패한 경우 기존 parent/session의 자기 소유 핸들 정리·claim 보존 규칙을 사용한다. 자동 재발급/재시도/삭제/원복 실행을 추가하지 않는다.
+
+완성 callback은 신뢰된 site 코드이며 로더·브로커·자동 발급기가 아니다. 실제로 수신한 메모리 자격과 source reader, 수정 불가한 역할 매핑, **이미 축소된 동일 로컬 monotonic 마감**을 받는다. 다른 native job으로 재결속·복사·직렬화·실패 후 재사용은 거부한다. callback 전후 마감과 반환된 계획의 Binding·자격 지문을 대조하고, FDS profile의 source·subject·CA 등 검사도 다시 적용한다. 그 뒤 기존 factory가 실제 original/control의 철회·기간·issuer·현재 권한과 source 의미를 검증한다. callback의 반환형·해시 대조가 이 인증을 대체하지 않는다.
+
+`status`는 계획 완성·자격 수신·TLS/원본 조회·claim을 실행하지 않는다. source session 없는 직접 경로에 prepared 계획을 넣어 우회하지 못한다. 부분 실패·예외·마감 초과·중단은 같은 부모·invocation이 소유한 채널과 준비 참조를 정리하고, 예외에 실린 임의 텍스트를 출력하지 않는다. 로컬 참조 정리와 서버 자격 회수는 구분한다.
 
 ## 여전히 필요한 운영 연결
 
@@ -38,7 +42,7 @@
 |---|---|
 | 현장 issuer 원본/실발급 | 권욱이 실제 발급 결과·fingerprint·수명·issuer 검토를 코드에 채택, 하영이 기존 권한 경로의 실제 관측 인계. `can-i yes`를 발급 성공으로 바꾸지 않음 |
 | 실제 job/Runner·peer·전달 경로 | 권욱 구현, 재환 Runner 정보 인계. 현재 계정/UID·job 정체성·host key/peer 인증·bounded channel·rendezvous를 실제 자료로 검토 |
-| post-auth 발급/plan 완성 순서 | 권욱 구현. 기존 parent는 ready 전에 최종 Binding/IssuerFacts를 요구한다. 뒤늦은 발급 결과를 연결하려면 검토된 두 단계 준비/완성 경로가 필요하며 이 고정 입력 helper가 해결한 것으로 표시하지 않음 |
+| 자격 수신/plan 완성 순서 | 두 단계 준비·완성 연결 구현. 실제 발급은 외부 기존 issuer 경로이며 자동 실행하지 않는다. 권욱이 현재 원본의 의미를 채택하는 완성 callback을 연결해야 하며, raw receipt 해시나 endpoint를 미래 값으로 미리 채우지 않음 |
 | 원본/control·종료 증적 | 권욱이 승인·producer·issuer 실제 원본/철회 control 의미, 현장 경로와 종료 관측 원본을 연결. hash/type만으로 원본 의미/승인 판정 금지 |
 | 수동 C 후 객체/이전 상태 | 하영 readback·권욱 배포 baseline 검토. 실제 원본 없으면 비어 있다고 가정하지 않음. current source 선택은 운영 인수 완료가 아님 |
 
@@ -47,5 +51,7 @@
 ## 검증과 단계
 
 신규 시험은 관측된 공개 pin과 명시적인 **SYNTHETIC** per-run fixture를 분리한다. fixture는 실제값·승인값·실행 증적이 아니다. 네트워크/DNS를 금지하고 UUID 혼동, source/render/CA/subject drift, 인자 누락, callback 미실행, 기존 객체 자동 채택 금지와 기존 parent 연계를 검사한다.
+
+두 단계 추가 시험은 actual factory를 사용하는 모의 source/control 철회, 다른 자격·Binding·job 거부, callback 마감 소비·실패·중단·close 후 반환, status 무수신, 한 번의 완성과 모든 소유 핸들 정리를 확인한다. Linux CI에서는 실제 로컬 익명 파이프→driver→source→계획 완성→factory→종료 receipt 경로를 가짜 API로 검사한다. 이 파이프 시험은 원격 현장 연결이나 운영 Runtime이 아니다.
 
 STATIC/MOCK만 이 변경의 로컬 완료 범위다. CI는 실제 해당 HEAD 결과를 별도 확인한다. RUNTIME·운영 SITE 채택·독립 REVIEW·MERGE·PUBLICATION·#46 AC 인수는 자동 완료되지 않는다.

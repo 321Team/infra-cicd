@@ -95,13 +95,7 @@ def build_configuration(*, run_id, platform_receipt_sha256, supply_receipt_sha25
     return config
 
 
-def validate_plan(config, plan):
-    """Compare this observed profile only; existing live authenticators still run.
-
-    No groups/IP/timestamps/fingerprint are generated or refreshed here. This
-    first-empty-target profile cannot adopt existing manual-C objects, previous
-    images, an end-page or restore. Such changes need actual reviewed originals.
-    """
+def _binding_checked(config):
     site.configuration_checked(config)
     b = config.binding
     expected = core.Binding(b.run_id, 'deploy', API_ORIGIN, CLUSTER_UUID,
@@ -109,6 +103,17 @@ def validate_plan(config, plan):
         RENDERED_SHA256, b.platform_receipt_sha256, b.supply_receipt_sha256,
         ROUTE_HOST, IMAGES)
     need(b == expected and core.digest(CA_PEM) == CA_PEM_SHA256)
+    return b
+
+
+def validate_plan(config, plan):
+    """Compare this observed profile; existing live authenticators still run.
+
+    No groups/IP/timestamps/fingerprint are generated or refreshed here. This
+    first-empty-target profile cannot adopt existing manual-C objects, previous
+    images, an end-page or restore. Such changes need actual reviewed originals.
+    """
+    b = _binding_checked(config)
     need(type(plan) is runtime.RuntimeAuthorityPlan
          and type(plan.approval) is AdoptedGrant
          and type(plan.issuer) is runtime.EvidenceAdoption
@@ -130,16 +135,22 @@ def validate_plan(config, plan):
     return plan
 
 
-def connect_parent(*, config, plan, finish_slot, expected_peer, routes, deadline,
+def connect_parent(*, config, finish_slot, expected_peer, routes, deadline,
                    wire, publish_ready, open_channel, monotonic,
-                   finish_capture=None, producer_pins=None):
+                   finish_capture=None, producer_pins=None, plan=None, materialize_plan=None):
     """Reuse the existing parent with explicit trusted transport/lifecycle code.
 
-    No callback is invoked here. A complete, actually adopted plan is required
-    before ready publication by the existing parent. Post-auth issuance/plan
-    materialization and a real authenticated channel are NOT supplied here.
+    No callback is invoked here. Supply exactly one completed plan OR trusted
+    materialize_plan(context, credential, source, roles, deadline). The latter
+    runs only after the existing authenticated ingress and private-source
+    handoff, then this profile and existing authority checks validate its actual
+    result. No token is issued and no concrete live transport is supplied here.
     """
-    validate_plan(config, plan)
+    _binding_checked(config)
+    need((plan is None and callable(materialize_plan))
+         or (plan is not None and materialize_plan is None))
+    if plan is not None:
+        validate_plan(config, plan)
     need(type(finish_slot) is runtime.FinishAdoptionSlot
          and finish_slot.binding == config.binding
          and type(expected_peer) is ingress.PeerIdentity
@@ -148,6 +159,11 @@ def connect_parent(*, config, plan, finish_slot, expected_peer, routes, deadline
          and core.finite(deadline)
          and all(callable(x) for x in (wire, publish_ready, open_channel, monotonic)))
     need(finish_capture is None or callable(finish_capture))
+    if plan is None:
+        def materialize(context, credential, source, roles, handoff_deadline):
+            return validate_plan(config, materialize_plan(
+                context, credential, source, roles, handoff_deadline))
+        plan = runtime.PreparedAuthorityPlan(binding=config.binding, materialize=materialize)
     return parent.ParentJobBuilder(config=config, plan=plan, finish_slot=finish_slot,
         expected_peer=expected_peer, routes=routes, deadline=deadline, wire=wire,
         publish_ready=publish_ready, open_channel=open_channel, monotonic=monotonic,
