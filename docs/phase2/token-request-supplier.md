@@ -70,6 +70,21 @@ receipt를 비공개 경로로 인계한 뒤 `supplier.close()`로 남은 참조
 발급 결과 불명확을 다룬다. Linux에서는 OpenSSH 대신 로컬 Python helper와 AF_UNIX IPC를
 실행해 가짜 발급 응답이 기존 메모리 frame으로 전달되고 자식이 종료되는지도 확인한다.
 
+`test_delivery_issued_job_connection.py`는 위 공급부와 native job 부모, Unix rendezvous,
+익명 pipe, source session, PreparedAuthorityPlan, 원본/control adapter를 한 경로로 연결한다.
+실제 issuer HTTP 응답과 비공개 원본 서버는 메모리 fixture로, SSH 실행 파일은 로컬 Python
+helper로 치환한다. Linux 비root에서만 실행하며 TCP/DNS·실제 발급·배포는 금지한다.
+
+- 정상: READY 이후 단회 발급, 발급/수신/plan의 동일 fingerprint, 원본/control 두 번 대조.
+- 실패: 전달이 성공해도 다른 fingerprint의 plan 채택이나 두 번째 control 변경은 거부한다.
+  claim·배포 쓰기에 진입하지 않으며 자식·FD·source session을 정리한다.
+- 기존 Binding의 플랫폼 원본 해시는 유지하고 새 발급 raw 해시로 역대입하지 않는다.
+
+이는 구성요소의 연결 시험이다. 실제 SSH 인증·클러스터 RBAC·운영 SITE 채택·기존 6객체
+기준선·배포·finish의 전체 통합 검증은 아니다. 실행 전 채택해야 하는 job/SSH mapping,
+actor/endpoint와 원본/control 의미는 여전히 별도 입력이다. 미래 run/nonce/발급·종료
+원본을 사전 미제출 자료로 요구하거나 합성하지 않는다. `SITE=None`을 유지한다.
+
 API 해석 근거:
 - [Kubernetes v1.33 TokenRequest 서버](https://github.com/kubernetes/kubernetes/blob/v1.33.0/pkg/registry/core/serviceaccount/storage/token.go): SA 조회와 응답 생성, 이름/namespace 검사, 실제 만료.
 - [Kubernetes v1.33 claims](https://github.com/kubernetes/kubernetes/blob/v1.33.0/pkg/serviceaccount/claims.go): SA UID·namespace 및 iat/nbf/exp 생성.
