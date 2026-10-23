@@ -143,6 +143,23 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(self.reads, 6)
         self.safe(out)
 
+    def test_replicas_conflict_blocks_whole_run_before_service_patch_or_claim(self):
+        for i, obj in enumerate(json.loads(self.c.h.render)):
+            obj = owned(obj, i)
+            if obj['kind'] == 'Deployment':
+                obj['spec']['replicas'] = 0
+                obj['metadata']['managedFields'].append({
+                    'manager': 'kubectl-patch', 'operation': 'Update', 'apiVersion': 'apps/v1',
+                    'fieldsType': 'FieldsV1', 'fieldsV1': {'f:spec': {'f:replicas': {}}}})
+            self.c.h.objects[core.path_for(core.identity(obj))] = obj
+        out = self.app().run('deploy')
+        self.assertEqual('PREFLIGHT_DENIED', out['error_code'], out)
+        self.assertEqual([], self.c.storage.claims)
+        self.assertEqual(0, self.c.sender_calls)
+        self.assertEqual([], self.c.h.requests)  # even earlier Services are not PATCHed
+        self.assertEqual(1, self.baselines)
+        self.safe(out)
+
     def test_preflight_and_session_failure_keep_separate_immutable_diagnostics(self):
         files = {}
         def create_once(root, binding, progress, now, diagnostic, *, phase='session'):

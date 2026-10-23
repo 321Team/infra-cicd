@@ -138,6 +138,32 @@ def includes(actual, desired):
     return actual == desired
 
 
+def replicas_apply_checked(observed, desired):
+    """Reject known replicas ownership conflicts before ANY object is written.
+
+    Both objects have already passed identity/shape checks. This is a narrow
+    no-force preflight, not a complete SSA simulator, dry-run, grant or handoff.
+    A shared same value is harmless here, but changing it needs every owner to
+    be the exact main-resource fds-deployer Apply workflow. Unknown/atomic spec
+    ownership is conservatively blocked; a map's '.' marker is not its children.
+    """
+    current, target = observed['spec'].get('replicas'), desired['spec']['replicas']
+    require(type(current) is int and 0 <= current <= 2**31 - 1,
+            'OBJECT_REPLICAS_INVALID')
+    if current == target:
+        return
+    for owner in observed['metadata']['managedFields']:
+        fields = owner['fieldsV1']
+        if 'f:spec' not in fields:
+            continue
+        spec = fields['f:spec']
+        require(type(spec) is dict, 'OBJECT_REPLICAS_OWNERSHIP_UNKNOWN')
+        if spec == {} or 'f:replicas' in spec:
+            require(owner['manager'] == 'fds-deployer' and owner['operation'] == 'Apply'
+                    and owner['apiVersion'] == 'apps/v1' and not owner.get('subresource'),
+                    'OBJECT_REPLICAS_OWNERSHIP_CONFLICT')
+
+
 class ObjectReconciler:
     """Bind immutable baseline and desired payloads to one run.
 
@@ -154,6 +180,9 @@ class ObjectReconciler:
             # Store private immutable bytes, not caller-owned dict references.
             self.baseline = tuple(None if raw is None else core.encoded(
                 normalized(decode(raw), key)) for key, raw in zip(core.objects_for(binding), baseline))
+            for key, raw, payload in zip(core.objects_for(binding), self.baseline, self.payloads):
+                if raw is not None and key[:2] == ('apps/v1', 'Deployment'):
+                    replicas_apply_checked(decode(raw), decode(payload))
             self.revisions = tuple(deployment_revision(None if raw is None else decode(raw))
                 if key[:2] == ('apps/v1', 'Deployment') else 0
                 for key, raw in zip(core.objects_for(binding), baseline))
