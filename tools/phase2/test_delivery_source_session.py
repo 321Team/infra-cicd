@@ -4,9 +4,11 @@ Reuse real factory/session/reconciler and MemoryStore. Separate Linux cases
 exercise real anonymous pipes. No fake token is operational input/evidence.
 """
 import contextlib
+import copy
 import io
 import json
 import os
+import pickle
 import sys
 import time
 import unittest
@@ -93,6 +95,133 @@ class SourceSessionTests(unittest.TestCase):
         self.assertTrue(all(r._fd is None for r in self.receivers))
         self.assertTrue(all(c._closed and c.token == '' for c in self.made))
         self.assertTrue(all(t._closed and t._credential is None for t in self.transports))
+
+    def prepared(self, callback=None):
+        from test_delivery_job import CONTEXT
+        prepared = runtime.PreparedAuthorityPlan(binding=self.f.config().binding,
+            materialize=callback or (lambda *args: self.f.plan()))
+        prepared.bind_context(CONTEXT)
+        self.addCleanup(prepared.close)
+        return prepared
+
+    def test_prepared_materializes_after_both_receipts_with_real_factory_authentication(self):
+        from test_delivery_job import CONTEXT
+        calls = []
+        expected_deadline = self.f.h.mono + 5
+        def materialize(context, credential, session, roles, deadline):
+            self.assertEqual(CONTEXT, context)
+            self.assertIs(credential, self.f.credential)
+            self.assertIs(session, self.session)
+            self.assertEqual('CONSUMED', session._state)
+            for receiver in self.receivers: receiver.receive.assert_called_once()
+            with self.assertRaises(TypeError): roles['readers'] = ()
+            calls.append(deadline)
+            return self.f.plan()
+        prepared = self.prepared(materialize)
+        rc, result = self.call(plan=prepared)
+        self.assertEqual(0, rc, result)
+        self.assertEqual('SESSION_COMPLETED', result['status'])
+        self.assertEqual('RELEASED', result['fence'])
+        self.assertEqual([expected_deadline], calls)
+        self.assertIn('control', self.blobs); self.assertIn('platform', self.blobs)
+        self.assertIsNone(prepared._materialize); self.assertIsNone(prepared._context)
+        self.closed()
+
+    def test_prepared_status_never_receives_or_materializes(self):
+        callback = Mock(side_effect=AssertionError('MATERIALIZE_FORBIDDEN'))
+        prepared = self.prepared(callback)
+        rc, result = self.call(('status',), plan=prepared)
+        self.assertEqual((0, 'NOT_RUN'), (rc, result['runtime']))
+        callback.assert_not_called()
+        for receiver in self.receivers: receiver.receive.assert_not_called()
+        self.assertEqual([], self.blobs); self.assertEqual([], self.f.p.c.storage.claims)
+        self.assertTrue(prepared._closed)
+
+    def test_materialized_plan_still_requires_fresh_original_control_before_claim(self):
+        def withdrawn(request, pin, original):
+            return replace(original, body=b'SYNTHETIC_WITHDRAWN_CONTROL') if pin.path == 'control' else original
+        self.f.read_hook = withdrawn
+        materialize = Mock(side_effect=lambda *args: self.f.plan())
+        rc, result = self.call(plan=self.prepared(materialize))
+        self.assertEqual(2, rc)
+        materialize.assert_called_once()
+        self.assertEqual([], self.f.p.c.storage.claims)
+        self.assertEqual([], self.f.h.requests)
+        self.assertEqual(0, self.f.p.c.storage.complete_calls)
+        self.closed()
+
+    def test_materializer_failure_never_reaches_claim_or_echoes_secret_and_consumes_plan(self):
+        prepared = self.prepared(Mock(side_effect=ValueError(TOKEN)))
+        rc, result = self.call(plan=prepared)
+        self.assertEqual((2, 'SOURCE_SESSION_SITE_REJECTED'), (rc, result['error_code']))
+        self.assertEqual([], self.f.p.c.storage.claims)
+        with self.assertRaisesRegex(runtime.RuntimeSiteError, 'CONSUMED'):
+            prepared.resolve(credential=self.f.credential, source=self.session, roles={}, deadline=105)
+        self.closed()
+
+    def test_late_materialization_does_not_renew_deadline_or_start_application(self):
+        expected_deadline = self.f.h.mono + 5
+        def late(*args):
+            self.f.h.mono = expected_deadline
+            return self.f.plan()
+        rc, result = self.call(plan=self.prepared(late))
+        self.assertEqual((2, 'NOT_RUN'), (rc, result['runtime']))
+        self.assertEqual([], self.f.p.c.storage.claims)
+        self.assertEqual(expected_deadline, self.session.deadline)
+        self.closed()
+
+    def test_received_token_fingerprint_and_binding_must_match_materialized_plan(self):
+        for index, field in enumerate(('credential', 'binding')):
+            plan = self.f.plan()
+            if field == 'credential':
+                plan = replace(plan, issuer=replace(plan.issuer,
+                    facts=replace(plan.issuer.facts, credential_fingerprint='0'*64)))
+            else:
+                plan = replace(plan, approval=replace(plan.approval,
+                    binding=replace(plan.approval.binding, run_id='SYNTHETIC_OTHER_RUN')))
+            # Independent source/FD ownership for each failure case.
+            with self.subTest(field=field):
+                if index:
+                    self.rosa = self.receiver()
+                    self.session = source.PrivateSourceSession((self.channel(),), wire=self.wire,
+                        monotonic=lambda: self.f.h.mono)
+                rc, result = self.call(plan=self.prepared(lambda *args, p=plan: p))
+                self.assertEqual((2, 'NOT_RUN'), (rc, result['runtime']))
+                self.assertEqual([], self.f.p.c.storage.claims)
+        self.closed()
+
+    def test_preparation_cannot_be_rebound_copied_or_used_without_source_receipt(self):
+        prepared = self.prepared()
+        with self.assertRaisesRegex(runtime.RuntimeSiteError, 'CONTEXT_INVALID'):
+            prepared.bind_context(replace(prepared._context, run_id='456'))
+        for operation in (copy.copy, copy.deepcopy, pickle.dumps):
+            with self.assertRaises(runtime.RuntimeSiteError): operation(prepared)
+        with self.assertRaisesRegex(runtime.RuntimeSiteError, 'MATERIALIZATION_FAILED'):
+            prepared.resolve(credential=self.f.credential, source=self.session,
+                             roles={}, deadline=105)
+        self.assertEqual([], self.f.p.c.storage.claims)
+
+    def test_callback_cannot_close_preparation_then_return_a_plan(self):
+        prepared = None
+        def closing(*args):
+            prepared.close()
+            return self.f.plan()
+        prepared = self.prepared(closing)
+        rc, result = self.call(plan=prepared)
+        self.assertEqual((2, 'NOT_RUN'), (rc, result['runtime']))
+        self.assertEqual([], self.f.p.c.storage.claims); self.closed()
+
+    def test_materializer_interrupts_are_sanitized_and_all_handles_closed(self):
+        for index, error in enumerate((KeyboardInterrupt(TOKEN), SystemExit(TOKEN))):
+            with self.subTest(kind=type(error).__name__):
+                if index:
+                    self.rosa = self.receiver()
+                    self.session = source.PrivateSourceSession((self.channel(),), wire=self.wire,
+                        monotonic=lambda: self.f.h.mono)
+                with self.assertRaises(type(error)) as caught:
+                    self.call(plan=self.prepared(Mock(side_effect=error)))
+                self.assertEqual(() if type(error) is KeyboardInterrupt else (130,), caught.exception.args)
+        self.closed()
 
     def test_real_factory_session_complete_owns_sources_not_borrowed_reader(self):
         borrowed = self.f.reader

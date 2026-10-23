@@ -160,9 +160,10 @@ def build_owned_invocation(context, command, *, config, plan, finish_slot,
              and callable(monotonic) and callable(wire), 'P2_HANDOFF_CONFIGURATION_INVALID')
         context.check()
         site.configuration_checked(config)
-        need(type(plan) is runtime.RuntimeAuthorityPlan
-             and plan.approval.binding == config.binding
+        need(runtime.plan_binding(plan) == config.binding
              and command in ('preflight', config.binding.action), 'P2_HANDOFF_CONFIGURATION_INVALID')
+        if type(plan) is runtime.PreparedAuthorityPlan:
+            plan.bind_context(context)
         need(type(sources) is tuple and 0 < len(sources) <= 16
              and all(type(x) is SourceHandoff for x in sources), 'P2_HANDOFF_CONFIGURATION_INVALID')
         clock = _Clock(monotonic)
@@ -199,7 +200,8 @@ def build_owned_invocation(context, command, *, config, plan, finish_slot,
         return invocation
     except BaseException as error:
         ok = True
-        for handle in (session, pending_receiver, *reversed(source_receivers), rosa):
+        prepared = plan if type(plan) is runtime.PreparedAuthorityPlan else None
+        for handle in (session, pending_receiver, *reversed(source_receivers), rosa, prepared):
             if handle is not None:
                 try:
                     result = handle.close()

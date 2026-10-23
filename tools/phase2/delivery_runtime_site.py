@@ -5,7 +5,10 @@ Source readers are borrowed; this module owns only the per-invocation adapters.
 No token issuance, source publication, environment discovery or auto-retry.
 """
 from dataclasses import dataclass, field
+import hmac
+import threading
 import time
+from types import MappingProxyType
 
 import delivery_adapter as core
 import delivery_cli as cli
@@ -67,6 +70,97 @@ class RuntimeAuthorityPlan:
     producer: EvidenceAdoption = field(repr=False)
     subject: ExpectedSubject = field(repr=False)
     baseline: BaselineAdoption | None = field(default=None, repr=False)
+
+
+class PreparedAuthorityPlan:
+    """One job's post-handoff plan construction, NOT authenticated authority.
+
+    Trusted materialize(context, credential, source, roles, deadline) consumes
+    actual in-memory inputs. It must honor the existing deadline and must not
+    issue/retry credentials, log secrets, or manufacture adopted originals.
+    Existing factory/source/control/current-RBAC checks still authenticate the
+    returned plan. No callback, input read or I/O happens at construction.
+    """
+    def __init__(self, *, binding, materialize):
+        core.binding_checked(binding)
+        need(callable(materialize), 'RUNTIME_PLAN_PREPARATION_INVALID')
+        self._binding, self._materialize = binding, materialize
+        self._context, self._closed, self._lock = None, False, threading.Lock()
+
+    @property
+    def binding(self):
+        return self._binding
+
+    def __repr__(self):
+        return '<P2 prepared authority plan: private, single-use, not authority>'
+
+    def _no_copy(self, *unused):
+        raise RuntimeSiteError('RUNTIME_PLAN_PREPARATION_INVALID')
+
+    __copy__ = __deepcopy__ = __reduce_ex__ = _no_copy
+
+    def bind_context(self, context):
+        from delivery_job import JobContext
+        need(type(context) is JobContext, 'RUNTIME_PLAN_CONTEXT_INVALID')
+        context.check()
+        with self._lock:
+            need(not self._closed and self._materialize is not None,
+                 'RUNTIME_PLAN_PREPARATION_CONSUMED')
+            need(self._context is None or self._context == context, 'RUNTIME_PLAN_CONTEXT_INVALID')
+            self._context = context
+
+    def resolve(self, *, credential, source, roles, deadline):
+        from delivery_source_session import PrivateSourceSession
+        with self._lock:
+            need(not self._closed and self._materialize is not None,
+                 'RUNTIME_PLAN_PREPARATION_CONSUMED')
+            materialize, self._materialize = self._materialize, None
+            context = self._context  # A failed attempt consumes preparation too.
+        try:
+            need(context is not None and type(credential) is BearerCredential
+                 and type(source) is PrivateSourceSession and source._state == 'CONSUMED'
+                 and type(roles) is dict and core.finite(deadline)
+                 and deadline == source.deadline and source.now() < deadline,
+                 'RUNTIME_PLAN_PREPARATION_INVALID')
+            plan = materialize(context, credential, source,
+                               MappingProxyType(dict(roles)), deadline)
+            # Callback time consumes the SAME capped local monotonic deadline.
+            need(source.now() < deadline, 'RUNTIME_PLAN_PREPARATION_EXPIRED')
+            with self._lock:
+                need(not self._closed, 'RUNTIME_PLAN_PREPARATION_CONSUMED')
+            need(type(plan) is RuntimeAuthorityPlan and type(plan.approval) is AdoptedGrant
+                 and type(plan.issuer) is EvidenceAdoption
+                 and type(plan.producer) is EvidenceAdoption
+                 and type(plan.issuer.grant) is AdoptedGrant
+                 and type(plan.producer.grant) is AdoptedGrant
+                 and type(plan.issuer.facts) is IssuerFacts
+                 and plan.approval.binding == plan.issuer.grant.binding
+                 == plan.producer.grant.binding == self.binding,
+                 'RUNTIME_PLAN_RESULT_INVALID')
+            fp = plan.issuer.facts.credential_fingerprint
+            need(type(fp) is str and hmac.compare_digest(fp, credential.fingerprint),
+                 'RUNTIME_PLAN_CREDENTIAL_MISMATCH')
+            return plan
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt() from None
+        except SystemExit:
+            raise SystemExit(130) from None
+        except Exception:
+            raise RuntimeSiteError('RUNTIME_PLAN_MATERIALIZATION_FAILED') from None
+
+    def close(self):
+        with self._lock:
+            self._closed, self._materialize, self._context = True, None, None
+        return True  # Reference release, not source/server credential revocation.
+
+
+def plan_binding(plan):
+    """Exact-type preparation check only; never materializes/authenticates."""
+    if type(plan) is PreparedAuthorityPlan:
+        return plan.binding
+    need(type(plan) is RuntimeAuthorityPlan and type(plan.approval) is AdoptedGrant,
+         'RUNTIME_SITE_PLAN_INVALID')
+    return plan.approval.binding
 
 
 class CodeAdoptedBaseline:

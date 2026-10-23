@@ -221,6 +221,37 @@ class LinuxHandoffTests(unittest.TestCase):
             with self.assertRaises(Exception): rosa.receive(deadline)
         finally: invocation.close()
 
+    def test_prepared_plan_native_handoff_driver_then_source_and_authority_validation(self):
+        calls = []
+        def materialize(context, credential, pool, roles, deadline):
+            self.assertEqual(CONTEXT, context)
+            self.assertEqual(self.args['rosa_token'], credential.token)
+            self.assertEqual('CONSUMED', pool._state)
+            self.assertEqual(self.f.h.mono+5, deadline)
+            calls.append(1)
+            return self.f.plan()
+        prepared = runtime.PreparedAuthorityPlan(binding=self.f.config().binding,
+                                                materialize=materialize)
+        invocation = self.call(plan=prepared)
+        self.assertEqual([], calls)  # Neither pipes nor invocation checks materialize a plan.
+        owned = [invocation.receiver] + [c.receiver for c in invocation.source_session.channels]
+        original = runtime.RuntimeAuthorityFactory
+        def factory(*a, **kw):
+            return original(*a, **kw, wall=lambda:self.f.h.now, monotonic=lambda:self.f.h.mono)
+        out = io.StringIO()
+        with patch.object(runtime, 'RuntimeAuthorityFactory', side_effect=factory), \
+                patch.object(site, 'build_application', side_effect=lambda c, **kw:self.f.app(factory=kw['authority_factory'])), \
+                contextlib.redirect_stdout(out):
+            rc = job.main(['deploy', '--execute'], declaration=job.JobSite(RUNNER, lambda *a:invocation),
+                context=CONTEXT, revision=lambda:CONTEXT.workflow_sha, identity=lambda:RUNNER)
+        result = json.loads(out.getvalue())
+        self.assertEqual((0,'SESSION_COMPLETED','RELEASED'),
+                         (rc,result['status'],result['result']['fence']),result)
+        self.assertEqual([1], calls)
+        self.assertTrue(prepared._closed)
+        self.assertTrue(all(rec._fd is None for rec in owned))
+        self.assertNotIn(fixture.TOKEN, out.getvalue())
+
     def test_capacity_shortwrite_and_os_write_errors_are_not_retried(self):
         import fcntl
         native = os.pipe2

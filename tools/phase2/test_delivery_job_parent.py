@@ -13,6 +13,7 @@ import delivery_job as job
 import delivery_job_handoff as handoff
 import delivery_job_parent as parent
 import delivery_job_site as declaration
+import delivery_runtime_site as runtime
 import test_delivery_crosshost_ingress as fixture
 from test_delivery_job import CONTEXT
 
@@ -47,6 +48,34 @@ class ParentTests(unittest.TestCase):
         self.assertEqual(1,self.channels[0].close_calls)
         with self.assertRaisesRegex(parent.ParentBuildError,'CONSUMED'):builder(CONTEXT,'deploy')
         self.assertEqual(1,self.publish.call_count);self.assertEqual(1,self.open.call_count)
+
+    def test_prepared_plan_ready_does_not_require_or_materialize_future_issuer_facts(self):
+        materialize = Mock(side_effect=AssertionError('FUTURE_PLAN_FORBIDDEN'))
+        prepared = runtime.PreparedAuthorityPlan(binding=self.f.config().binding, materialize=materialize)
+        self.addCleanup(prepared.close)
+        builder = self.builder(plan=prepared)
+        marker = object()
+        with patch.object(handoff, 'build_owned_invocation', return_value=marker) as build:
+            self.assertIs(marker, builder(CONTEXT, 'deploy'))
+        materialize.assert_not_called()
+        self.assertIs(prepared, build.call_args.kwargs['plan'])
+        self.assertEqual(CONTEXT, prepared._context)
+        self.assertEqual(1, self.channels[0].close_calls)
+
+    def test_prepared_plan_on_failed_peer_auth_is_closed_without_materializing(self):
+        materialize = Mock(side_effect=AssertionError('MATERIALIZE_FORBIDDEN'))
+        prepared = runtime.PreparedAuthorityPlan(binding=self.f.config().binding, materialize=materialize)
+        builder = self.builder(plan=prepared)
+        opening = self.open.side_effect
+        def wrong(*args):
+            result = opening(*args)
+            self.channels[-1].peer = replace(self.peer, principal='SYNTHETIC_WRONG_PEER')
+            return result
+        self.open.side_effect = wrong
+        with self.assertRaisesRegex(parent.ParentBuildError, 'PEER_REJECTED'):
+            builder(CONTEXT, 'deploy')
+        materialize.assert_not_called()
+        self.assertTrue(prepared._closed); self.assertIsNone(prepared._materialize)
 
     def test_shape_context_action_slot_or_plan_rejected_before_publication(self):
         cases=[(dict(config=None),CONTEXT,'deploy'),(dict(plan=None),CONTEXT,'deploy'),

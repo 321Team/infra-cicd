@@ -154,6 +154,7 @@ def run_site(argv, *, source_session, config, plan, readers, finish_slot, receiv
     import delivery_site as site
     source = source_session if type(source_session) is PrivateSourceSession else None
     owned = receiver if type(receiver) is PipeCredentialReceiver else None
+    prepared = plan if type(plan) is runtime.PreparedAuthorityPlan else None
     result, credential, application = None, None, None
     try:
         parser = cli.SafeParser(description='Reviewed source-session runtime; no default target.')
@@ -162,7 +163,7 @@ def run_site(argv, *, source_session, config, plan, readers, finish_slot, receiv
         need(source is not None, 'SOURCE_SESSION_REQUIRED')
         need(config is not None, 'RUNTIME_SITE_UNCONFIGURED')
         site.configuration_checked(config)
-        need(type(plan) is runtime.RuntimeAuthorityPlan and config.binding == plan.approval.binding,
+        need(config.binding == runtime.plan_binding(plan),
              'RUNTIME_SITE_BINDING_MISMATCH')
         need(readers is None and producer_run_reader is None and finish_collection is None
              and finish_observation is None, 'SOURCE_SESSION_ROLE_CONFLICT')
@@ -176,6 +177,10 @@ def run_site(argv, *, source_session, config, plan, readers, finish_slot, receiv
             deadline = source.prepare(owned, handoff_deadline)
             credential = owned.receive(deadline)
             roles = source.open(credential)
+            if prepared is not None:
+                plan = prepared.resolve(credential=credential, source=source, roles=roles,
+                                        deadline=deadline)
+                need(source.now() < deadline, 'SOURCE_SESSION_HANDOFF_EXPIRED')
             factory = runtime.RuntimeAuthorityFactory(plan, roles['readers'], finish_slot,
                 finish_capture=finish_capture, producer_pins=producer_pins,
                 producer_run_reader=roles.get('producer_run_reader'),
@@ -199,10 +204,14 @@ def run_site(argv, *, source_session, config, plan, readers, finish_slot, receiv
         result = {'status': 'BLOCKED', 'error_code': 'SOURCE_SESSION_PREPARATION_FAILED',
                   'execution_authorized': False,
                   'runtime': 'NOT_RUN' if application is None else 'NOT_VERIFIED'}
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt() from None
+    except SystemExit:
+        raise SystemExit(130) from None
     finally:
         credential = None
         ok = True
-        for handle in (source, owned):
+        for handle in (source, owned, prepared):
             if handle is not None:
                 try:
                     closed = handle.close()
