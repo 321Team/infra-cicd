@@ -28,6 +28,7 @@ import delivery_ssh_bridge as bridge
 import delivery_token_request as issuer
 from delivery_object_reader import BearerCredential
 from delivery_approval_source import ApprovalSourceError
+from delivery_evidence_source import EvidenceSourceError
 from delivery_private_source import PrivateGitHubOriginalAdapter
 from delivery_verifier import Progress, ReadRequest
 import test_delivery_job_rendezvous as local
@@ -118,22 +119,41 @@ class IssuedJobConnectionTests(unittest.TestCase):
         self.thread.start()  # Publisher must not wait for receiver/ACK here.
 
     def clean(self):
+        # Safety cleanup must not disguise a helper that failed to exit itself.
+        forced = []
         if self.thread:
             self.thread.join(8)
         for proc in self.processes:
             if proc.poll() is None:
+                forced.append(proc)
                 proc.kill()
                 proc.wait(timeout=2)
         if self.thread:
             self.thread.join(2)
-        if self.invocation:
-            self.invocation.close()
-        self.owner.close()
-        if self.supplier:
-            self.supplier.close()
+        try:
+            if self.invocation:
+                self.assert_invocation_closed()
+        finally:
+            self.owner.close()
+            if self.supplier:
+                self.supplier.close()
         self.assertFalse(self.thread and self.thread.is_alive())
+        self.assertEqual([], forced, 'HELPER_REQUIRED_FORCED_KILL')
+        self.assertTrue(all(proc.returncode == 0 for proc in self.processes))
 
-    def connect(self, *, wrong_fingerprint=False):
+    def assert_invocation_closed(self):
+        handles = tuple(self.invocation.source_session._handles)
+        self.assertIs(self.invocation.close(), True)
+        self.assertIsNone(self.invocation.receiver._fd)
+        self.assertEqual('CLOSED', self.invocation.source_session._state)
+        self.assertEqual([], self.invocation.source_session._handles)
+        self.assertEqual({}, self.invocation.source_session._readers)
+        self.assertTrue(self.invocation.plan._closed)
+        # Exact owned credentials/transports, not a fabricated cleanup receipt.
+        self.assertTrue(all(handle._closed for handle in handles))
+        self.assertIs(self.invocation.close(), True)  # Idempotent owner cleanup.
+
+    def connect(self, *, wrong_fingerprint=False, terminal=False):
         wire = sources.SourceRoleWiring(binding=self.f.h.binding,
             routes=tuple(sources.RoleRoute(role, self.repo, self.repo) for role in sources.ROLES),
             wall=lambda: 1001, monotonic=self.clock)
@@ -182,7 +202,12 @@ class IssuedJobConnectionTests(unittest.TestCase):
         self.assertNotEqual(self.platform_hash, core.digest(self.raw))
         factory = runtime.RuntimeAuthorityFactory(plan, roles['readers'], self.f.slot,
                                                  wall=lambda: 1001, monotonic=self.clock)
-        progress = Progress()
+        if terminal:
+            # A SYNTHETIC in-memory terminal record, not a real deployment or
+            # sender-close proof. This test isolates native handoff -> finish
+            # original/control authentication; run_session close is tested elsewhere.
+            self.f.terminal()
+        progress = self.f.progress if terminal else Progress()
         bundle = factory(self.f.h.binding, credential, lambda: progress)
         self.addCleanup(bundle.close)
         return bundle, ReadRequest(self.f.h.binding, credential, progress, deadline)
@@ -195,9 +220,7 @@ class IssuedJobConnectionTests(unittest.TestCase):
         self.assertEqual(['ready', 'issue', 'delivered', 'materialize'], self.events)
         self.assertEqual([], self.f.h.requests)  # No mock deployment writes either.
         self.assertEqual([], self.f.p.c.storage.claims)
-        self.assertTrue(self.invocation.close())
-        self.assertIsNone(self.invocation.receiver._fd)
-        self.assertEqual('CLOSED', self.invocation.source_session._state)
+        self.assert_invocation_closed()
         self.assertIsNone(declaration.SITE)
 
     def test_delivered_credential_cannot_adopt_foreign_plan_fingerprint(self):
@@ -208,6 +231,7 @@ class IssuedJobConnectionTests(unittest.TestCase):
         self.assertEqual([], self.f.h.requests)
         self.assertEqual([], self.f.p.c.storage.claims)
         self.assertIsNotNone(self.receipt)  # Real SYNTHETIC receipt retained for caller cleanup.
+        self.assert_invocation_closed()
 
     def test_delivered_then_second_control_drift_still_denies_before_claim(self):
         bundle, request = self.connect()
@@ -226,6 +250,41 @@ class IssuedJobConnectionTests(unittest.TestCase):
         self.assertIn('delivered', self.events)
         self.assertEqual([], self.f.h.requests)
         self.assertEqual([], self.f.p.c.storage.claims)
+        self.assert_invocation_closed()
+
+    def test_native_handoff_does_not_invent_finish_and_authenticates_supplied_terminal_original(self):
+        bundle, request = self.connect(terminal=True)
+        with self.assertRaisesRegex(runtime.RuntimeSiteError, 'FINISH_ADOPTION_NOT_INSTALLED'):
+            bundle.adapters.finish(request)
+        self.assertEqual([], self.blobs)
+        self.f.slot.install(runtime.EvidenceAdoption(self.f.grants['finish'], self.f.finish),
+                            request.progress)
+        value = bundle.adapters.finish(request)
+        self.assertEqual('EXCLUSIVE_ACCESS_ENDED', value.disposition)
+        self.assertEqual(request.progress.key, value.progress_key)
+        self.assertEqual(['finish', 'control', 'finish', 'control'], self.blobs)
+        self.assertEqual(0, self.f.p.c.storage.complete_calls)  # Auth != claim release.
+        self.assert_invocation_closed()
+
+    def test_delivered_terminal_record_cannot_bypass_second_finish_control_withdrawal(self):
+        bundle, request = self.connect(terminal=True)
+        self.f.slot.install(runtime.EvidenceAdoption(self.f.grants['finish'], self.f.finish),
+                            request.progress)
+        count = 0
+        def withdraw(req, pin, original):
+            nonlocal count
+            if pin.path == 'control':
+                count += 1
+                if count == 2:
+                    return replace(original, body=b'SYNTHETIC_WITHDRAWN_FINISH_CONTROL')
+            return original
+        self.f.read_hook = withdraw
+        with self.assertRaises(EvidenceSourceError):
+            bundle.adapters.finish(request)
+        self.assertEqual(2, count)
+        self.assertEqual(0, self.f.p.c.storage.complete_calls)
+        self.assertEqual([], self.f.p.c.storage.claims)
+        self.assert_invocation_closed()
 
 
 if __name__ == '__main__':
