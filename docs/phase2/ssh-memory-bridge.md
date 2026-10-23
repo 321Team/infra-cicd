@@ -1,5 +1,7 @@
 # #46 SSH 메모리 bridge·운영 SITE 연결 후보
 
+기존6객체·5역할·native job 연결은 후속 [명시 SITE 조립 후보](existing-job-site.md)에서 묶는다. SSH source-host 시계/설정과 job-host 시계/설정은 분리한다.
+
 `delivery_ssh_bridge.py`와 고정 launcher `delivery_ssh_bridge_helper.py`는 명시된 기존 OpenSSH 경로로 공개 job request와 자격 프레임을 메모리 전달하는 후보 코드다. 생성자는 프로세스·소켓·시계·자격을 호출하지 않는다. **SITE는 여전히 `None`이다.** 검증은 가짜 SSH가 로컬 Python helper를 호출하는 오프라인 시험이며 실제 SSH·서버 접속·발급·배포를 하지 않는다.
 
 ## 연결 순서
