@@ -7,10 +7,10 @@ profile. No discovery, credentials, filesystem or callback invocation here.
 import delivery_fds_job_site as assembly
 import delivery_fds_site_inputs as profile
 import delivery_fds_observed_baseline as baseline
-from delivery_job import RunnerIdentity
+import delivery_fds_management_route as management
 
 
-EXPECTED_RUNNER = RunnerIdentity('cicd-runner01', 'server01_cicd-runner', 1000)
+EXPECTED_RUNNER = management.EXPECTED_RUNNER
 # Assignment only. Never treat this name or historical can-i as authentication
 # of a BearerCredential. The existing issuer API still needs the actual actor.
 ISSUANCE_OPERATOR = 'hayeoung'
@@ -21,6 +21,7 @@ ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46
 build_configuration = profile.build_configuration
 build_token_issuer = profile.build_token_issuer
 connect_baseline = baseline.connect_selected_baseline
+build_management_bridge_configuration = management.build_configuration
 
 
 def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
@@ -61,11 +62,13 @@ def configuration_status():
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
             'baseline_expectation': baseline.selection_status(),
+            'management_route_expectation': management.selection_status(),
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
              'support': '재환: 기존 Runner/SSH 배치 사실, 하영: 발급측 연결 사실',
-             'items': ['SSH 방향·host key/기존 key 경로·helper UID/배치',
+             'items': ['issuer 실행 위치·기존 관리 SSH와의 결합',
+                       'SSH port/host-key 별칭·remote Python/helper 경로·현재 UID/netns',
                        '인증된 READY 전달·양 호스트 deadline 연결',
                        'input/source/persistent store 위치·현재 endpoint']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',

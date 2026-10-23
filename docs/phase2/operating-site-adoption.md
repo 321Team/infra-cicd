@@ -163,3 +163,8 @@ READY의 왕복 방식이다. `inventory/hosts.yml`의 svc_ansible은 다른 관
 메모리 자격 전달에 그대로 사용하지 않는다. 기존 소스/control/finish 인증 계약을 유지하고,
 전체 `SshBridgeConfig`·`SITE`를 채우지는 않았다. 필요한 것은 위 남은 사실/중앙 배치 선택이며
 새 key·신규 권한·원본 재수집이나 과거 Runner 시험의 전량 반복을 요구하는 절차가 아니다.
+
+위 역사적 관리 경로를 [명시 bridge 설정](management-ssh-selection.md)에 연결했다.
+같은 로그인 계정의 helper 기대 UID1000은 이 경로에만 명시 선택하며 현재 관측값으로
+표시하지 않는다. 포트·host-key 별칭·remote Python/helper·예산은 필수 입력이고,
+issuer 위치·helper 배치/netns·실제 원본/control/finish가 빠진 전체 SITE는 계속 차단한다.
