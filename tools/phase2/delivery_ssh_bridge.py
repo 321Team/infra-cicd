@@ -150,24 +150,32 @@ def _pair_shape(read_fd, write_fd):
 
 
 def _reap_owned(proc, budget):
-    interrupted = False
+    interrupted = None
+    def remember(exc):
+        nonlocal interrupted
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            interrupted = type(exc)
     try:
         if proc.poll() is not None:
-            return True
+            return True, None
         proc.terminate()
         proc.wait(timeout=budget.remaining(budget.limit))
     except BaseException as exc:
         # Interrupt during terminate/wait must not skip kill/reap of our child.
-        interrupted = not isinstance(exc, Exception)
+        remember(exc)
         try:
             proc.kill()
+        except BaseException as kill_error:
+            remember(kill_error)
+        # Attempt reap even when kill was interrupted or the child already exited.
+        try:
             proc.wait(timeout=1)  # Cleanup only, never renewed execution budget.
-        except BaseException:
-            return False
+        except BaseException as wait_error:
+            remember(wait_error)
     try:
-        return proc.poll() is not None and not interrupted
+        return proc.poll() is not None, interrupted
     except BaseException:
-        return False
+        return False, interrupted
 
 
 def _raise(error):
@@ -262,7 +270,10 @@ class SshCredentialBridge(ingress._NoCopy):
                 except BaseException:
                     cleanup = False
             if proc is not None:
-                cleanup = _reap_owned(proc, self._budget) and cleanup
+                reaped, interrupted = _reap_owned(proc, self._budget)
+                cleanup = reaped and cleanup
+                if interrupted is not None:
+                    error = KeyboardInterrupt() if interrupted is KeyboardInterrupt else SystemExit(130)
             if not cleanup:
                 error = BridgeError('P2_SSH_CLEANUP_FAILED')
             elif error is None:

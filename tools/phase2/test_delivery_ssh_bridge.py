@@ -93,8 +93,12 @@ class BridgePolicyTests(unittest.TestCase):
                 if where=='terminate':proc.terminate.side_effect=exc
                 else:proc.wait.side_effect=[exc,0]
                 result=bridge._reap_owned(proc,unix._Budget(20,lambda:10))
-                self.assertEqual(isinstance(exc,Exception),result)
+                self.assertEqual((True,None if isinstance(exc,Exception) else type(exc)),result)
                 proc.kill.assert_called_once();self.assertEqual(1,proc.wait.call_args.kwargs['timeout'])
+        proc=Mock();proc.poll.side_effect=[None,0];proc.terminate.side_effect=OSError(TOKEN)
+        proc.kill.side_effect=KeyboardInterrupt(TOKEN)
+        self.assertEqual((True,KeyboardInterrupt),bridge._reap_owned(proc,unix._Budget(20,lambda:10)))
+        proc.wait.assert_called_once_with(timeout=1)
         for exc in (KeyboardInterrupt(TOKEN),OSError(TOKEN)):
             value=Mock();value.close.side_effect=exc
             self.assertFalse(bridge._clean(value))
@@ -157,15 +161,20 @@ class BridgeLinuxTests(unittest.TestCase):
         supplier.assert_not_called();self.assertFalse(value.supply_attempted);self.assertIsNotNone(self.procs[0].poll())
 
     def test_supplier_exception_interrupt_or_late_return_consumed_and_child_reaped(self):
-        for mode in ('exception','interrupt','late'):
+        for mode in ('exception','interrupt','late','cleanup_interrupt'):
             value=self.client()
             def supply(*args):
-                if mode=='exception':raise ValueError(TOKEN)
+                if mode in ('exception','cleanup_interrupt'):raise ValueError(TOKEN)
                 if mode=='interrupt':raise KeyboardInterrupt(TOKEN)
                 value._budget.limit=time.monotonic()-1
                 return credentials(*args)
-            with self.subTest(mode=mode), patch.object(subprocess,'Popen',side_effect=self.start):
-                with self.assertRaises(KeyboardInterrupt if mode=='interrupt' else bridge.BridgeError) as e:
+            original=bridge._reap_owned
+            def reap(*args):
+                result=original(*args)
+                return (result[0],KeyboardInterrupt) if mode=='cleanup_interrupt' else result
+            with self.subTest(mode=mode), patch.object(subprocess,'Popen',side_effect=self.start), \
+                 patch.object(bridge,'_reap_owned',side_effect=reap):
+                with self.assertRaises(KeyboardInterrupt if mode in ('interrupt','cleanup_interrupt') else bridge.BridgeError) as e:
                     value.send_from_supplier(self.request,provide_credentials=supply)
                 self.assertNotIn(TOKEN,str(e.exception));self.assertTrue(value.supply_attempted)
                 self.assertIsNotNone(self.procs[-1].poll())
