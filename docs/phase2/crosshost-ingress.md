@@ -124,6 +124,12 @@ publish callback이 받은 요청을 바꿔도 저장된 job/nonce는 바뀌지 
 해당 receiver를 닫아 무효화한다. 부분 자원을 만들고 반환 전에 실패한 callback은 그 부분을 스스로 정리한다.
 open이 정확한 channel을 반환하면 마감이 지났어도 core가 해당 channel 정리를 맡는다.
 bundle은 부모가 참조를 정리하고, 성공 반환한 invocation만 기존 driver가 소유한다.
+bundle·receiver 정리가 모두 끝나기 전에 invocation의 소유권을 넘기지 않는다.
+정리 중 예외·인터럽트가 나도 나머지 정리를 시도하며, 반환하지 못한 정확한
+`RuntimeInvocation`의 source session·pipe·prepared plan도 닫는다. 외부에서 빌린
+full plan이나 임의 반환 객체에는 `close`를 호출하지 않는다. 정리 실패는
+`P2_PARENT_CLEANUP_FAILED`, 인터럽트는 원문 없는 `KeyboardInterrupt`/`SystemExit(130)`으로
+보고하고 같은 builder를 재사용하지 않는다. 참조·FD 정리는 서버 측 자격 회수의 증거가 아니다.
 status/gate는 기존 driver 규칙대로 builder·전송부를 호출하지 않는다.
 
 이 helper는 SSH 프로세스·rendezvous 경로·listener를 만들지 않고 임의 프로세스도 종료하지 않는다.
