@@ -67,6 +67,19 @@ PR100 위에 쌓은 변경을 독립 검토할 수 있도록 P2 오프라인 CI�
 
 ## 구현 완료와 잔여의 구분
 
+`PreparedAuthorityPlan.resolve`는 실제 자격 수신 뒤 운영 plan을 완성하는 연결부다.
+완성 콜백 실패·잘못된 결과·중단 시에는 고정 오류 또는 정제한 인터럽트만 반환하며,
+이 메서드의 예외 연쇄와 traceback 프레임에 콜백·자격·원본 reader·반환 plan을 남기지 않는다.
+실패한 준비 객체는 재사용할 수 없다. 빌린 source session과 자격의 종료는 기존 소유자가
+담당하며, 참조 해제를 메모리 보안 소거나 서버 자격 회수로 표현하지 않는다.
+이는 해당 연결부의 처리 범위이며 호출자나 모든 다른 모듈의 traceback 제거 보장은 아니다.
+
+기존 플랫폼 원본(CA·대상·RBAC·Route 근거)과 새 TokenRequest 응답은 자동으로 같은
+원본이 되지 않는다. 최종 Binding은 플랫폼 원본 해시를 포함하므로, Binding 고정 뒤
+발급되는 응답 raw를 그 사전 해시의 원본으로 대입해서는 안 된다. 실제 저장·인증 경로와
+두 근거의 의미를 연결한 운영 채택이 남아 있으며, 이 구분을 위한 별도 GO나 재제출
+양식을 만들지 않는다. 새 발급 응답의 token·시각·해시를 예상값으로 채우지 않는다.
+
 - 이번 구현: 선택적 의미 채택 판정기, 승인/issuer/producer/기준선/finish의 구체 factory, 기존 CLI·pipe·실제 progress 연결과 실패/정리 처리.
 - 실제 연결 잔여: 해당 방식의 운영 채택, 실제 발급/RBAC·공급/이미지/clean render·종료 원본과 본인 자격, 승인 대상/창·현장 경로를 구성하는 일. 미래 종료 원본이나 end-page digest를 추정해 채우지 않는다.
 - 인수 잔여: 정상 Commit→실제 ROSA 배포, 실제 Test/Scan 실패 배포 차단, Pod imageID·Commit 역추적, Health/R01/R02/R04/R07, 이전 승인 digest 복구 및 원본 증적 편입. STATIC/MOCK/CI/REVIEW/MERGE는 이 Runtime AC를 대신하지 않는다.

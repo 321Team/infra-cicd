@@ -137,6 +137,58 @@ class SourceSessionTests(unittest.TestCase):
         self.assertEqual([], self.blobs); self.assertEqual([], self.f.p.c.storage.claims)
         self.assertTrue(prepared._closed)
 
+    def test_materializer_error_drops_private_exception_chain_and_owned_frame_references(self):
+        deadline = self.session.prepare(self.rosa, self.f.h.mono + 5)
+        roles = self.session.open(self.rosa.receive(deadline))
+        for kind in (ValueError, runtime.RuntimeSiteError, KeyboardInterrupt, SystemExit):
+            def materialize(*args, error_type=kind):
+                private_original = TOKEN
+                raise error_type(private_original)
+            prepared = self.prepared(materialize)
+            expected = runtime.RuntimeSiteError if issubclass(kind, Exception) else kind
+            try:
+                prepared.resolve(credential=self.f.credential, source=self.session,
+                                 roles=roles, deadline=deadline)
+            except expected as caught:
+                self.assertIsNone(caught.__context__)
+                self.assertIsNone(caught.__cause__)
+                self.assertNotIn(TOKEN, str(caught))
+                names = []
+                tb = caught.__traceback__
+                while tb:
+                    names.append(tb.tb_frame.f_code.co_name)
+                    if tb.tb_frame.f_code is runtime.PreparedAuthorityPlan.resolve.__code__:
+                        for name in ('materialize', 'credential', 'source', 'roles', 'plan'):
+                            self.assertIsNone(tb.tb_frame.f_locals[name], name)
+                    tb = tb.tb_next
+                self.assertNotIn('materialize', names)
+            else:
+                self.fail('materialization failure must stop')
+            self.assertIsNone(prepared._materialize)
+            # resolve borrows this session; its owner still closes it.
+            self.assertEqual('CONSUMED', self.session._state)
+            self.assertFalse(self.made[0]._closed)
+            self.assertEqual([], self.f.p.c.storage.claims)
+            self.assertEqual([], self.f.h.requests)
+
+    def test_rejected_materializer_result_drops_returned_plan_from_error_frame(self):
+        deadline = self.session.prepare(self.rosa, self.f.h.mono + 5)
+        roles = self.session.open(self.rosa.receive(deadline))
+        prepared = self.prepared(lambda *unused: {'private_original': TOKEN})
+        try:
+            prepared.resolve(credential=self.f.credential, source=self.session,
+                             roles=roles, deadline=deadline)
+        except runtime.RuntimeSiteError as caught:
+            self.assertIsNone(caught.__context__)
+            tb = caught.__traceback__
+            while tb:
+                if tb.tb_frame.f_code is runtime.PreparedAuthorityPlan.resolve.__code__:
+                    self.assertIsNone(tb.tb_frame.f_locals['plan'])
+                tb = tb.tb_next
+        else:
+            self.fail('untyped plan cannot be adopted')
+        self.assertEqual([], self.f.p.c.storage.claims)
+
     def test_materialized_plan_still_requires_fresh_original_control_before_claim(self):
         def withdrawn(request, pin, original):
             return replace(original, body=b'SYNTHETIC_WITHDRAWN_CONTROL') if pin.path == 'control' else original
