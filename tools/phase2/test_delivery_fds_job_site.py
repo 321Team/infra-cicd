@@ -108,6 +108,17 @@ class AssemblyTests(unittest.TestCase):
         self.assertTrue(made[0]._closed);self.assertIsNone(made[0]._materialize)
         self.assertFalse(self.wire._used);self.clock.assert_not_called()
 
+    def test_late_site_failure_keeps_borrowed_full_plan_and_fixed_error(self):
+        made=[];original=parent.ParentJobBuilder.__init__
+        def observe(value,*args,**kw):original(value,*args,**kw);made.append(value)
+        with patch.object(parent.ParentJobBuilder,'__init__',new=observe), \
+             patch.object(job.JobSite,'check',side_effect=ValueError('SYNTHETIC_SECRET')):
+            with self.assertRaisesRegex(assembly.SiteAssemblyError,'CONFIGURATION_INVALID') as caught:
+                self.build()
+        self.assertEqual(1,len(made));self.assertIs(made[0]._plan,self.f.plan)
+        self.assertNotIn('SYNTHETIC_SECRET',str(caught.exception))
+        self.assertFalse(self.wire._used);self.clock.assert_not_called()
+
     def test_interrupt_and_owner_cleanup_failure_do_not_expose_callback_text(self):
         for error in (KeyboardInterrupt('SYNTHETIC_SECRET'),SystemExit('SYNTHETIC_SECRET')):
             with patch.object(assembly.existing,'connect_existing_parent',side_effect=error):
