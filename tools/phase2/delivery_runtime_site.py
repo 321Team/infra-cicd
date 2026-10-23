@@ -116,6 +116,7 @@ class PreparedAuthorityPlan:
                  'RUNTIME_PLAN_PREPARATION_CONSUMED')
             materialize, self._materialize = self._materialize, None
             context = self._context  # A failed attempt consumes preparation too.
+        plan = error = fp = None
         try:
             need(context is not None and type(credential) is BearerCredential
                  and type(source) is PrivateSourceSession and source._state == 'CONSUMED'
@@ -140,13 +141,21 @@ class PreparedAuthorityPlan:
             fp = plan.issuer.facts.credential_fingerprint
             need(type(fp) is str and hmac.compare_digest(fp, credential.fingerprint),
                  'RUNTIME_PLAN_CREDENTIAL_MISMATCH')
-            return plan
         except KeyboardInterrupt:
-            raise KeyboardInterrupt() from None
+            error = KeyboardInterrupt()
         except SystemExit:
-            raise SystemExit(130) from None
-        except Exception:
-            raise RuntimeSiteError('RUNTIME_PLAN_MATERIALIZATION_FAILED') from None
+            error = SystemExit(130)
+        except BaseException:
+            error = RuntimeSiteError('RUNTIME_PLAN_MATERIALIZATION_FAILED')
+        if error is not None:
+            # Raising inside except keeps the original in __context__, even
+            # with `from None`. That original may retain private source bytes
+            # and credentials through callback frames. Release this method's
+            # references and raise only after leaving the exception handler.
+            # Source/credential are BORROWED: their owner still closes them.
+            materialize = context = credential = source = roles = plan = fp = None
+            raise error from None
+        return plan
 
     def close(self):
         with self._lock:
