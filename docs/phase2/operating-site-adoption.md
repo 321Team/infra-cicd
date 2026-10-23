@@ -44,7 +44,8 @@ port/key/known_hosts, helper 설치 위치·실행 UID/netns는 현재 미확정
 
 원본 위치 목록은 조회 근거이지 실행 설정이나 승인 loader가 아니다. 운영 의미가
 미확정인 상태에서 새 forwarding wrapper나 JSON `approved=true`를 추가하지 않았다.
-현재 생산 코드는 그대로이며 이번 후속 변경은 **연결 시험과 배치 대조의 보강**이다.
+PR127에서는 생산 코드를 변경하지 않았고 **연결 시험과 배치 대조를 보강**했다.
+이후 수신한 full raw의 해석·계획 연결 구현은 아래 후속 절에 구분한다.
 
 PR125 시험에 native TokenRequest 모의 응답→로컬 helper→익명 pipe→실제 source session을
 통과한 credential로 finish 원본/control을 인증하는 경우를 추가했다. 종료 자료 미설치 시
