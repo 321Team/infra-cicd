@@ -1,5 +1,7 @@
 # #46 job rendezvous 생성·부모 소유권 연결
 
+후속 [SSH 메모리 bridge·운영 SITE 연결 후보](ssh-memory-bridge.md)는 별도 코드다. 기존 rendezvous가 SSH 인증·운영 채택을 대신하지 않는 경계는 유지한다.
+
 `delivery_job_rendezvous.py`는 기존 parent와 Linux 로컬 peer UID 채널 사이에서 남아 있던 **listener 생성·준비 알림·1회 수신·정리**를 명시적으로 연결한다. 실제 SSH 프로세스·host key·계정·운영 경로·SITE를 채택하지 않는다. 이 코드는 기본 자동 선택이 아닌 검토용 후보이며 `SITE=None`과 실행 workflow는 유지한다.
 
 ## 경로와 실제 입력의 구분
