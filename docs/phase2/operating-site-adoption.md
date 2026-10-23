@@ -22,13 +22,13 @@ PR125 `d20b5ee7`, PR126 `c2afae72` 병합 뒤 기존 자료를 다시 대조했�
 | 기존 자료에서 확인한 것 | #46에 재사용할 범위 / 아직 채택하지 않는 것 |
 |---|---|
 | [P1 native probe](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/docs/deploy-native-auth-probe.md)의 Runner `10.250.10.20`, `cicd-runner01`, `server01_cicd-runner / UID1000` | host/account/UID 기대값은 PR126에서 이미 연결했다. IP는 기존 경로의 후보 주소다. P2 발급측에서 도달 가능하거나 같은 SSH trust를 사용한다는 증거로 확대하지 않는다 |
-| [기존 broker 코드](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/tools/delivery/transfer_native_probe.py)의 ansible01→CP1 및 ansible01→Runner 2개 SSH 연결 | ROSA의 `hayeoung` 발급 세션과 CP1의 `server02` 자격은 별개다. CP1 API/SA/CA·kubeconfig를 P2 issuer에 넣지 않는다. 기존 broker 키 위치는 호출자가 명시하며 실제 키 파일명은 해당 자료만으로 확정되지 않는다 |
+| [기존 broker 코드](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/tools/delivery/transfer_native_probe.py)의 ansible01→CP1 및 ansible01→Runner 2개 SSH 연결 | ROSA의 `hayeoung` 발급 세션과 CP1의 `server02` 자격은 별개다. CP1 API/SA/CA·kubeconfig를 P2 issuer에 넣지 않는다. broker는 대상별 key를 명시 입력으로 받으며, **실제 기존 키 경로는 아래 저장소 교차 대조로 보완했다** |
 | [P1 workflow 배치](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/docs/deploy-workflow-handoff.md)의 Runner HOME 및 P1 입력 폴더 | HOME 위치의 근거로만 사용한다. P1 입력·claim/store를 P2에 공유하지 않는다. P2 helper·input/source/store 경로는 중앙이 결정할 배치 항목이며, 이미 설치된 사실로 만들지 않는다 |
 | infra-ansible inventory의 `svc_ansible`, 엄격한 known_hosts 설정 및 임시 `ansible-isolated` Runner 운영 문서 | 해당 inventory에는 CICD Runner 항목이 없다. 임시 Runner와 장기 `cicd-runner01`을 혼용하지 않으며 `svc_ansible`을 helper 계정으로 추정하지 않는다 |
 
 권욱은 발급측 실행 위치·기존 SSH 중계 경로의 선택, READY 전달 방식과 P2 전용 배치를
-완성한다. 재환·하영에게는 **기존 자료에 없는 배치 사실만** 대조받는다. 실제 SSH
-port/key/known_hosts, helper 설치 위치·실행 UID/netns는 현재 미확정이다. 새 키 생성이나
+완성한다. 재환·하영에게는 **기존 자료에 없는 배치 사실만** 대조받는다. 기존 key/known_hosts
+경로는 아래에서 확인했으며, P2 issuer 위치·helper 설치 위치/실행 UID/netns와 그 연결은 미확정이다. 새 키 생성이나
 기존 계정 권한 변경을 이번 작업에서 수행하지 않았다. Runtime 전 현재값 대조는 이후
 승인된 연결에서 수행하며, 이 문서를 작성하기 위한 현장 재수집은 요청하지 않는다.
 
@@ -142,3 +142,24 @@ PR129 병합 후 [replicas 소유권 처리안](replicas-ownership-plan.md)을 �
 기존 ObjectReconciler가 알려진 replicas 충돌을 claim·sender 및 첫 Service PATCH보다
 먼저 차단한다. 0 유지 중 협조적 필드 인계는 향후 운영 검토안이며 실행하지 않았다.
 현재 previous와 target digest는 같으므로 다른 이미지로의 rollback 검증으로 확대하지 않는다.
+
+## 저장소의 기존 SSH 값 교차 대조 — 2026-10-24
+
+키 경로까지 전부 미확정이라는 앞선 설명을 아래 범위로 좁힌다. 코드·과거 실행 근거를
+재사용하는 것이며 실제 private key/known_hosts 파일 내용을 조회하거나 새 SSH를 시도하지 않았다.
+
+| 확인한 기존값 | 근거 / P2 채택의 경계 |
+|---|---|
+| 관리 출발지 `ansible01 / server01_ansible`, 대상 `10.250.10.20 / server01_cicd-runner` | [#82 실제 10/20 공급 보고](https://github.com/321Team/infra-ansible/issues/82#issuecomment-6283088910)의 B→A 관리 전송. 당시 release helper의 검토 사본도 대조했다. 역방향·CloudShell→Runner 성공이나 현재 가용성을 증명하지 않는다 |
+| 기존 키 `/home/server01_ansible/.ssh/p1_ansible_ed25519` | [infra-ansible 코드](https://github.com/321Team/infra-ansible/blob/7f04e18371f5d10aec678460f5dcd6e28d98d7d3/tools/ntp-onepass.py#L39), [검증기](https://github.com/321Team/infra-ansible/blob/7f04e18371f5d10aec678460f5dcd6e28d98d7d3/scripts/verify-ssh-main.py#L82), [baseline Runner 인증 참조](https://github.com/321Team/fds-project-baseline/blob/6219aa4a0246c6d2ce631006e1b022e775ed28d7/governance/handoffs/phase1-execution-20261010/DEPLOY_AFTER_PUSH_INPUTS_20261013.json#L17). 10/20 release helper도 이 경로를 명시했다. **CP1의 `id_ed25519`와 구별**한다 |
+| 기존 known_hosts `/home/server01_ansible/.ssh/known_hosts` | [동일 관리 코드](https://github.com/321Team/infra-ansible/blob/7f04e18371f5d10aec678460f5dcd6e28d98d7d3/tools/ntp-onepass.py#L40) 및 native broker의 실행자 HOME 경로. 경로 근거이며 현재 host key 항목·파일 권한의 직접 확인이 아니다 |
+| ROSA 발급 담당 `hayeoung`; 과거 원본은 CloudShell의 `~/c-deploy/`에서 수집 | [#46 수집 기록](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6366234985). 원본 수집 위치와 담당 지정이며 ansible01에 named-admin credential이 있다는 증거가 아니다 |
+
+따라서 기존 관리 경로의 IP/계정/key/known_hosts를 다시 전부 제출받을 필요는 없다.
+남은 연결 사실은 **ROSA issuer를 실제 어디에서 실행할지**, 그 위치에서 이 관리 SSH를
+어떻게 사용할지, Runner의 **P2 helper 고정 경로·실행 UID·job과 같은 netns**와 인증된
+READY의 왕복 방식이다. `inventory/hosts.yml`의 svc_ansible은 다른 관리 대상 계정이며
+장기 Runner나 P2 helper의 계정으로 복사하지 않는다. #82 packet 파일 전송 코드를 #46의
+메모리 자격 전달에 그대로 사용하지 않는다. 기존 소스/control/finish 인증 계약을 유지하고,
+전체 `SshBridgeConfig`·`SITE`를 채우지는 않았다. 필요한 것은 위 남은 사실/중앙 배치 선택이며
+새 key·신규 권한·원본 재수집이나 과거 Runner 시험의 전량 반복을 요구하는 절차가 아니다.

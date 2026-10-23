@@ -64,7 +64,9 @@ PR129 previous는 승인된 두 이미지로 명시 선택했으며 다음 targe
 따라 previous 상수를 독립 공급 프로필 `IMAGES`와 대조하는 시험도 추가했다.
 
 SSH/helper/READY의 기존 경로·key·known_hosts·실행 UID/netns 및 배치 위치는 새 회신이
-없다. 원본 5역할 grant/control·보관 인증·materializer·finish 범위도 기존 운영 결정과
+없었다. 이후 사용자 요청으로 [저장소 교차 대조](operating-site-adoption.md#저장소의-기존-ssh-값-교차-대조--2026-10-24)를
+진행해 기존 관리 경로의 key/known_hosts까지 확인했다. 남은 issuer/helper 배치와
+원본 5역할 grant/control·보관 인증·materializer·finish 범위는 기존 운영 결정과
 연결이 필요하다. 이미 존재하는 API를 감싸는 wrapper나 임의 경로·grant를 추가하지 않았다.
 `SITE=None`, 기본 실행 차단·원본/control 앞뒤 인증·finish/fence 계약을 유지한다.
 
@@ -73,3 +75,27 @@ SSH/helper/READY의 기존 경로·key·known_hosts·실행 UID/netns 및 배치
 대조와 합성 fixture 시험은 구분한다. 실제 API·SSH·발급·필드 인계·배포는 미실행이다.
 코드 원복은 이번 preflight·시험·문서 변경을 revert하면 되고 서버 원복은 발생하지 않는다.
 DB·Robot 유지 및 10/26 12:00 KST 최종 정리 기한은 변경하지 않는다.
+
+## 오프라인 0 유지용 intent 후보 준비
+
+기존 렌더 `3c8b6fe1…73516`과 원본 snapshot `e1022708…66c2a6f`를 오프라인 대조하여
+**기존 렌더의 Deployment replicas만 3→0으로 바꾼 별도 검토 후보 2개**를 준비했다.
+기존 fds-deployer Apply의 FieldsV1 소유 항목을 후보와 대조해 transaction-api 67노드,
+fds-engine 61노드에서 필드 누락·관측 소유 값 변경이 없음을 확인했다. f:/k:/dot과 atomic
+하위트리만 보수적으로 해석했고, container ports의 list key 비교에만 공식 TCP 기본값을
+사용했다([Kubernetes API 정의](https://github.com/kubernetes/api/blob/master/core/v1/generated.proto)).
+이는 candidate에 protocol 값을 새로 넣는 동작이 아니다. 모르는 selector/형태는 거부한다.
+
+| 검토용 후보 | SHA-256 |
+|---|---|
+| transaction-api-zero-intent.review.json | `af061731ffd14f8d3b0aea2c1bbca2dc69fc6a807e3d114a03b9ae4491eb0916` |
+| fds-engine-zero-intent.review.json | `49d4a615092c1f567782f962a1a383951b47d307db139ab619201437b218b71b` |
+
+후보와 검사 자료는 중앙 로컬 비공개 검토 폴더에 두었다. Git에 현재 raw·candidate를
+포함하지 않았고 source/binding/rendered hash를 교체하지 않았다. 별도 로컬 SYNTHETIC
+시험8건으로 소유 필드 누락·값 변경·중복/타입 불일치 selector·잘못된 TCP 기본값 적용·
+atomic 차이·다른 신원/소유자·미지원 tree/깊이 초과 거부를 확인했다.
+
+이 결과는 현재 live·다른 소유자와의 충돌·서버 기본화/admission·SSA 성공이나 인계 완료의
+증거가 아니다. 위 3단계의 **완전한 기존 intent 후보를 준비한 범위**이고, 실제 별도 작업창에서
+현재 UID/버전·RC/readback을 확인해야 한다. 임시 manager용 실행 코드/force 명령은 만들지 않았다.
