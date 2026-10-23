@@ -14,6 +14,13 @@
   기존 SSH bridge의 `provide_credentials`로 전달할 수 있다. request의 일치나 READY 자체는
   발급 허가·GO가 아니다. 실제 발급 측의 승인과 Kubernetes 인가는 계속 별개다.
 
+실제 전송을 수행하도록 채택된 발급 측 호출부는 `supplier.send_over_bridge(bridge)`로
+기존 공급부와 SSH bridge를 연결할 수 있다. 두 객체는 같은 monotonic 함수 객체와
+발급 측 호스트의 절대 deadline을 공유하며, bridge deadline은 발급 상한보다 늦을 수 없다.
+인증·채택한 job request와 SSH host/key/helper/UID/netns를 넘긴 뒤 명시적으로 호출한다.
+호출 전에는 SSH·발급이 없고, 호출하면 기존 bridge의 READY 확인 뒤에만 발급한다.
+이 메서드는 CLI·운영 SITE 기본값·추가 권한·자동 실행을 만들지 않는다.
+
 발급은 정확 SA `/token` 경로에 audiences 1개·900초를 요청하는 POST 한 번이다.
 기존 TLS sender의 CA/SNI 검증·숫자 endpoint·bounded HTTP/JSON을 사용하고 DNS·proxy·redirect·
 retry·자동 갱신·기본 kubeconfig·`oc`·파일·환경변수 자격 로더를 추가하지 않는다.
@@ -45,11 +52,23 @@ POST 진입 시 `attempted=True`를 보존한다. 그 뒤 HTTP 오류·timeout·
 client는 사용자 bearer 참조를 해제하고 supplier는 source 자격과 request 참조를 해제한다.
 receipt의 소비/폐기는 소유자 책임이며 참조 해제는 보안 소거·서버 자격 회수가 아니다.
 
+`send_over_bridge`는 READY를 기다리기 전에 supplier를 예약하여 중복/직접 호출을 막는다.
+READY 이전 실패에도 아직 호출되지 않은 supplier의 사용자/source 참조를 정리한다.
+발급 후 전송·ACK·정리 실패나 인터럽트가 나면 성공을 반환하지 않으며 실제 수신 receipt는
+`take_receipt()`로 한 번 인계할 수 있게 남긴다. POST 결과가 불명확하면
+`issuance_attempted=True`, receipt 없음으로 구분하며 자동 재발급하지 않는다.
+SSH 자식/FD 정리는 기존 bridge가 담당한다. `True`는 전달 완료에 한정되며 receiver 인수,
+권한/원본 의미 채택, 배포·종료 성공을 뜻하지 않는다. 호출자는 성공/실패 모두에서
+receipt를 비공개 경로로 인계한 뒤 `supplier.close()`로 남은 참조를 정리한다.
+
 ## 검증 범위
 
 `test_delivery_token_request.py`는 SYNTHETIC JWT와 주입한 가짜 TLS socket으로 실제 HTTP
 직렬화·201 파서·UID/수명/원문 비노출·기한/일회성·bridge frame 호환을 검증한다.
 실제 네트워크·발급·SSH·Runner·ROSA·운영 원본은 사용하지 않는다. SITE는 `None`이다.
+추가 시험은 READY 전 실패·발급 후 실패/취소·중복 호출·시계/기한 불일치·정리 실패·
+발급 결과 불명확을 다룬다. Linux에서는 OpenSSH 대신 로컬 Python helper와 AF_UNIX IPC를
+실행해 가짜 발급 응답이 기존 메모리 frame으로 전달되고 자식이 종료되는지도 확인한다.
 
 API 해석 근거:
 - [Kubernetes v1.33 TokenRequest 서버](https://github.com/kubernetes/kubernetes/blob/v1.33.0/pkg/registry/core/serviceaccount/storage/token.go): SA 조회와 응답 생성, 이름/namespace 검사, 실제 만료.
