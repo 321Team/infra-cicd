@@ -137,3 +137,8 @@ rollback 성공은 만들지 않고 현재 live·rollback 상태는 미검증으
 병합 차단이 아니라 이후 Runtime 준비의 쟁점이다. [Kubernetes 공식 충돌 규칙](https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts)과 대조했다.
 후속 승인된 운영 준비에서 현재 사용/중지 상태와 좁은 필드 인계 방식을 결정해야 한다.
 전체 force 자동 추가·managedFields 제거·실제 replica 변경은 이번 구현에 포함하지 않는다.
+
+PR129 병합 후 [replicas 소유권 처리안](replicas-ownership-plan.md)을 준비했다.
+기존 ObjectReconciler가 알려진 replicas 충돌을 claim·sender 및 첫 Service PATCH보다
+먼저 차단한다. 0 유지 중 협조적 필드 인계는 향후 운영 검토안이며 실행하지 않았다.
+현재 previous와 target digest는 같으므로 다른 이미지로의 rollback 검증으로 확대하지 않는다.

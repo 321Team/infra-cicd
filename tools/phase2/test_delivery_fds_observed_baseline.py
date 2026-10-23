@@ -20,6 +20,12 @@ import test_delivery_fds_baseline_archive as fixture
 
 
 class ObservedBaselineSelectionTests(unittest.TestCase):
+    def test_selected_previous_matches_independent_adopted_supply_profile(self):
+        # PR129 review follow-up: do not build this expectation from policy.
+        # Profile literals are maintained separately from the previous choice.
+        import delivery_fds_site_inputs as source
+        self.assertEqual(source.IMAGES, policy.PREVIOUS_IMAGES)
+
     def setUp(self):
         self.f = fixture.BaselineArchiveTests('runTest'); self.f.setUp()
         self.addCleanup(self.f.doCleanups)

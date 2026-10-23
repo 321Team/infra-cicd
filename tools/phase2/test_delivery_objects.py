@@ -290,6 +290,48 @@ class ObjectTests(unittest.TestCase):
         r.check(self.b, Progress(), raw)
         r.check(self.b, self.progress(6), self.raws)
 
+    def replicas_baseline(self, *, current=0, manager='kubectl-patch', operation='Update',
+                          fields=None, version='apps/v1'):
+        docs = copy.deepcopy(self.docs)
+        docs[2]['spec']['replicas'] = current
+        docs[2]['metadata']['managedFields'].append({
+            'manager': manager, 'operation': operation, 'apiVersion': version,
+            'fieldsType': 'FieldsV1',
+            'fieldsV1': {'f:spec': {'f:replicas': {}}} if fields is None else fields})
+        return tuple(core.encoded(o) for o in docs)
+
+    def test_changed_replicas_owned_by_other_workflow_is_blocked_without_raw_rewrite(self):
+        for manager, operation, version in (
+                ('kubectl-patch', 'Update', 'apps/v1'), ('another-apply', 'Apply', 'apps/v1'),
+                ('fds-deployer', 'Update', 'apps/v1'), ('fds-deployer', 'Apply', 'old/v1')):
+            raw = self.replicas_baseline(manager=manager, operation=operation, version=version)
+            before = tuple(raw)
+            with self.subTest(manager=manager, operation=operation, version=version):
+                with self.assertRaisesRegex(VerificationError, '^OBJECT_REPLICAS_OWNERSHIP_CONFLICT$'):
+                    self.make(raw)
+                self.assertEqual(before, raw)
+
+    def test_same_value_shared_ownership_and_exact_apply_owner_do_not_conflict(self):
+        target = self.docs[2]['spec']['replicas']
+        for raw in (self.replicas_baseline(current=target),
+                    self.replicas_baseline(manager='fds-deployer', operation='Apply')):
+            self.make(raw).check(self.b, Progress(), raw)
+
+    def test_other_fields_or_map_marker_do_not_mean_replicas_owned(self):
+        for fields in ({}, {'f:metadata': {'f:labels': {}}},
+                       {'f:spec': {'.': {}, 'f:template': {}}}):
+            raw = self.replicas_baseline(fields=fields)
+            self.make(raw).check(self.b, Progress(), raw)
+
+    def test_atomic_or_unknown_spec_and_bad_replica_values_are_blocked(self):
+        for fields in ({'f:spec': {}}, {'f:spec': None}):
+            with self.assertRaisesRegex(VerificationError, '^OBJECT_REPLICAS_OWNERSHIP_'):
+                self.make(self.replicas_baseline(fields=fields))
+        for current in (None, True, -1, '0', 2**31):
+            with self.subTest(current=current), self.assertRaisesRegex(
+                    VerificationError, '^OBJECT_REPLICAS_INVALID$'):
+                self.make(self.replicas_baseline(current=current))
+
     def test_baseline_and_progress_require_exact_binding(self):
         with self.assertRaisesRegex(VerificationError, 'BINDING_MISMATCH'):
             self.r.check(replace(self.b, run_id='different'), Progress(), self.absent)
