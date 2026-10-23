@@ -46,7 +46,11 @@ class JobWorkflowTests(unittest.TestCase):
         self.assertEqual(1, len(assignments))
         self.assertEqual('SITE', assignments[0].targets[0].id)
         self.assertIsNone(ast.literal_eval(assignments[0].value))
-        self.assertFalse(any(isinstance(n, (ast.Call, ast.Import, ast.ImportFrom)) for n in ast.walk(tree)))
+        # The sole lazy status helper may import the fixed composition root.
+        # Importing the declaration itself must still construct/load nothing.
+        self.assertFalse(any(isinstance(n, (ast.Call, ast.Import, ast.ImportFrom))
+            for statement in tree.body if not isinstance(statement, ast.FunctionDef)
+            for n in ast.walk(statement)))
 
     def test_exact_checkout_read_only_token_no_automatic_issuance_or_raw_artifact(self):
         self.assertEqual({'contents': 'read'}, self.w['permissions'])

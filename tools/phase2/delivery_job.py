@@ -256,6 +256,7 @@ def main(argv=None, *, declaration=_DEFAULT, context=None, revision=code_revisio
         result = workflow_gate(declaration=declaration, context=context, revision=revision)
         print(json.dumps(result, sort_keys=True))
         return 0 if result['dispatch_configured'] else 2
+    default_selection = declaration is _DEFAULT
     invocation, started, result, rc, runtime_rc = None, False, None, 2, None
     try:
         declaration = configured(declaration)
@@ -296,6 +297,10 @@ def main(argv=None, *, declaration=_DEFAULT, context=None, revision=code_revisio
                 'PREFLIGHT_OBSERVED', 'SESSION_COMPLETED') else 2
     except Exception as error:
         result = blocked(safe_error(error), started=started)
+        if (default_selection and args.command == 'status'
+                and result['error_code'] == 'P2_JOB_UNCONFIGURED'):
+            from delivery_job_site import configuration_status
+            result['operating_configuration'] = configuration_status()
         if type(runtime_rc) is int and -128 <= runtime_rc <= 255:
             result['runtime_returncode'] = runtime_rc  # Not a reconstructed receipt.
     finally:

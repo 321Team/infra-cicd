@@ -1,5 +1,7 @@
 # #46 기존 대상 운영 SITE 조립 후보
 
+2026-10-23 운영 구성 진입점은 [운영 채택표](operating-site-adoption.md)를 따른다. 확인된 Runner 기대값을 `delivery_fds_operating.assemble_job`에 고정했으며 아래 일반 조립 API를 재사용한다. 전체 SITE의 미확정 연결과 Runtime 미실행 상태는 유지한다.
+
 `delivery_fds_job_site.assemble_existing_job_site`는 명시한 운영 입력을 기존 FDS profile → 5역할 source wiring → helper UID 수신 → rendezvous 소유권 wrapper → native `JobSite`로 연결한다. 아직 미채택 입력을 생성하거나 전역 `delivery_job_site.SITE`를 채우지 않는다. **SITE=None·실제 Runtime 미실행**이며, 이 코드는 운영 채택 후보다.
 
 ## 명시 입력과 보존되는 계약
