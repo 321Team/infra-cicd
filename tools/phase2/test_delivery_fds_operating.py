@@ -93,14 +93,16 @@ class OperatingSelectionTests(unittest.TestCase):
         self.assertEqual('PARTIAL', state['selection'])
         self.assertFalse(state['selected']['issuance_assignment']['credential_authenticated'])
         self.assertFalse(state['selected']['runner_expectation']['current_host_observed'])
-        self.assertEqual(3, len(state['pending_before_run']))
+        self.assertEqual(2, len(state['pending_before_run']))
+        self.assertFalse(state['selected']['baseline_expectation']['current_live_checked'])
+        self.assertFalse(state['selected']['baseline_expectation']['force_authorized'])
         self.assertTrue(state['produced_during_run'])
 
     def test_partial_status_mutation_or_execute_flag_never_opens_default_gate(self):
         status = operating.configuration_status()
         status['pending_before_run'].clear(); status['execution_authorized'] = True
         fresh = operating.configuration_status()
-        self.assertEqual(3, len(fresh['pending_before_run']))
+        self.assertEqual(2, len(fresh['pending_before_run']))
         self.assertFalse(fresh['execution_authorized'])
         gate = job.workflow_gate(context=CONTEXT, revision=lambda: CONTEXT.workflow_sha)
         self.assertFalse(gate['dispatch_configured']); self.assertIsNone(declaration.SITE)

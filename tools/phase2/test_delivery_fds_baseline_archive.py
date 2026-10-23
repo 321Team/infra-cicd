@@ -141,5 +141,43 @@ class BaselineArchiveTests(unittest.TestCase):
         for root in ('../escape', '/absolute', ROOT+'/other', True):
             with self.assertRaises(reader.BaselineArchiveError): self.read(root_name=root)
 
+    def rewrite_tar(self, change):
+        original = gzip.decompress(archive(self.data))
+        with io.BytesIO() as output:
+            with tarfile.open(fileobj=io.BytesIO(original), mode='r:') as source, \
+                 tarfile.open(fileobj=output, mode='w', format=tarfile.PAX_FORMAT) as target:
+                for member in source:
+                    raw = source.extractfile(member).read() if member.isfile() else None
+                    change(member)
+                    target.addfile(member, io.BytesIO(raw) if raw is not None else None)
+            return gzip.compress(output.getvalue(), mtime=0)
+
+    def test_pax_metadata_on_otherwise_valid_member_is_rejected(self):
+        def change(member):
+            if member.name.endswith(reader.OBJECT_FILES[0]):
+                member.pax_headers = {'comment':'SYNTHETIC_PAX'}
+        with self.assertRaises(reader.BaselineArchiveError): self.read(self.rewrite_tar(change))
+
+    def test_foreign_directory_replacing_root_does_not_hide_behind_member_limit(self):
+        def change(member):
+            if member.isdir(): member.name = 'SYNTHETIC_FOREIGN_ROOT'
+        with self.assertRaises(reader.BaselineArchiveError): self.read(self.rewrite_tar(change))
+
+    def test_member_size_guards_on_valid_json_and_valid_manifest_are_independent(self):
+        raw = archive(self.data)
+        largest = max(len(self.data[name]) for name in reader.OBJECT_FILES)
+        with patch.object(reader, 'MAX_OBJECT', largest-1), self.assertRaises(reader.BaselineArchiveError):
+            self.read(raw)
+        data = dict(self.data); data['00-time.txt'] = b'N'*900
+        with patch.object(reader, 'MAX_NOTE', 899), self.assertRaises(reader.BaselineArchiveError):
+            self.read(archive(data))
+
+    def test_valid_tar_over_total_limit_is_rejected_before_tar_parser(self):
+        raw = archive(self.data)
+        with patch.object(reader, 'MAX_TAR', len(gzip.decompress(raw))-1), \
+             patch.object(tarfile, 'open', side_effect=AssertionError('NO_TAR_PARSE')) as opened:
+            with self.assertRaises(reader.BaselineArchiveError): self.read(raw)
+        opened.assert_not_called()
+
 
 if __name__ == '__main__': unittest.main()

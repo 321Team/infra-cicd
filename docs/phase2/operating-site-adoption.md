@@ -39,7 +39,7 @@ port/key/known_hosts, helper 설치 위치·실행 UID/netns는 현재 미확정
 | 발급·platform | [하영 정정 6339313808](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6339313808)과 이미 수신한 `p46-inputs-20261022T190046.tgz`. 과거 can-i·CA·OIDC 자료를 실제 발급 응답으로 대체하지 않는다. 현재 actor와 endpoint, 사전 원본과 사후 receipt의 의미 연결은 권욱 담당 |
 | producer | 이미 채택한 MSA 소스·rendered·2개 digest와 기존 공급 원본. native Run 성공만으로 앱 source/이미지 계보를 만들지 않는다. 기존 `ActionsRunSource`와 원본 인증을 함께 결속한다 |
 | approval/control | 댓글 locator와 저장소 ID만으로 `AdoptedGrant`를 만들지 않는다. 실행 대상·기간·철회 의미와 변경을 감지할 control 원본/참조의 운영 채택은 권욱 담당. 현재 control pin이 없다는 사실을 담당자의 새 토큰 미제출로 돌리지 않는다 |
-| baseline | 창 C UID/RV 표와 SCC Pod JSON은 Deployment/Service/Route 6객체 전체 원본이 아니다. 10/23 22:39:26 KST 수집한 별도 full raw를 공유 사본으로 수신·검증했다. 아래 연결부에 원본 바이트를 전달할 수 있으며, previous 근거와 허용 owner/spec 운영 채택은 계속 별도다 |
+| baseline | 10/23 22:39:26 KST의 full raw를 정확한 owner/spec 기대 기준선으로 코드 선택하고, 승인 공급+실제 Ready/imageID 근거의 두 이미지를 다음 실행의 previous로 명시 선택했다. 코드 리뷰·실제 grant/control·fresh 비교는 별도이며 실행 GO가 아니다 |
 | finish | 기존 `SourceRoleWiring`의 명시적 observation 또는 collection 모드를 사용한다. 권욱이 해당 실행의 종료 범위·control·보관 위치를 정한다. 실제 종료 progress와 관측 원본은 실행 후 생성되므로 사전 해시를 요구하거나 합성하지 않는다 |
 
 원본 위치 목록은 조회 근거이지 실행 설정이나 승인 loader가 아니다. 운영 의미가
@@ -56,15 +56,14 @@ progress는 메모리 fixture이며 실제 sender 종료·배포·claim 해제 �
 
 ## 미확정 입력과 남은 중앙 연결
 
-아래 세 묶음은 새 제출 양식이 아니다. 이미 제출한 자료를 먼저 재사용하고, 없는 사실 또는 아직 미구현인 연결만 보완한다.
+기존 세 묶음 중 owner/spec·previous의 기대값 선택을 코드에 연결했다. 실행 전 남은 두 묶음은 아래와 같다. 이미 제출한 자료를 먼저 재사용하고 없는 사실만 보완한다.
 
 | 묶음·담당 | 아직 필요한 것 | 완료조건 |
 |---|---|---|
 | **1. 전송·배치 — 권욱**, 재환/하영은 기존 배치 사실 확인 | SSH 실제 방향·host/key/known_hosts 경로·원격 helper 경로와 UID/netns, 인증된 READY 전달, input/source/persistent store 위치, 현재 endpoint | 실제 기존 배치 근거를 `SshBridgeConfig`, source route 및 job 조립에 명시한다. 새로운 계정·키·권한·파일 위치를 이미 존재하는 값으로 기입하지 않는다. 양 호스트 monotonic 값을 직접 공유하지 않는다 |
-| **2. 원본/control/finish — 권욱 구현·채택**, 담당자 기존 원본 재사용 | approval/platform/producer/finish/baseline 5역할의 원본·control pin, 비공개 보관 인증·materializer, 실행 및 종료 범위 | 기수신 10/10 플랫폼 원본·생산자 원본과 실제 승인 의미를 연결한다. 역사적 창 C 수동 GO를 #46 자동 배포 GO로 전환하지 않는다. 원본의 해시 일치만으로 의미·권위를 채택하지 않는다 |
-| **3. 기존 6객체 기준선 — 권욱 채택**, 하영 원본·재환 previous 근거 | full raw 수신·9/9 manifest 대조 완료. 남은 것은 허용 owner/spec 및 이전 이미지의 명시적 채택 | `connect_baseline_archive`에 별도 grant·기존 producer.previous_images를 전달하고 기존 fresh GET/원본/control 검증을 통과해야 한다. 수신 원본을 승인이나 previous 값으로 자동 변환하지 않는다 |
+| **2. 원본/control/finish — 권욱 구현·채택**, 담당자 기존 원본 재사용 | 5역할 원본·control pin, 보관 인증·materializer, 선택한 baseline의 실제 grant·fresh 비교, replicas 필드 충돌 처리, 실행 및 종료 범위 | 기존 원본과 실제 승인 의미를 연결하고 아래 SSA 쟁점을 해소한다. 역사적 창 C 수동 GO·원본의 해시 일치를 #46 자동 배포 GO로 전환하지 않는다 |
 
-누락값을 책임자에게 모두 새로 생산시키는 요청이 아니다. 2번의 코드/의미 연결은 권욱 업무이고, 1·3번은 기존 자료에 해당 사실이 있는지 담당자 확인이 필요한 부분이다. 새 API/SSH/수집을 이 PR에서 실행하지 않는다.
+누락값을 책임자에게 모두 새로 생산시키는 요청이 아니다. 2번의 코드/의미 연결은 권욱 업무이며, 1번은 기존 배치 사실을 담당자와 대조한다. full raw·SCC/Ready 원본 재수집을 요청하거나 새 API/SSH를 실행하지 않는다.
 
 다음은 **사전 누락 입력이 아니다**: 미래 native run/attempt, READY nonce, 발급 응답·fingerprint·iat/exp, 실제 finish 관측 원본. 기존 코드가 해당 실행 때 생성·검증한다. 반면 생성 위치·범위·원본 해석 방식과 control 정책은 실행 전에 연결해야 한다. 사후 발급 응답 해시를 사전 `Binding.platform_receipt_sha256`에 역대입하지 않는다.
 
@@ -76,13 +75,13 @@ progress는 메모리 fixture이며 실제 sender 종료·배포·claim 해제 �
 python3 -B tools/phase2/delivery_job.py status
 ```
 
-현재 정상 결과는 종료 코드 **2**, `P2_JOB_UNCONFIGURED`와 `operating_configuration.selection=PARTIAL`이다. 미확정 세 묶음이 보고되며 자격·실제 원본·환경변수·호스트를 조회하지 않는다. `--execute`를 붙여도 현재 기본 SITE는 활성화되지 않는다. 이 문서는 Runtime 실행 명령이나 GO가 아니다.
+현재 정상 결과는 종료 코드 **2**, `P2_JOB_UNCONFIGURED`와 `operating_configuration.selection=PARTIAL`이다. baseline 기대값과 미확정 두 묶음이 보고되며 자격·실제 원본·환경변수·호스트를 조회하지 않는다. `--execute`를 붙여도 현재 기본 SITE는 활성화되지 않는다. 이 문서는 Runtime 실행 명령이나 GO가 아니다.
 
 시험은 기존 SYNTHETIC 계획으로 실제 조립 타입, 기대 Runner 고정 및 native mismatch 차단, helper UID 분리, foreign target 거부, deferred materializer 무호출, 상태보고 무I/O 및 gate 불변을 확인한다. 기존 workflow/보안 경계·발급 권한·6객체 검증·claim/fence/finish 계약은 유지한다. 원복은 이 코드 변경을 되돌리는 것으로 충분하며 서버 자원 원복은 발생하지 않는다.
 
 Claude Code·Grok·Antigravity에는 일반 구성 연결/상태 계약만 역할별 전달했다. 프로젝트 운영 메타데이터 전송은 자동 검토에서 거부돼 제공하지 않았다. 세 도구의 응답은 일반 설계 자문이며 이 소스·실행 원본의 외부 심층 검토나 독립 사람 승인이 아니다. Codex가 원본·코드·시험을 대조했다.
 
-PR 병합 뒤에도 세 묶음 연결과 실제 실행 승인이 별도로 남는다. DB·Robot 유지 조건 및 **10/26 12:00 KST 최종 정리** 결정은 변경하지 않는다.
+PR 병합 뒤에도 위 두 묶음 연결과 실제 실행 승인이 별도로 남는다. DB·Robot 유지 조건 및 **10/26 12:00 KST 최종 정리** 결정은 변경하지 않는다.
 
 ## 수신한 full raw의 실제 형식 연결 — 2026-10-23 22:5x KST
 
@@ -102,11 +101,39 @@ PR 병합 뒤에도 세 묶음 연결과 실제 실행 승인이 별도로 남�
 
 실제 원본에는 두 Deployment replicas0, transaction-api의 `restartedAt` annotation,
 `fds-deployer` Apply와 `kubectl-patch`/`kubectl-rollout`/controller Update가 있다.
-이 관측을 렌더의 replicas3 또는 임의 owner로 바꾸지 않았다. baseline 허용 owner/spec,
-previous 이미지 근거와 그 grant/control의 의미 채택은 **권욱 잔여**다. 최초 P2 배포 때의
+이 관측을 렌더의 replicas3 또는 임의 owner로 바꾸지 않았다. PR128 시점에는 owner/spec·
+previous 선택이 잔여였으며, 다음 절의 명시적 코드 선택으로 연결한다. 최초 P2 배포 때의
 `previous 없음` 기록만으로 현재 redeploy의 previous를 확정하지 않는다.
 
 Runtime의 `CodeAdoptedBaseline`은 이후에도 원본/control을 앞뒤로 재인증하고 여섯 fresh
 GET의 UID/spec/owner를 비교한 뒤에만 claim/write를 허용한다. raw 수신·형식 통과는 현재
 클러스터 무변경 증명·실행 GO가 아니다. control/finish 범위 및 SSH·READY/helper 배치는
 기존 잔여이며 `SITE=None`을 유지한다. 이번 중앙 작업은 로컬 수신·오프라인 구현/검증뿐이다.
+
+## owner/spec·previous의 명시 선택과 실행 전 쟁점
+
+`delivery_fds_observed_baseline`은 위 **정확한 묶음 hash/root**를 owner/spec 기대 기준선으로
+선택한다. 전체 raw를 다시 쓰거나 managedFields/replicas/restartedAt을 제거하지 않는다.
+다음 두 이미지를 다음 실행의 previous로 코드에 **명시 선택**했다.
+
+- transaction-api: `10.1.93.54/fds/transaction-api@sha256:338b8a2871507ce8b42deedc916b26e350577ee6efd18df23d7ff2dd4b17dff0`
+- fds-engine: `10.1.93.54/fds/fds-engine@sha256:8b257adb08b6d381f72b66d3386efea6112a8f072ecfafcbcd463bcd1c3be89d`
+
+근거는 [승인 공급 계보/#43](https://github.com/321Team/fds-project-baseline/issues/43#issuecomment-6185877075),
+기존 D22 FINAL·MSA42 source/render 인계, [실제 앱 SA Pod 6개 Ready/imageID 관측](https://github.com/321Team/fds-project-baseline/issues/47#issuecomment-6361606970),
+[관측 JSON 반출](https://github.com/321Team/fds-project-baseline/issues/38#issuecomment-6366473628)과 수신 full raw다.
+관측 JSON(`f0c6fe24…628e`)은 **Pod API 전체 raw가 아닌 6행 projection**이며 중앙에서
+6/6 Ready·앱 SA·승인 image/imageID·restricted-v2·runAsUser를 대조했다. 이를 baseline으로 대체하지 않는다.
+
+`connect_selected_baseline`은 기존 계획의 previous가 없을 때 이 코드 선택을 연결하고,
+이미 같으면 수용하며 다르면 거부한다. 임의 현재 이미지에서 previous를 복사하지 않는다.
+기존 다른 원본/생산자 사실은 보존하며 grant/control은 호출자가 기존 인증 경로로 공급한다.
+`delivery_fds_operating.connect_baseline`은 이 선택 진입점을 직접 참조한다. 새 승인이나
+rollback 성공은 만들지 않고 현재 live·rollback 상태는 미검증으로 표시한다. 코드는 독립 리뷰 대상이다.
+
+**실행 전 실제 쟁점:** 수신 raw의 두 Deployment에서 `kubectl-patch`가 `f:spec/f:replicas`를
+소유하고 값은 0이다. 다음 검토 렌더는 3이며 sender는 `fieldManager=fds-deployer`이고 force가 없다.
+따라서 이 상태 그대로의 적용은 **SSA 409 충돌이 예상**된다. 이는 수신 아카이브 구현의
+병합 차단이 아니라 이후 Runtime 준비의 쟁점이다. [Kubernetes 공식 충돌 규칙](https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts)과 대조했다.
+후속 승인된 운영 준비에서 현재 사용/중지 상태와 좁은 필드 인계 방식을 결정해야 한다.
+전체 force 자동 추가·managedFields 제거·실제 replica 변경은 이번 구현에 포함하지 않는다.

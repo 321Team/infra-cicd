@@ -6,6 +6,7 @@ profile. No discovery, credentials, filesystem or callback invocation here.
 """
 import delivery_fds_job_site as assembly
 import delivery_fds_site_inputs as profile
+import delivery_fds_observed_baseline as baseline
 from delivery_job import RunnerIdentity
 
 
@@ -19,6 +20,7 @@ ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46
 # alternate input parser or implicit current-object -> previous-image fallback.
 build_configuration = profile.build_configuration
 build_token_issuer = profile.build_token_issuer
+connect_baseline = baseline.connect_selected_baseline
 
 
 def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
@@ -58,6 +60,7 @@ def configuration_status():
                 'rendered_sha256': profile.RENDERED_SHA256},
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
+            'baseline_expectation': baseline.selection_status(),
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
@@ -69,11 +72,8 @@ def configuration_status():
              'support': '하영·재환: 이미 제출한 담당 영역 원본 재사용',
              'items': ['원본 5역할과 control pin·보관 인증·materializer 결속',
                        '사전 플랫폼 receipt와 사후 발급 receipt 구분',
-                       '실행 승인 범위·종료 관측/회수 범위의 운영 채택']},
-            {'id': 'EXISTING_BASELINE', 'owner': '이권욱',
-             'support': '하영: 기존 6객체 전체 원본 위치, 재환: previous 근거 대조',
-             'items': ['6객체 full raw 수신·내용검증 완료; owner/spec·previous 이미지 명시 채택',
-                       'UID/RV 표·SCC JSON으로 전체 spec를 합성하지 않음']},
+                       '선택한 baseline의 실제 grant/control 및 fresh drift 검증',
+                       'replicas0/3 SSA 충돌 처리와 실행·finish 범위 채택']},
         ],
         'produced_during_run': ['native job run/attempt', 'READY nonce',
             '실제 발급 응답·fingerprint·iat/exp', '실제 finish 관측 원본'],
