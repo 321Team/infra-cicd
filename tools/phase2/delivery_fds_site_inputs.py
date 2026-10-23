@@ -106,6 +106,19 @@ def _binding_checked(config):
     return b
 
 
+def build_token_issuer(config, *, actor, endpoint_ip, deadline, monotonic, wall):
+    """Observed SA/issuer/audience/CA only; caller supplies current private inputs.
+
+    No issuance on construction, no new permission or operating SITE adoption.
+    """
+    from delivery_token_request import TokenRequestIssuer, TokenTarget
+    binding = _binding_checked(config)
+    _, _, namespace, name = SUBJECT.split(':')
+    return TokenRequestIssuer(binding, target=TokenTarget(namespace, name, SUBJECT_UID, ISSUER, AUDIENCE),
+        actor=actor, ca_pem=CA_PEM, endpoint_ip=endpoint_ip, deadline=deadline,
+        monotonic=monotonic, wall=wall)
+
+
 def _source_profile(config, plan):
     """Common fixed FDS source/target comparison, never baseline adoption."""
     b = _binding_checked(config)
