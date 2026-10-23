@@ -223,7 +223,7 @@ def _public_error(error, fallback):
     code = error.args[0] if type(error) is IssuanceError and len(error.args) == 1 else None
     allowed = {'TOKEN_REQUEST_INVALID','TOKEN_RESPONSE_INVALID','TOKEN_SUBJECT_MISMATCH',
         'TOKEN_LIFETIME_INVALID','TOKEN_REQUEST_CONSUMED','TOKEN_CLOCK_INVALID','TOKEN_DEADLINE_INVALID',
-        'TOKEN_CLEANUP_FAILED'}
+        'TOKEN_CLEANUP_FAILED','TOKEN_TRANSPORT_INVALID'}
     return IssuanceError(code if type(code) is str and code in allowed else fallback)
 
 
@@ -246,6 +246,7 @@ class RequestBoundSupplier(ingress._NoCopy):
                 ingress._token(item['token'], source=True)
             self._issuer, self._request, self._sources = issuer, copy.deepcopy(request), copy.deepcopy(source_tokens)
             self._lock = threading.Lock(); self._used = False; self._receipt = None
+            self._transport = False
         except BaseException as e: error = _public_error(e, 'TOKEN_REQUEST_INVALID')
         if error is not None:
             source_tokens = None
@@ -253,9 +254,17 @@ class RequestBoundSupplier(ingress._NoCopy):
 
     def __repr__(self): return '<RequestBoundSupplier: private single-use>'
 
+    @property
+    def issuance_attempted(self):
+        return self._issuer.attempted  # True is not proof of a successful issuance.
+
     def __call__(self, request, deadline):
+        return self._provide(request, deadline, transported=False)
+
+    def _provide(self, request, deadline, *, transported):
         with self._lock:
-            need(not self._used, 'TOKEN_REQUEST_CONSUMED'); self._used = True
+            need(not self._used and self._transport is transported, 'TOKEN_REQUEST_CONSUMED')
+            self._used = True
         receipt = result = error = None
         try:
             ingress._request(request); need(request == self._request, 'TOKEN_REQUEST_INVALID')
@@ -274,6 +283,44 @@ class RequestBoundSupplier(ingress._NoCopy):
             receipt = result = None
             raise error from None
         return result
+
+    def send_over_bridge(self, bridge):
+        """Explicit one-shot issuance -> existing SSH bridge, never a SITE GO.
+
+        Caller has already authenticated/adopted this request and actual SSH
+        mapping. Reserve this supplier before SSH: a direct or second call
+        cannot issue while READY is pending. SSH still owns its child/FDs.
+        Release actor/source references even if READY fails before supply.
+        Keep any actual issuance receipt for take_receipt(), including failure.
+        """
+        from delivery_ssh_bridge import SshCredentialBridge
+        with self._lock:
+            need(not self._used and not self._transport, 'TOKEN_REQUEST_CONSUMED')
+            self._transport = True
+        error = None
+        try:
+            need(type(bridge) is SshCredentialBridge
+                 and bridge._budget.clock is self._issuer.monotonic
+                 and bridge._budget.limit <= self._issuer.deadline,
+                 'TOKEN_TRANSPORT_INVALID')
+            result = bridge.send_from_supplier(self._request,
+                provide_credentials=lambda request, deadline:
+                    self._provide(request, deadline, transported=True))
+            need(result is True, 'TOKEN_TRANSPORT_FAILED')
+        except BaseException as e:
+            error = _public_error(e, 'TOKEN_TRANSPORT_FAILED')
+        finally:
+            # Do not call self.close(): it deliberately disposes the private
+            # receipt, which must remain available after a failed handoff.
+            with self._lock:
+                self._used = True; self._sources = self._request = None
+            try: self._issuer.close()
+            except BaseException as e:
+                if not isinstance(error, (KeyboardInterrupt, SystemExit)):
+                    error = _public_error(e, 'TOKEN_CLEANUP_FAILED') if isinstance(e, (KeyboardInterrupt, SystemExit)) else IssuanceError('TOKEN_CLEANUP_FAILED')
+        if error is not None:
+            raise error from None
+        return True  # Forwarding only; job acceptance/adoption is still separate.
 
     def take_receipt(self):
         with self._lock:

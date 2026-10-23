@@ -4,7 +4,10 @@ import copy
 from dataclasses import replace
 from datetime import datetime, timezone
 import json
+import os
 import pickle
+import sys
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -14,6 +17,7 @@ import delivery_token_request as issuer
 import delivery_transport as wire
 from delivery_object_reader import BearerCredential
 from test_delivery_job import CONTEXT
+from test_delivery_unix_ingress import REAL_SOCKET
 import test_delivery_transport as fixture
 
 
@@ -247,6 +251,135 @@ class TokenRequestTests(unittest.TestCase):
             c.issue(20)
         self.assertTrue(c.attempted); self.assertTrue(c.close()); self.assertTrue(c.close())
         self.assertIsNone(c._token)
+
+    def bridge(self, supplier, **changes):
+        import delivery_ssh_bridge as ssh
+        from test_delivery_ssh_bridge import config
+        args=dict(deadline=20,monotonic=supplier._issuer.monotonic);args.update(changes)
+        return ssh.SshCredentialBridge(config(),**args)
+
+    def test_owned_bridge_success_preserves_original_until_single_private_take(self):
+        s=self.supplier();b=self.bridge(s);seen=[]
+        def forward(req,*,provide_credentials):
+            seen.append(req)
+            token,sources=provide_credentials(req,b._budget.limit)
+            self.assertEqual(self.token(),token);self.assertEqual(1,len(sources))
+            return True
+        with patch.object(b,'send_from_supplier',side_effect=forward), \
+             patch.object(s._issuer,'_exchange',return_value=core.encoded(self.response())) as exchange:
+            self.assertTrue(s.send_over_bridge(b))
+        self.assertEqual([self.request()],seen);exchange.assert_called_once()
+        self.assertIsNone(s._sources);self.assertIsNone(s._request);self.assertIsNone(s._issuer._token)
+        self.assertEqual(core.encoded(self.response()),s.take_receipt().raw)
+        self.assertIsNone(s.take_receipt())
+        with self.assertRaisesRegex(issuer.IssuanceError,'CONSUMED'):s.send_over_bridge(b)
+
+    def test_bridge_before_ready_failure_closes_uninvoked_supplier_without_issuance(self):
+        s=self.supplier();b=self.bridge(s)
+        with patch.object(b,'send_from_supplier',side_effect=OSError('SYNTHETIC_PRIVATE')), \
+             patch.object(s._issuer,'issue') as issue:
+            with self.assertRaisesRegex(issuer.IssuanceError,'^TOKEN_TRANSPORT_FAILED$') as got:s.send_over_bridge(b)
+        issue.assert_not_called();self.assertIsNone(s._issuer._token);self.assertIsNone(s._sources)
+        self.assertIsNone(s.take_receipt());self.assertFalse(s._issuer.attempted)
+        self.assertIsNone(got.exception.__context__);self.assertIsNone(got.exception.__cause__)
+        with self.assertRaisesRegex(issuer.IssuanceError,'CONSUMED'):s(self.request(),20)
+
+    def test_bridge_after_issuance_failure_keeps_private_receipt_not_forwarded_success(self):
+        for exc in (OSError('SYNTHETIC_PRIVATE'),KeyboardInterrupt('SYNTHETIC_PRIVATE'),SystemExit('SYNTHETIC_PRIVATE')):
+            s=self.supplier();b=self.bridge(s)
+            def forward(req,*,provide_credentials):
+                provide_credentials(req,b._budget.limit)
+                raise exc
+            kind=issuer.IssuanceError if isinstance(exc,Exception) else type(exc)
+            with patch.object(b,'send_from_supplier',side_effect=forward), \
+                 patch.object(s._issuer,'_exchange',return_value=core.encoded(self.response())):
+                with self.assertRaises(kind) as got:s.send_over_bridge(b)
+            self.assertIsNone(got.exception.__context__);self.assertNotIn('SYNTHETIC_PRIVATE',str(got.exception))
+            self.assertEqual(self.token(),s.take_receipt().credential.token)
+            self.assertIsNone(s.take_receipt());self.assertIsNone(s._sources);self.assertIsNone(s._issuer._token)
+
+    def test_bridge_reservation_rejects_direct_or_second_use_before_ready(self):
+        s=self.supplier();b=self.bridge(s)
+        def forward(req,*,provide_credentials):
+            with self.assertRaisesRegex(issuer.IssuanceError,'CONSUMED'):s(req,20)
+            with self.assertRaisesRegex(issuer.IssuanceError,'CONSUMED'):s.send_over_bridge(b)
+            provide_credentials(req,20)
+            with self.assertRaisesRegex(issuer.IssuanceError,'CONSUMED'):provide_credentials(req,20)
+            return True
+        with patch.object(b,'send_from_supplier',side_effect=forward), \
+             patch.object(s._issuer,'_exchange',return_value=core.encoded(self.response())) as exchange:
+            self.assertTrue(s.send_over_bridge(b))
+        exchange.assert_called_once()
+
+    def test_bridge_clock_or_extended_deadline_rejected_before_transport(self):
+        for changes in ({'monotonic':lambda:10},{'deadline':21}):
+            s=self.supplier();b=self.bridge(s,**changes)
+            with patch.object(b,'send_from_supplier') as forward,patch.object(s._issuer,'issue') as issue:
+                with self.assertRaises(issuer.IssuanceError):s.send_over_bridge(b)
+            forward.assert_not_called();issue.assert_not_called();self.assertIsNone(s._sources)
+            self.assertIsNone(s._issuer._token)
+
+    def test_expired_native_bridge_never_starts_ssh_or_calls_issuer(self):
+        import delivery_ssh_bridge as ssh
+        s=self.supplier();b=self.bridge(s,deadline=5)
+        with patch.object(ssh.sys,'platform','linux'),patch.object(ssh.subprocess,'Popen') as start, \
+             patch.object(s._issuer,'issue') as issue:
+            with self.assertRaises(issuer.IssuanceError):s.send_over_bridge(b)
+        start.assert_not_called();issue.assert_not_called();self.assertIsNone(s._issuer._token)
+        self.assertIsNone(s._sources)
+
+    def test_bridge_cleanup_failure_cannot_report_success_or_discard_receipt(self):
+        s=self.supplier();b=self.bridge(s);close=s._issuer.close;calls=[]
+        def cleanup():
+            calls.append(1);close()
+            if len(calls)==3:raise ValueError('SYNTHETIC_PRIVATE')
+            return True
+        def forward(req,*,provide_credentials):provide_credentials(req,20);return True
+        with patch.object(b,'send_from_supplier',side_effect=forward),patch.object(s._issuer,'close',side_effect=cleanup), \
+             patch.object(s._issuer,'_exchange',return_value=core.encoded(self.response())):
+            with self.assertRaisesRegex(issuer.IssuanceError,'TOKEN_CLEANUP_FAILED'):s.send_over_bridge(b)
+        self.assertIsNotNone(s.take_receipt());self.assertIsNone(s._sources)
+
+    def test_bridge_failed_post_is_unknown_issuance_without_retry_or_false_receipt(self):
+        s=self.supplier();b=self.bridge(s)
+        def forward(req,*,provide_credentials):provide_credentials(req,20);return True
+        with patch.object(b,'send_from_supplier',side_effect=forward), \
+             patch.object(s._issuer,'_exchange',side_effect=TimeoutError('SYNTHETIC_PRIVATE')) as exchange:
+            with self.assertRaises(issuer.IssuanceError):s.send_over_bridge(b)
+        exchange.assert_called_once();self.assertTrue(s.issuance_attempted)
+        self.assertIsNone(s.take_receipt());self.assertIsNone(s._sources);self.assertIsNone(s._issuer._token)
+        with self.assertRaisesRegex(issuer.IssuanceError,'CONSUMED'):s.send_over_bridge(b)
+        self.assertEqual(1,exchange.call_count)
+
+    @unittest.skipUnless(sys.platform=='linux' and hasattr(os,'geteuid') and os.geteuid()>0,
+                         'local fake SSH/helper IPC requires nonroot Linux')
+    def test_native_bridge_to_local_helper_transfers_issued_frame_and_reaps_child(self):
+        import delivery_ssh_bridge as ssh
+        import test_delivery_ssh_bridge as local
+        import test_delivery_unix_ingress as unix_fixture
+        f=local.BridgeLinuxTests('runTest')
+        with patch.object(unix_fixture,'request',side_effect=self.request):f.setUp()
+        self.addCleanup(f.doCleanups);self.addCleanup(f.tearDown)
+        s=self.supplier(issuer=self.client(deadline=f.deadline,monotonic=time.monotonic),request=f.request)
+        b=f.client()
+        with patch.object(ssh.subprocess,'Popen',side_effect=f.start), \
+             patch.object(s._issuer,'_exchange',return_value=core.encoded(self.response())) as exchange:
+            self.assertTrue(s.send_over_bridge(b))
+        exchange.assert_called_once();self.assertTrue(s.issuance_attempted)
+        self.assertEqual(0,f.procs[0].returncode);self.assertIsNone(s._sources)
+        # accept constructs another AF_UNIX socket; no network socket is opened.
+        with patch.object(wire.socket,'socket',new=REAL_SOCKET):sock,_=f.listener.accept()
+        with sock:
+            received=b''
+            while True:
+                chunk=sock.recv(4096)
+                if not chunk:break
+                received+=chunk
+        expected=ingress.encode_frame(f.request,rosa_token=self.token(),
+            source_tokens=[{'repository':'synthetic/evidence','token':'SYNTHETIC_SOURCE_TOKEN_12345'}])
+        self.assertEqual(expected,received)
+        self.assertEqual(core.encoded(self.response()),s.take_receipt().raw)
+        self.assertIsNone(s.take_receipt())
 
 
 if __name__=='__main__':unittest.main()

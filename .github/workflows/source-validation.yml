@@ -6,7 +6,7 @@ on:
   # hosted run because these checks do not read Markdown or docs/.
   # PR113/114/115/116 are explicit stack bases for offline source tests only.
   pull_request:
-    branches: [main, codex/p2-observed-site-20261022, codex/p2-job-source-roles-20261023, codex/p2-existing-target-20261023, codex/p2-unix-job-channel-20261023, codex/p2-owned-job-rendezvous-20261023, codex/p2-ssh-memory-bridge-20261023]
+    branches: [main, codex/p2-observed-site-20261022, codex/p2-job-source-roles-20261023, codex/p2-existing-target-20261023, codex/p2-unix-job-channel-20261023, codex/p2-owned-job-rendezvous-20261023, codex/p2-ssh-memory-bridge-20261023, codex/p2-tokenrequest-supplier-20261023]
     paths-ignore: ['**/*.md', 'docs/**']
   push:
     branches: [main]
