@@ -23,6 +23,7 @@ import delivery_crosshost_ingress as ingress
 import delivery_crosshost_pipe as pipes
 import delivery_job_rendezvous as rendezvous
 import delivery_unix_ingress as unix
+import delivery_ssh_stdio as stdio
 
 PUBLIC_MAX = 8192
 SCHEMA = 'P2-SSH-bridge-open-1'
@@ -296,7 +297,19 @@ def serve_owned_pipes(read_fd, write_fd, *, listener_uid, timeout_seconds, monot
     # Foreign descriptors stay borrowed. Once both qualify, own both even if the
     # configuration/clock/first endpoint constructor fails before the second.
     _pair_shape(read_fd, write_fd)
-    raw_fds = [read_fd, write_fd]
+    return _serve_owned(read_fd, write_fd, listener_uid=listener_uid,
+        timeout_seconds=timeout_seconds, monotonic=monotonic, socket_stdio=False)
+
+
+def serve_owned_stdio(read_fd, write_fd, *, listener_uid, timeout_seconds, monotonic):
+    """Owned qualified SSH stdio only; arbitrary sockets remain rejected."""
+    kind = stdio.classify_pair(read_fd, write_fd)
+    return _serve_owned(read_fd, write_fd, listener_uid=listener_uid,
+        timeout_seconds=timeout_seconds, monotonic=monotonic, socket_stdio=kind == 'socketpair')
+
+
+def _serve_owned(read_fd, write_fd, *, listener_uid, timeout_seconds, monotonic, socket_stdio):
+    raw_fds = [(read_fd, pipes.identity(read_fd)), (write_fd, pipes.identity(write_fd))]
     b = None
     reader = writer = sock = None
     error = None; cleanup = True; frame = None
@@ -306,10 +319,11 @@ def serve_owned_pipes(read_fd, write_fd, *, listener_uid, timeout_seconds, monot
              and callable(monotonic))
         now = monotonic(); need(core.finite(now))
         b = unix._Budget(now + timeout_seconds, monotonic)
-        raw_fds.remove(read_fd)
-        reader = pipes._PipeEnd(read_fd, write=False, deadline=b.limit, monotonic=monotonic)
-        raw_fds.remove(write_fd)
-        writer = pipes._PipeEnd(write_fd, write=True, deadline=b.limit, monotonic=monotonic)
+        end = stdio.SocketStdioEnd if socket_stdio else pipes._PipeEnd
+        reader = end(read_fd, write=False, deadline=b.limit, monotonic=monotonic)
+        raw_fds.pop(0)
+        writer = end(write_fd, write=True, deadline=b.limit, monotonic=monotonic)
+        raw_fds.pop(0)
         packet = _frame(reader, PUBLIC_MAX, b)
         value = json.loads(packet[4:].decode('utf-8'))
         need(type(value) is dict and set(value) == {'schema', 'request'}
@@ -337,11 +351,8 @@ def serve_owned_pipes(read_fd, write_fd, *, listener_uid, timeout_seconds, monot
         for end in (reader, writer):
             if end is not None:
                 cleanup = _clean(end) and cleanup
-        for fd in raw_fds:
-            try:
-                os.close(fd)
-            except BaseException:
-                cleanup = False
+        for fd, ident in raw_fds:
+            cleanup = stdio.close_owned_fd(fd, ident) and cleanup
         if not cleanup:
             error = BridgeError('P2_SSH_CLEANUP_FAILED')
         elif error is None:
@@ -355,19 +366,16 @@ def serve_owned_pipes(read_fd, write_fd, *, listener_uid, timeout_seconds, monot
 
 
 def remote_main(argv=None):
-    """Fixed SSH helper entrypoint. Dup only pipe stdio; no config/secret loader."""
+    """Fixed SSH helper entrypoint; qualify stdio dups, never config/secret load."""
     args = sys.argv[1:] if argv is None else argv
     fds = []
     try:
         need(len(args) == 2 and all(type(v) is str and re.fullmatch(r'[0-9]{1,10}', v) for v in args))
-        # Validate borrowed stdio before dup/ownership, using existing pipe shape.
-        import fcntl
-        need(stat.S_ISFIFO(os.fstat(0).st_mode) and stat.S_ISFIFO(os.fstat(1).st_mode)
-             and fcntl.fcntl(0, fcntl.F_GETFL) & os.O_ACCMODE == os.O_RDONLY
-             and fcntl.fcntl(1, fcntl.F_GETFL) & os.O_ACCMODE == os.O_WRONLY)
-        fds.append(os.dup(0)); fds.append(os.dup(1))
+        _, read_fd, write_fd = stdio.duplicate_stdio()
+        fds = [read_fd, write_fd]
+        stdio.classify_pair(read_fd, write_fd)  # Before transferring both dups.
         read_fd, write_fd = fds; fds = []
-        serve_owned_pipes(read_fd, write_fd, listener_uid=int(args[0]),
+        serve_owned_stdio(read_fd, write_fd, listener_uid=int(args[0]),
                           timeout_seconds=int(args[1]), monotonic=time.monotonic)
         return 0
     except BaseException:
