@@ -8,7 +8,7 @@ import delivery_job_handoff as handoff
 import delivery_runtime_site as runtime
 import delivery_site as site
 
-SAFE_CODES = frozenset('P2_PARENT_CONFIGURATION_INVALID P2_PARENT_CONSUMED P2_PARENT_BUILD_FAILED'.split())
+SAFE_CODES = frozenset('P2_PARENT_CONFIGURATION_INVALID P2_PARENT_CONSUMED P2_PARENT_BUILD_FAILED P2_PARENT_CLEANUP_FAILED'.split())
 
 
 class ParentBuildError(RuntimeError):
@@ -46,8 +46,9 @@ class ParentJobBuilder(ingress._NoCopy):
         with self._lock:
             need(not self._used, 'P2_PARENT_CONSUMED')
             self._used = True
-        receiver = bundle = None
-        transferred = False
+        receiver = bundle = value = None
+        error = interrupted = None
+        cleanup_failed = False
         try:
             need(type(context) is job.JobContext, 'P2_PARENT_CONFIGURATION_INVALID')
             context.check()
@@ -72,20 +73,48 @@ class ParentJobBuilder(ingress._NoCopy):
             value = bundle.build_invocation(context, command, config=self._config, plan=self._plan,
                 finish_slot=self._slot, wire=self._wire, handoff_deadline=self._deadline,
                 finish_capture=self._capture, producer_pins=self._pins)
-            transferred = True
-            return value
         except BaseException as exc:
-            if isinstance(exc, KeyboardInterrupt):
-                raise KeyboardInterrupt() from None
-            if isinstance(exc, SystemExit):
-                raise SystemExit(130) from None
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                interrupted = KeyboardInterrupt if isinstance(exc, KeyboardInterrupt) else SystemExit
             code = exc.args[0] if type(exc) in (ParentBuildError, ingress.IngressError, handoff.HandoffError) and len(exc.args) == 1 else None
             allowed = SAFE_CODES | ingress.SAFE_CODES | handoff.SAFE_CODES
-            raise ParentBuildError(code if type(code) is str and code in allowed else 'P2_PARENT_BUILD_FAILED') from None
+            error = code if type(code) is str and code in allowed else 'P2_PARENT_BUILD_FAILED'
         finally:
-            if bundle is not None:
-                bundle.close()  # Detach refs; successful invocation remains driver-owned.
-            if receiver is not None:
-                receiver.close()
-            if not transferred and type(self._plan) is runtime.PreparedAuthorityPlan:
-                self._plan.close()
+            # A return does not transfer ownership until this cleanup succeeds.
+            # An interrupt in one close must not skip the remaining owned state.
+            for temporary in (bundle, receiver):
+                if temporary is not None:
+                    try:
+                        temporary.close()
+                    except BaseException as exc:
+                        cleanup_failed = True
+                        if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            interrupted = KeyboardInterrupt if isinstance(exc, KeyboardInterrupt) else SystemExit
+            if error is not None or interrupted is not None or cleanup_failed:
+                plan_attempted = False
+                if type(value) is job.RuntimeInvocation:
+                    try:
+                        ok = value.close()  # Attempts all its owned handles.
+                        plan_attempted = value.plan is self._plan
+                        cleanup_failed = ok is not True or cleanup_failed
+                    except BaseException as exc:
+                        cleanup_failed = True
+                        if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            interrupted = KeyboardInterrupt if isinstance(exc, KeyboardInterrupt) else SystemExit
+                # Never call close on a foreign return or a borrowed full plan.
+                if not plan_attempted and type(self._plan) is runtime.PreparedAuthorityPlan:
+                    try:
+                        cleanup_failed = self._plan.close() is not True or cleanup_failed
+                    except BaseException as exc:
+                        cleanup_failed = True
+                        if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            interrupted = KeyboardInterrupt if isinstance(exc, KeyboardInterrupt) else SystemExit
+        if interrupted is KeyboardInterrupt:
+            raise KeyboardInterrupt() from None
+        if interrupted is SystemExit:
+            raise SystemExit(130) from None
+        if cleanup_failed:
+            raise ParentBuildError('P2_PARENT_CLEANUP_FAILED') from None
+        if error is not None:
+            raise ParentBuildError(error) from None
+        return value  # Successful invocation transfers to the caller only here.
