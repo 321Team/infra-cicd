@@ -3,7 +3,7 @@ name: P2 intake offline validation
 on:
   pull_request:
     # Exact stack bases for hosted offline tests only; no self-hosted Runner.
-    branches: [main, codex/p2-nine-object-contract-20261020, codex/p2-operational-site-auth-20261021, codex/p2-run-gate-finish-20261021, codex/p2-native-finish-decoder-20261021, codex/p2-first-deploy-inputs-20261021, codex/p2-source-session-20261021, codex/p2-job-driver-20261021, codex/p2-owned-handoff-20261021, codex/p2-observed-site-20261022, codex/p2-job-source-roles-20261023, codex/p2-existing-target-20261023, codex/p2-unix-job-channel-20261023, codex/p2-owned-job-rendezvous-20261023]
+    branches: [main, codex/p2-nine-object-contract-20261020, codex/p2-operational-site-auth-20261021, codex/p2-run-gate-finish-20261021, codex/p2-native-finish-decoder-20261021, codex/p2-first-deploy-inputs-20261021, codex/p2-source-session-20261021, codex/p2-job-driver-20261021, codex/p2-owned-handoff-20261021, codex/p2-observed-site-20261022, codex/p2-job-source-roles-20261023, codex/p2-existing-target-20261023, codex/p2-unix-job-channel-20261023, codex/p2-owned-job-rendezvous-20261023, codex/p2-ssh-memory-bridge-20261023]
     paths: ['tools/phase2/**', 'templates/phase2/**', '.github/workflows/p2-intake-validation.yml', '.github/workflows/p2-rosa-delivery.yml']
   push:
     branches: [main]
