@@ -252,6 +252,35 @@ class LinuxHandoffTests(unittest.TestCase):
         self.assertTrue(all(rec._fd is None for rec in owned))
         self.assertNotIn(fixture.TOKEN, out.getvalue())
 
+    def test_native_job_actual_pipes_then_explicit_source_role_wiring(self):
+        import delivery_job_sources as wiring
+        from delivery_private_source import PrivateGitHubOriginalAdapter
+        repo = self.args['sources'][0].repository
+        router = wiring.SourceRoleWiring(binding=self.f.h.binding, routes=tuple(
+            wiring.RoleRoute(role, repo, repo) for role in wiring.ROLES),
+            wall=lambda:self.f.h.now, monotonic=lambda:self.f.h.mono)
+        prepared = runtime.PreparedAuthorityPlan(binding=self.f.h.binding,
+            materialize=lambda context, credential, pool, roles, deadline:self.f.plan())
+        invocation = self.call(plan=prepared, wire=router)
+        owned = [invocation.receiver] + [c.receiver for c in invocation.source_session.channels]
+        original = runtime.RuntimeAuthorityFactory
+        def factory(*a, **kw):
+            return original(*a, **kw, wall=lambda:self.f.h.now, monotonic=lambda:self.f.h.mono)
+        out = io.StringIO()
+        with patch.object(PrivateGitHubOriginalAdapter, 'blob',
+                new=lambda reader, request, pin:self.f.reader.blob(request, pin)), \
+                patch.object(runtime, 'RuntimeAuthorityFactory', side_effect=factory), \
+                patch.object(site, 'build_application', side_effect=lambda c, **kw:self.f.app(factory=kw['authority_factory'])), \
+                contextlib.redirect_stdout(out):
+            rc = job.main(['deploy', '--execute'], declaration=job.JobSite(RUNNER, lambda *a:invocation),
+                context=CONTEXT, revision=lambda:CONTEXT.workflow_sha, identity=lambda:RUNNER)
+        result = json.loads(out.getvalue())
+        self.assertEqual((0, 'SESSION_COMPLETED', 'RELEASED'),
+                         (rc, result['status'], result['result']['fence']), result)
+        self.assertTrue(router._used); self.assertTrue(prepared._closed)
+        self.assertTrue(all(rec._fd is None for rec in owned))
+        self.assertNotIn(fixture.TOKEN, out.getvalue())
+
     def test_capacity_shortwrite_and_os_write_errors_are_not_retried(self):
         import fcntl
         native = os.pipe2
