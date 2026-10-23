@@ -72,7 +72,7 @@ def configuration_status():
                        '실행 승인 범위·종료 관측/회수 범위의 운영 채택']},
             {'id': 'EXISTING_BASELINE', 'owner': '이권욱',
              'support': '하영: 기존 6객체 전체 원본 위치, 재환: previous 근거 대조',
-             'items': ['현재 6객체 full raw·owner·previous 이미지의 명시 채택',
+             'items': ['6객체 full raw 수신·내용검증 완료; owner/spec·previous 이미지 명시 채택',
                        'UID/RV 표·SCC JSON으로 전체 spec를 합성하지 않음']},
         ],
         'produced_during_run': ['native job run/attempt', 'READY nonce',
