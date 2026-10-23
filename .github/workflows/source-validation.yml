@@ -4,9 +4,9 @@ on:
   # Stack bases ci/offline-supply-consumption-20260917 and ci/private-app-source-20260918
   # were removed on 2026-09-28: no open PR targets them. Docs-only changes skip the
   # hosted run because these checks do not read Markdown or docs/.
-  # PR113 is an explicit stack base for offline source tests only.
+  # PR113/114 are explicit stack bases for offline source tests only.
   pull_request:
-    branches: [main, codex/p2-observed-site-20261022]
+    branches: [main, codex/p2-observed-site-20261022, codex/p2-job-source-roles-20261023]
     paths-ignore: ['**/*.md', 'docs/**']
   push:
     branches: [main]

@@ -106,13 +106,8 @@ def _binding_checked(config):
     return b
 
 
-def validate_plan(config, plan):
-    """Compare this observed profile; existing live authenticators still run.
-
-    No groups/IP/timestamps/fingerprint are generated or refreshed here. This
-    first-empty-target profile cannot adopt existing manual-C objects, previous
-    images, an end-page or restore. Such changes need actual reviewed originals.
-    """
+def _source_profile(config, plan):
+    """Common fixed FDS source/target comparison, never baseline adoption."""
     b = _binding_checked(config)
     need(type(plan) is runtime.RuntimeAuthorityPlan
          and type(plan.approval) is AdoptedGrant
@@ -130,22 +125,25 @@ def validate_plan(config, plan):
          and (plan.subject.username, plan.subject.uid) == (SUBJECT, SUBJECT_UID)
          and plan.issuer.grant.principal == SUBJECT)
     need((p.images, p.source_commit, p.contract_sha256, p.rendered_sha256)
-         == (IMAGES, SOURCE_COMMIT, CONTRACT_SHA256, RENDERED_SHA256)
-         and p.previous_images is None and plan.baseline is None)
+         == (IMAGES, SOURCE_COMMIT, CONTRACT_SHA256, RENDERED_SHA256))
     return plan
 
 
-def connect_parent(*, config, finish_slot, expected_peer, routes, deadline,
-                   wire, publish_ready, open_channel, monotonic,
-                   finish_capture=None, producer_pins=None, plan=None, materialize_plan=None):
-    """Reuse the existing parent with explicit trusted transport/lifecycle code.
+def validate_plan(config, plan):
+    """First-empty-target profile only; existing authenticators still run.
 
-    No callback is invoked here. Supply exactly one completed plan OR trusted
-    materialize_plan(context, credential, source, roles, deadline). The latter
-    runs only after the existing authenticated ingress and private-source
-    handoff, then this profile and existing authority checks validate its actual
-    result. No token is issued and no concrete live transport is supplied here.
+    No current facts are generated. Existing objects/previous are NOT adopted
+    by this API; the explicit existing-target connector has its own checks.
     """
+    _source_profile(config, plan)
+    need(plan.producer.facts.previous_images is None and plan.baseline is None)
+    return plan
+
+
+def _connect_parent(validate, *, config, finish_slot, expected_peer, routes, deadline,
+                    wire, publish_ready, open_channel, monotonic,
+                    finish_capture=None, producer_pins=None, plan=None, materialize_plan=None):
+    """Internal CODE composition, not an external validation/policy loader."""
     _binding_checked(config)
     from delivery_job_sources import SourceRoleWiring
     if type(wire) is SourceRoleWiring:
@@ -153,7 +151,9 @@ def connect_parent(*, config, finish_slot, expected_peer, routes, deadline,
     need((plan is None and callable(materialize_plan))
          or (plan is not None and materialize_plan is None))
     if plan is not None:
-        validate_plan(config, plan)
+        validate(config, plan)
+        if type(wire) is SourceRoleWiring:
+            wire.check_plan(plan)
     need(type(finish_slot) is runtime.FinishAdoptionSlot
          and finish_slot.binding == config.binding
          and type(expected_peer) is ingress.PeerIdentity
@@ -164,10 +164,28 @@ def connect_parent(*, config, finish_slot, expected_peer, routes, deadline,
     need(finish_capture is None or callable(finish_capture))
     if plan is None:
         def materialize(context, credential, source, roles, handoff_deadline):
-            return validate_plan(config, materialize_plan(
+            return validate(config, materialize_plan(
                 context, credential, source, roles, handoff_deadline))
         plan = runtime.PreparedAuthorityPlan(binding=config.binding, materialize=materialize)
     return parent.ParentJobBuilder(config=config, plan=plan, finish_slot=finish_slot,
         expected_peer=expected_peer, routes=routes, deadline=deadline, wire=wire,
         publish_ready=publish_ready, open_channel=open_channel, monotonic=monotonic,
         finish_capture=finish_capture, producer_pins=producer_pins)
+
+
+def connect_parent(*, config, finish_slot, expected_peer, routes, deadline,
+                   wire, publish_ready, open_channel, monotonic,
+                   finish_capture=None, producer_pins=None, plan=None, materialize_plan=None):
+    """First-empty-target full/prepared plan -> existing one-use parent.
+
+    No callback/I/O at construction. Actual post-handoff facts are checked by
+    this fixed profile and the unchanged factory/source/control authenticators.
+    """
+    from delivery_job_sources import SourceRoleWiring, ROLES
+    if type(wire) is SourceRoleWiring:
+        need(wire.roles == ROLES)
+    return _connect_parent(validate_plan, config=config, finish_slot=finish_slot,
+        expected_peer=expected_peer, routes=routes, deadline=deadline, wire=wire,
+        publish_ready=publish_ready, open_channel=open_channel, monotonic=monotonic,
+        finish_capture=finish_capture, producer_pins=producer_pins, plan=plan,
+        materialize_plan=materialize_plan)

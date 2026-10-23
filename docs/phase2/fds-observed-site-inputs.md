@@ -28,7 +28,7 @@
 1. 검토된 Runner/job 부모 코드에서 `build_configuration`을 호출한다. 실제 `run_id`, platform/supply 원본 SHA, 절대 input/source/store 경로, 파일명, 실행 예산과 finalize 여부를 **모두 명시 인자**로 전달한다. 함수는 파일을 읽거나 디렉터리를 만들지 않는다. 안전한 POSIX 파일·Git source·실제 바이트 검증은 기존 loader가 담당한다.
 2. 이미 완성된 `RuntimeAuthorityPlan` 또는 명시적인 `materialize_plan(context, credential, source, roles, deadline)` 중 하나만 `connect_parent`에 전달한다. 후자는 자격을 받기 전에 미래 issuer 사실을 만들 필요가 없도록 준비 순서를 분리한다. `validate_plan`은 고정 profile 대조이며 인증 판정은 아니다. 실제 token fingerprint/iat/exp/groups/IP·원본/control은 실행 시 실제 자료에서 채택한다.
 3. 실제 `FinishAdoptionSlot`, 인증된 peer/routes, 절대 deadline, wire/publish/open/monotonic callback을 명시한다. 생성 시 callback을 호출하지 않는다. `PreparedAuthorityPlan` 경로는 native job/Runner 확인 → 공개 ready → 기존 peer 인증·메모리 수신 → ROSA와 private source 자격 수신 → 원본 reader 연결 → **계획 완성 callback 1회** → 기존 authority factory 순서다. ready는 자격 발급·배포 승인이나 issuer 인증 증거가 아니다.
-4. 이번 first-empty-target profile은 `previous=None`만 대조하고 기존 `FirstDeploymentBaseline`의 fresh GET/404 조건을 유지한다. **수동 C 배포 후 기존 객체가 있으면 차단**한다. 실제 기존 객체·UID·owner/spec 및 previous에 대한 검토 없이 baseline을 생성하거나 current를 previous로 복사하지 않는다. restore/end-page를 포함하지 않는다.
+4. `connect_parent`의 first-empty-target profile은 `previous=None`만 대조하고 기존 `FirstDeploymentBaseline`의 fresh GET/404 조건을 유지한다. **수동 C 배포 후 기존 객체가 있으면 차단**한다. [별도 existing-target 연결](fds-existing-target.md)은 실제 검토한6객체·grant·명시 previous를 요구하며 자동 선택하지 않는다. 실제 기존 객체·UID·owner/spec 및 previous에 대한 검토 없이 baseline을 생성하거나 current를 previous로 복사하지 않는다. restore/end-page를 포함하지 않는다.
 
 실패 시 고정 코드로 중단한다. 생성 실패는 외부 자원을 만들지 않으며, 실행 중 실패한 경우 기존 parent/session의 자기 소유 핸들 정리·claim 보존 규칙을 사용한다. 자동 재발급/재시도/삭제/원복 실행을 추가하지 않는다.
 
