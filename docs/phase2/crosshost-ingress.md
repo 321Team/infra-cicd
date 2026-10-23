@@ -5,6 +5,9 @@
 `delivery_crosshost_ingress.py`는 검토된 전송부가 전달하는 바이트를 정확한
 대기 job에 결속하고, 수신한 자격을 기존 `build_owned_invocation`으로 넘긴다.
 실제 SSH listener·job rendezvous·발급기·설정 로더는 설치하지 않는다.
+검토된 전송부가 이미 소유한 Linux 로컬 socket의 kernel peer UID·bounded read/accept를
+연결하는 선택 adapter는 [Unix job 수신부](unix-job-ingress.md)에 별도로 정리한다.
+이 adapter 추가가 실제 SSH 인증·host key·운영 rendezvous 채택을 의미하지 않는다.
 `delivery_job_site.SITE=None`이며 이 모듈의 import와 생성자는 외부에 접속하지 않는다.
 
 | 구분 | 현재 상태 |
