@@ -14,6 +14,45 @@
 
 운영 설정의 선택 근거와 실제 실행 증적을 구분한다. source/rendered 값은 검토한 배포 입력의 선택이며 현재 live spec의 증명이나 최근 수동 변경 수용은 아니다. 실행 때 native revision·원본/control·baseline drift 검증을 그대로 거친다.
 
+## SSH·배치 원본 대조 — PR125·126 병합 후
+
+PR125 `d20b5ee7`, PR126 `c2afae72` 병합 뒤 기존 자료를 다시 대조했다.
+아래는 **기존 배치 근거**이며 P2에서 접속·설치·발급을 새로 확인한 결과가 아니다.
+
+| 기존 자료에서 확인한 것 | #46에 재사용할 범위 / 아직 채택하지 않는 것 |
+|---|---|
+| [P1 native probe](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/docs/deploy-native-auth-probe.md)의 Runner `10.250.10.20`, `cicd-runner01`, `server01_cicd-runner / UID1000` | host/account/UID 기대값은 PR126에서 이미 연결했다. IP는 기존 경로의 후보 주소다. P2 발급측에서 도달 가능하거나 같은 SSH trust를 사용한다는 증거로 확대하지 않는다 |
+| [기존 broker 코드](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/tools/delivery/transfer_native_probe.py)의 ansible01→CP1 및 ansible01→Runner 2개 SSH 연결 | ROSA의 `hayeoung` 발급 세션과 CP1의 `server02` 자격은 별개다. CP1 API/SA/CA·kubeconfig를 P2 issuer에 넣지 않는다. 기존 broker 키 위치는 호출자가 명시하며 실제 키 파일명은 해당 자료만으로 확정되지 않는다 |
+| [P1 workflow 배치](https://github.com/321Team/infra-cicd/blob/c2afae721159224f501e72f43b54fecd7fbe3621/docs/deploy-workflow-handoff.md)의 Runner HOME 및 P1 입력 폴더 | HOME 위치의 근거로만 사용한다. P1 입력·claim/store를 P2에 공유하지 않는다. P2 helper·input/source/store 경로는 중앙이 결정할 배치 항목이며, 이미 설치된 사실로 만들지 않는다 |
+| infra-ansible inventory의 `svc_ansible`, 엄격한 known_hosts 설정 및 임시 `ansible-isolated` Runner 운영 문서 | 해당 inventory에는 CICD Runner 항목이 없다. 임시 Runner와 장기 `cicd-runner01`을 혼용하지 않으며 `svc_ansible`을 helper 계정으로 추정하지 않는다 |
+
+권욱은 발급측 실행 위치·기존 SSH 중계 경로의 선택, READY 전달 방식과 P2 전용 배치를
+완성한다. 재환·하영에게는 **기존 자료에 없는 배치 사실만** 대조받는다. 실제 SSH
+port/key/known_hosts, helper 설치 위치·실행 UID/netns는 현재 미확정이다. 새 키 생성이나
+기존 계정 권한 변경을 이번 작업에서 수행하지 않았다. Runtime 전 현재값 대조는 이후
+승인된 연결에서 수행하며, 이 문서를 작성하기 위한 현장 재수집은 요청하지 않는다.
+
+## 원본·control·finish 연결의 현재 경계
+
+| 역할 | 재사용하는 원본 / 남은 중앙 결정 |
+|---|---|
+| 발급·platform | [하영 정정 6339313808](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6339313808)과 이미 수신한 `p46-inputs-20261022T190046.tgz`. 과거 can-i·CA·OIDC 자료를 실제 발급 응답으로 대체하지 않는다. 현재 actor와 endpoint, 사전 원본과 사후 receipt의 의미 연결은 권욱 담당 |
+| producer | 이미 채택한 MSA 소스·rendered·2개 digest와 기존 공급 원본. native Run 성공만으로 앱 source/이미지 계보를 만들지 않는다. 기존 `ActionsRunSource`와 원본 인증을 함께 결속한다 |
+| approval/control | 댓글 locator와 저장소 ID만으로 `AdoptedGrant`를 만들지 않는다. 실행 대상·기간·철회 의미와 변경을 감지할 control 원본/참조의 운영 채택은 권욱 담당. 현재 control pin이 없다는 사실을 담당자의 새 토큰 미제출로 돌리지 않는다 |
+| baseline | 창 C UID/RV 표와 SCC Pod JSON은 Deployment/Service/Route 6객체 전체 원본이 아니다. 하영은 **기존** raw의 spec/managedFields/owner 포함 여부·위치 확인 중(PR126 리뷰). 재환의 previous digest 근거와 함께 권욱이 채택한다 |
+| finish | 기존 `SourceRoleWiring`의 명시적 observation 또는 collection 모드를 사용한다. 권욱이 해당 실행의 종료 범위·control·보관 위치를 정한다. 실제 종료 progress와 관측 원본은 실행 후 생성되므로 사전 해시를 요구하거나 합성하지 않는다 |
+
+원본 위치 목록은 조회 근거이지 실행 설정이나 승인 loader가 아니다. 운영 의미가
+미확정인 상태에서 새 forwarding wrapper나 JSON `approved=true`를 추가하지 않았다.
+현재 생산 코드는 그대로이며 이번 후속 변경은 **연결 시험과 배치 대조의 보강**이다.
+
+PR125 시험에 native TokenRequest 모의 응답→로컬 helper→익명 pipe→실제 source session을
+통과한 credential로 finish 원본/control을 인증하는 경우를 추가했다. 종료 자료 미설치 시
+읽기 없이 거부하고, 두 번째 control이 바뀌면 종료 판정을 거부한다. 이 시험의 terminal
+progress는 메모리 fixture이며 실제 sender 종료·배포·claim 해제 증명이 아니다.
+정상·실패 세 경로의 source credential/transport·pipe·prepared plan 정리를 단언하고,
+안전 청소에 helper 강제 종료가 필요하면 시험을 실패시킨다. 기존 child rc=0 단언은 유지한다.
+
 ## 미확정 입력과 남은 중앙 연결
 
 아래 세 묶음은 새 제출 양식이 아니다. 이미 제출한 자료를 먼저 재사용하고, 없는 사실 또는 아직 미구현인 연결만 보완한다.
