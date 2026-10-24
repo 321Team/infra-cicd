@@ -4,6 +4,7 @@ No credentials, files, default host/port or configured SITE. The public selector
 correlates native context/Binding/repositories; it is not execution authority.
 """
 import copy
+import errno
 from dataclasses import asdict
 import json
 import math
@@ -145,15 +146,37 @@ class ReadyMailbox(ingress._NoCopy):
         return True
 
 
+def _connect_mailbox(selected, budget):
+    """Wait only for not-yet-listening UNIX address, inside the same budget.
+
+    No bytes/ACK/credential have been sent on ECONNREFUSED/ENOENT. Once connect
+    succeeds, peer/parse/ACK failures are never retried and no new run is made.
+    """
+    while True:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.set_inheritable(False); sock.settimeout(budget.remaining(budget.limit))
+            sock.connect(address(selected))
+            budget.remaining(budget.limit)
+            return sock
+        except OSError as exc:
+            need(unix._close(sock), 'P2_READY_CLEANUP_FAILED')
+            if exc.errno not in (errno.ECONNREFUSED, errno.ENOENT):
+                raise
+            time.sleep(min(0.05, budget.remaining(budget.limit)))
+            budget.remaining(budget.limit)
+        except BaseException:
+            unix._close(sock)
+            raise
+
+
 def read_mailbox(selected, *, listener_uid, budget):
     """Remote SSH helper in job netns: UID check, canonical request, digest ACK."""
     sock = None; error = None; clean = True; request = None
     try:
         _selector(selected)
         need(type(listener_uid) is int and 0 < listener_uid < 0xFFFFFFFF)
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.set_inheritable(False); sock.settimeout(budget.remaining(budget.limit))
-        sock.connect(address(selected))
+        sock = _connect_mailbox(selected, budget)
         pid, uid, _ = unix._peer_credentials(sock)
         need(pid > 0 and uid == listener_uid, 'P2_READY_PEER_REJECTED')
         reader = _SocketReader(sock, budget)

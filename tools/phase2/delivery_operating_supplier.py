@@ -1,13 +1,14 @@
 """Owned memory credentials -> public READY pull -> existing actor/SSH channel.
 
-Input is explicit in-process BearerCredential/source tokens, never file/env/argv.
-This supplies orchestration, NOT a login provider or an execution authorization.
+Input is an explicit in-process actor or deferred LoginActorChannel plus source
+tokens, never file/env/argv. Orchestration does not imply execution authorization.
 """
 import copy
 from dataclasses import replace
 import threading
 
 import delivery_actor_channel as actor
+import delivery_login_channel as login
 import delivery_crosshost_ingress as ingress
 import delivery_ready_pull as ready
 import delivery_ssh_bridge as ssh
@@ -25,16 +26,16 @@ def need(ok):
 class MemoryOperatingSupplier(ingress._NoCopy):
     """Take exclusive channel + copied source refs only after validation succeeds.
 
-    The dedicated actor token is already owned by ActorCredentialChannel. Caller
+    A direct actor token or deferred login password is owned by the channel. Caller
     must release its own aliases. Python reference cleanup is not zeroization.
-    Public READY failure occurs before actor use; server revocation is then NOT
-    ATTEMPTED and remains an explicit operator cleanup task, never false success.
+    Public READY failure occurs before actor use/login. Direct actor server cleanup
+    remains explicit; deferred login creates no token before READY.
     """
     def __init__(self, *, ready_pull, bridge, actor_channel, source_tokens):
         try:
             need(type(ready_pull) is ready.SshReadyPull
                  and type(bridge) is ssh.SshCredentialBridge
-                 and type(actor_channel) is actor.ActorCredentialChannel)
+                 and type(actor_channel) in (actor.ActorCredentialChannel, login.LoginActorChannel))
             selected = ready_pull._selected
             need(selected['target']['binding_key'] == actor_channel._binding.key)
             need(ready_pull._budget.clock is bridge._budget.clock is actor_channel._clock
@@ -47,12 +48,15 @@ class MemoryOperatingSupplier(ingress._NoCopy):
                  and r.remote_helper.endswith('/delivery_ready_pull_helper.py')
                  and b.remote_helper.endswith('/delivery_ssh_bridge_helper.py')
                  and r.remote_helper.rsplit('/',1)[0] == b.remote_helper.rsplit('/',1)[0])
-            ingress._tokens(source_tokens, selected['repositories'], actor_channel._token)
+            if type(actor_channel) is login.LoginActorChannel:
+                actor_channel.check_sources(source_tokens, selected['repositories'])
+            else:
+                ingress._tokens(source_tokens, selected['repositories'], actor_channel._token)
             sources = copy.deepcopy(source_tokens)
         except Exception:
             raise SupplyError('P2_MEMORY_SUPPLY_INVALID') from None
         self._ready, self._bridge, self._actor = ready_pull, bridge, actor_channel
-        self._sources, self._receipt = sources, None
+        self._sources, self._receipt, self._login_metadata = sources, None, None
         self._status = {'public_ready_received':False, **actor_channel.status()}
         self._used, self._lock = False, threading.RLock()
 
@@ -82,7 +86,10 @@ class MemoryOperatingSupplier(ingress._NoCopy):
                 try:
                     self._status.update(self._actor.status())
                     self._receipt = self._actor.take_receipt()
+                    if type(self._actor) is login.LoginActorChannel:
+                        self._login_metadata = self._actor.take_login_metadata()
                     self._actor.close()
+                    self._status.update(self._actor.status())
                     self._status['local_references_released'] = True
                 except BaseException as exc:
                     if not isinstance(error, (KeyboardInterrupt, SystemExit)):
@@ -102,6 +109,11 @@ class MemoryOperatingSupplier(ingress._NoCopy):
         with self._lock:
             value, self._receipt = self._receipt, None
             return value  # Private token-bearing original; caller owns after take.
+
+    def take_login_metadata(self):
+        with self._lock:
+            value, self._login_metadata = self._login_metadata, None
+            return value  # Private recovery handoff; no token/password.
 
     def close(self):
         with self._lock:

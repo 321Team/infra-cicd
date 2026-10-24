@@ -43,6 +43,9 @@ class MemorySupplyTests(unittest.TestCase):
         with self.assertRaisesRegex(supply.SupplyError,'CONSUMED'):value.send()
 
     def test_mismatched_trust_clock_binding_and_sources_rejected_without_consuming_actor(self):
+        bad=ready.SshReadyPull(self.bridge._config, self.pull._selected,
+                              deadline=20, monotonic=self.f.clock)
+        with self.assertRaises(supply.SupplyError):self.make(ready_pull=bad)
         for field,new in [('port',2222),('host_key_alias','different'),('remote_python','/other/python')]:
             b=ssh.SshCredentialBridge(replace(self.bridge._config,**{field:new}),deadline=20,monotonic=self.f.clock)
             with self.subTest(field=field),self.assertRaises(supply.SupplyError):self.make(bridge=b)

@@ -1,6 +1,6 @@
 # #46 메모리 공급·READY 왕복 연결
 
-이 문서는 코드 연결 계약이다. **로그인 provider와 실제 배치 입력은 미공급이며 SITE=None, Runtime NOT_RUN을 유지한다.** 기존 제출 자료와 미확정 값은 [운영 인계표](operating-handoff.md)를 기준으로 한다.
+이 문서는 코드 연결 계약이다. **로그인 provider 코드는 [후속 연결](memory-login-connection.md)에 구현됐지만 실제 로그인·배치 입력은 미공급이며 SITE=None, Runtime NOT_RUN을 유지한다.** 기존 제출 자료와 미확정 값은 [운영 인계표](operating-handoff.md)를 기준으로 한다.
 
 ## 연결 순서
 
@@ -8,10 +8,10 @@
 2. job의 자격 listener를 먼저 연다. 공개 mailbox는 context·Binding·repository 순서의 digest로 만든 abstract UNIX 주소만 사용한다. nonce는 실제 ingress가 생성한다. 파일이나 상시 daemon을 만들지 않는다.
 3. 발급측 trusted caller는 같은 context/Binding/repository selector와 `build_ready_pull_configuration`을 `SshReadyPull`에 전달한다. 기존 ansible01→Runner 관리 SSH 방향이다. 고정 helper 이름 이외의 SSH trust·Python·UID·기한은 자격 bridge와 같아야 한다.
 4. remote helper는 현재 job과 같은 netns에서 mailbox에 접속하고 양쪽 SO_PEERCRED를 대조한다. canonical request → digest ACK → EOF·helper RC0를 확인한다. 공개 ACK까지만 기다리므로 다음 자격 전달을 기다리는 교착을 피한다. 같은 UID 전체를 신뢰하는 기존 호스트 경계이며 악성 동일 UID 프로세스 격리를 보장하지 않는다.
-5. `MemoryOperatingSupplier`는 이미 메모리에 있는 전용 actor 채널과 허용 repository별 source 자격을 복사 인수한다. 공개 request가 selector와 일치하면 기존 users/~ 본인 확인→별도 SSH helper READY→TokenRequest 1회→전달→자기 OAuth 회수 1회를 호출한다. 파일·환경·argv·로그로 자격을 읽거나 로그인 세션을 탐색하지 않는다.
+5. `MemoryOperatingSupplier`는 이미 메모리에 있는 전용 actor 채널 또는 명시 LoginActorChannel과 허용 repository별 source 자격을 인수한다. LoginActorChannel은 공개 READY 후에만 로그인하며 상세 실패 계약은 후속 연결 문서를 따른다. 공개 request가 selector와 일치하면 기존 users/~ 본인 확인→별도 SSH helper READY→TokenRequest 1회→전달→자기 OAuth 회수 1회를 호출한다. 파일·환경·argv·로그로 자격을 읽거나 로그인 세션을 탐색하지 않는다.
 6. job은 기존 private source 인증과 original/control 5역할을 통해 계획을 조립한다. 실제 materializer와 grant/control pin은 명시 입력이다. sender close 뒤 관측·control 검증을 재사용하고 철회/누락이면 fence를 유지한다. 미래 원본·승인을 만들어 넣지 않는다.
 
-helper 둘은 **같은 검토 SHA의 job checkout** 아래 둔다. 실제 port/host alias·설치·netns가 확인되지 않으면 실행 구성이 아니다. 발급측과 job은 각 호스트의 monotonic 기한을 따로 사용하며 remote helper는 제한된 duration으로 자기 clock 예산을 시작한다. 공개 mailbox 연결 실패를 자동 재시도하지 않는다. job이 준비된 뒤 발급측을 한 번 시작한다.
+helper 둘은 **같은 검토 SHA의 job checkout** 아래 둔다. 실제 port/host alias·설치·netns가 확인되지 않으면 실행 구성이 아니다. 발급측과 job은 각 호스트의 monotonic 기한을 따로 사용하며 remote helper는 제한된 duration으로 자기 clock 예산을 시작한다. 공개 mailbox가 아직 열리지 않아 ECONNREFUSED/ENOENT인 경우에만 helper가 자기 budget 안에서 connect를 짧게 기다린다. 연결 후 검증/ACK 실패나 전체 절차는 재시도하지 않는다.
 
 ## 정상과 실패 인수
 

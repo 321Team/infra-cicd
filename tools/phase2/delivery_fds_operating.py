@@ -54,6 +54,25 @@ def build_actor_channel(config, *, actor, endpoint_ip, operation_deadline,
         monotonic=monotonic, wall=wall)
 
 
+def build_login_actor_channel(config, *, login_provider, endpoint_ip,
+                             operation_deadline, cleanup_deadline, monotonic, wall):
+    """Deferred login using the adopted username; OAuth origin/trust stay explicit.
+
+    The API SA issuer is NOT an OAuth login origin. No endpoint/credential default,
+    construction I/O, global SITE assignment or generated original/control input.
+    """
+    from delivery_login_channel import LoginActorChannel
+    from delivery_token_request import TokenTarget
+    binding = profile._binding_checked(config)
+    _, _, namespace, name = profile.SUBJECT.split(':')
+    return LoginActorChannel(binding, login_provider=login_provider,
+        expected_username=ISSUANCE_OPERATOR,
+        target=TokenTarget(namespace, name, profile.SUBJECT_UID, profile.ISSUER, profile.AUDIENCE),
+        ca_pem=profile.CA_PEM, endpoint_ip=endpoint_ip,
+        operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
+        monotonic=monotonic, wall=wall)
+
+
 def build_job_bridge_configuration(*, workspace, context, port, host_key_alias,
                                    remote_python, remote_timeout_seconds):
     """Select the existing native job's exact-checkout helper, without I/O.
@@ -159,6 +178,7 @@ def configuration_status():
                 'server_revocation_verified': False, 'runtime_authorized': False},
             'memory_ready_connection': {'supplier': 'MemoryOperatingSupplier',
                 'ready': 'SshReadyPull/ReadyMailbox', 'helper': READY_ENTRYPOINT,
+                'login_provider_implementation': 'BasicChallengeLogin/LoginActorChannel',
                 'login_provider_supplied': False, 'runtime_connected': False},
             'issuer_location_expectation': {'hostname': ISSUER_HOST,
                 'account': ISSUER_ACCOUNT, 'mode': 'DIRECT_ISSUE_AND_MANAGEMENT_SSH',
@@ -179,7 +199,7 @@ def configuration_status():
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
              'support': '재환·하영 기존 사실 회신 수신. 미기록 값은 현재 실행 준비에서 확인',
-             'items': ['중앙 연결: 본인 로그인 provider가 생산한 actor·repository 자격을 메모리 caller에 연결',
+             'items': ['중앙 연결: 명시 OAuth origin·CA·endpoint와 본인 메모리 password, repository 자격 연결',
                        '중앙 연결: 입력·source/store 및 두 호스트 caller의 실제 배치',
                        '실행 준비: 기존 workspace/Python의 현재 대조, 명시 SSH port/별칭·UID/netns·endpoint',
                        '실행 준비: 본인 actor 인증·API 도달·회수 adapter의 실응답 및 만료/수동 회수 인수']},

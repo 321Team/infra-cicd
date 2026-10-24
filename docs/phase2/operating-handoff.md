@@ -2,7 +2,7 @@
 
 **기존 구현·원본·담당자 확인을 이 문서로 묶는다. 설계와 오프라인 구현은 준비됐지만, 전체 실행 SITE의 실제 배치·자격 공급·원본/control 연결은 미완료다.** `SITE=None`, dispatch false, Runtime NOT_RUN을 유지한다. 아래 문서는 실행 GO나 현재 호스트 점검 결과가 아니다.
 
-기준 코드는 PR133 병합 `7d42910f`다. 최신 HEAD `a401f528`의 하영·재환 승인과 검사 2건 SUCCESS를 확인한 뒤 병합했다. 이후 메모리 공급·공개 READY 왕복 변경은 별도 코드 리뷰 대상이다. [연결 계약과 실패 인수](memory-ready-connection.md)를 함께 본다.
+기준 코드는 PR134 병합 `34e4924a`다. 최신 HEAD `60d279eb`의 하영·재환 승인과 검사 2건 SUCCESS, 병합 SHA의 검사 2건 SUCCESS를 확인했다. 이후 로그인 공급 변경은 별도 코드 리뷰 대상이다. [로그인 연결과 미확정 입력](memory-login-connection.md)을 함께 본다. [연결 계약과 실패 인수](memory-ready-connection.md)를 함께 본다.
 
 ## 1. 반복 요청 없이 재사용할 자료
 
@@ -48,7 +48,7 @@
 |---|---|---|
 | 1. 중앙 구성 | `delivery_fds_operating.build_configuration` + 기존 profile, 명시 경로·Binding·기한 | `SiteConfiguration` 생성은 준비만 의미. 원본을 인증하는 materializer와 실제 source/control pin을 연결해야 함 |
 | 2. Runner job 준비 | `assemble_observed_job(ready_context=...)` → `ReadyMailbox` + 기존 owned rendezvous | 5역할·helper 기대 UID1000·post-close followup 2개 재사용. 자격 없는 request만 기존 관리 SSH 방향으로 회수. source/control 채택과 실제 배치는 별도 |
-| 3. ansible01 자격 전달 | `MemoryOperatingSupplier` → `SshReadyPull` → 기존 `ActorCredentialChannel` | 명시 메모리 자격·같은 SSH trust/clock/기한으로 연결. 공개 request 회수 뒤 사용자 확인→기존 helper READY→단회 발급·전달·회수. 본인 로그인 provider는 미공급 |
+| 3. ansible01 자격 전달 | `MemoryOperatingSupplier` → `SshReadyPull` → 기존 `ActorCredentialChannel` | 명시 메모리 자격·같은 SSH trust/clock/기한으로 연결. 공개 request 회수 뒤 사용자 확인→기존 helper READY→단회 발급·전달·회수. BasicChallengeLogin/LoginActorChannel 코드 추가. 실제 OAuth 입력·메모리 공급은 미구성 |
 | 4. 원본과 계획 조립 | `SourceRoleWiring`, `PrivateSourceSession`, 기존 prepared plan/materializer | 회차 Binding의 원본/control 인증 후 기존 6객체·previous·owner 검증. `approved=true`나 댓글 URL만으로 grant를 만들지 않음 |
 | 5. 적용·실패 차단 | 기존 job/provider·claim/fence·sender·baseline drift/SSA 검사 | 현재 단계에서는 미실행. replicas 인계와 새 기준선이 없으면 실행 준비 미완료. force/다른 계정/다른 endpoint 재시도 금지 |
 | 6. 종료 관측 | 기존 `ObservationRoute`: OBJECT_READBACK + ROLLOUT_READBACK | sender close 뒤 같은 Binding·기한으로 관측. 실제 progress와 authenticated control을 사용; 원본 부재/철회면 완료를 만들지 않고 fence 유지 |
@@ -84,7 +84,7 @@ READY 게시 callback은 공개 request의 수신 ACK까지만 한정 대기하�
 ## 5. 지금 마무리할 것과 실행 때 생성할 것
 
 - **이번 준비 묶음:** 담당자 회신 편입, 단회 메모리 공급 연결과 공개 READY pull/helper, 기존 5역할·control·finish 조립 연결 및 오프라인 시험. 새 GO/승인 파일·환경 자격 loader 없음.
-- **권욱의 실제 연결 잔여:** 본인 로그인 provider의 실제 메모리 입력, 실제 5역할 original/control pin·materializer 및 최종 SITE 값 연결. 코드 연결점이 생겼다고 미발행 grant나 미기록 SSH 값을 채운 것으로 보지 않는다.
+- **권욱의 실제 연결 잔여:** 구현된 BasicChallengeLogin의 실제 OAuth 입력·메모리 password 공급, 실제 5역할 original/control pin·materializer 및 최종 SITE 값 연결. 코드 연결점이 생겼다고 미발행 grant나 미기록 SSH 값을 채운 것으로 보지 않는다.
 - **승인된 실행 준비 잔여:** 현재 SSH 신뢰·UID/netns·경로·endpoint/실효 권한, replicas 인계 뒤 새 baseline. 현재 보고/예상값과 실제 점검 결과를 구분한다.
 - **실행 중 생성:** GitHub native run/attempt는 workflow가, READY nonce는 rendezvous가, 발급 receipt/fingerprint/iat/exp는 실제 issuer가, finish 원본은 종료 관측기가 생성한다. 사전 합성·담당자 제출 항목에서 제외한다.
 
