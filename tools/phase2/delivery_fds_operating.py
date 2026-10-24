@@ -4,11 +4,13 @@ Expected Runner is adopted from the existing workflow and owner review, not a
 fresh host observation. Other fixed target/source inputs use the existing FDS
 profile. No discovery, credentials, filesystem or callback invocation here.
 """
+import delivery_adapter as core
 import delivery_fds_job_site as assembly
 import delivery_fds_site_inputs as profile
 import delivery_fds_observed_baseline as baseline
 import delivery_fds_management_route as management
 import delivery_fds_observed_connection as connection
+import delivery_fds_operating_policy as policy
 import delivery_job as job
 import delivery_job_sources as sources
 from dataclasses import replace
@@ -18,7 +20,7 @@ from delivery_finish_observation import FOLLOWUPS
 EXPECTED_RUNNER = management.EXPECTED_RUNNER
 # Assignment only. Never treat this name or historical can-i as authentication
 # of a BearerCredential. The existing issuer API still needs the actual actor.
-ISSUANCE_OPERATOR = 'gwonuk'
+ISSUANCE_OPERATOR = policy.ACTOR
 ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6379184704'
 ISSUER_HOST = management.SOURCE_HOST
 ISSUER_ACCOUNT = management.SOURCE_ACCOUNT
@@ -228,6 +230,41 @@ def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
         producer_pins=producer_pins)
 
 
+def assemble_observed_native_job(*, config, context, selection, finish_slot,
+        expected_peer, routes, role_routes, finish_scope, wall, deadline, monotonic,
+        producer_repository, producer_pins):
+    """Actual reviewed grants -> existing native reader/materializer + JobSite.
+
+    Creates no grant, timestamp, receipt, credential, listener or baseline.
+    Uses the chosen control snapshot and existing deploy-only six-object path.
+    Caller still owns actual scope/original meaning; source/authority checks run
+    downstream. Global SITE remains untouched and absence never falls back.
+    """
+    from delivery_token_materializer import NativeTokenMaterializer
+    from delivery_source_session import native_original_reader
+    policy.selection_checked(config, context, selection, finish_scope,
+                             producer_repository, producer_pins)
+
+    def materialize(actual_context, credential, source, roles, shared_deadline):
+        policy.need(actual_context == context and core.finite(shared_deadline)
+                    and core.finite(deadline) and shared_deadline <= deadline)
+        selected = NativeTokenMaterializer(binding=config.binding, context=context,
+            selection=selection, read_original=native_original_reader(config.binding),
+            wall=wall)
+        try:
+            return selected(actual_context, credential, source, roles, shared_deadline)
+        finally:
+            # This connector owns the transient materializer, never its borrowed
+            # source/credential. The PreparedAuthorityPlan owns single-use entry.
+            selected.close()
+
+    return assemble_observed_job(config=config, finish_slot=finish_slot,
+        expected_peer=expected_peer, routes=routes, role_routes=role_routes,
+        finish_scope=finish_scope, wall=wall, deadline=deadline, monotonic=monotonic,
+        ready_context=context, materialize_plan=materialize,
+        producer_repository=producer_repository, producer_pins=producer_pins)
+
+
 def reported_actor_grant_status():
     """Owner-reported RBAC metadata, never a live check, Runtime grant or clock.
 
@@ -273,6 +310,7 @@ def configuration_status():
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
             'reported_actor_permission': reported_actor_grant_status(),
+            'adopted_scope_control': policy.selection_status(),
             'actor_channel': {'adapter': 'NAMED_OAUTH_TOKENREQUEST_SSH',
                 'constructed_for_runtime': False, 'identity_verified': False,
                 'server_revocation_verified': False, 'runtime_authorized': False},
@@ -308,7 +346,7 @@ def configuration_status():
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
              'support': '하영·재환: 이미 제출한 담당 영역 원본 재사용',
              'items': ['원본 5역할과 control pin·보관 인증·materializer 결속',
-                       '실제 자동 실행 RUN/action/Binding·허가 창·control 근거 선택 (RBAC 회수기한과 분리)',
+                       '상시 시간대/control 선택은 편입; 실제 RUN/action/Binding별 유한 grant·원본 의미 연결',
                        '사전 플랫폼 receipt와 사후 발급 receipt 구분',
                        '선택한 baseline의 실제 grant/control 및 fresh drift 검증',
                        '채택한 replicas0/3 인계의 실제 완료와 새 full baseline',
