@@ -6,7 +6,7 @@
 
 기존 `MemoryOperatingSupplier`의 직접 actor 입력은 유지한다. 새 경로는 아래 순서다.
 
-1. ansible01의 신뢰하는 caller가 실제 OAuth origin·CA bytes/해시·숫자 endpoint·본인 사용자·메모리 password·monotonic 기한을 `BasicChallengeLogin`에 명시한다. 파일·환경변수·argv·kubeconfig·기존 세션 탐색·대화형 입력을 수행하지 않는다. 기존 본인 `gwonuk` 선택은 `build_login_actor_channel`이 대조한다.
+1. ansible01의 신뢰하는 caller가 실제 OAuth origin·CA bytes/해시·숫자 endpoint·본인 사용자·메모리 password·monotonic 기한을 `BasicChallengeLogin`에 명시한다. provider 자체는 파일·환경변수·argv·kubeconfig·기존 세션 탐색·대화형 입력을 수행하지 않는다. 별도 로컬 입력 함수 `delivery_terminal_login.read_login_provider`를 명시적으로 호출하면 hidden prompt 한 번으로 같은 provider를 만든다. 기존 본인 `gwonuk` 선택은 `build_login_actor_channel`이 대조한다.
 2. 현재 job checkout의 공개 helper를 관리 SSH로 실행한다. 동일 context/Binding/repository selector, UID, canonical frame, ACK/EOF, helper RC0를 확인한 **뒤에만** 로그인을 시작한다. job listener가 늦게 열리면 기존 helper 기한 안에서 `ECONNREFUSED/ENOENT`인 connect만 짧게 기다린다. 연결 후 peer·내용·ACK 실패, SSH 실패 또는 자격 전달 실패는 재시도하지 않는다.
 3. 명시 OAuth origin의 `/oauth/authorize`에 `openshift-challenging-client`, `response_type=token`, 정확한 implicit return URI, 무작위 state와 X-CSRF-Token을 보낸다. Basic challenge를 받은 경우 같은 URL에 자격을 **한 번만** 보낸다. TLS 체인·호스트·SNI와 명시 CA를 확인하고, 시스템 CA·proxy·DNS·redirect·insecure fallback을 사용하지 않는다.
 4. 302 응답의 Location은 따라가지 않는다. 같은 origin의 `/oauth/token/implicit` fragment에서 state 일치, Bearer, modern `sha256~` token, 양의 `expires_in`과 중복 없는 필드를 확인한다. 브라우저/SSO/외부 challenge redirect/legacy token/만료 미제공 응답은 현재 지원하지 않으며 자동 전환하지 않는다.
@@ -33,6 +33,18 @@
 
 ## 실패와 복구
 
+### 로컬 비밀번호 입력과 인수
+
+`read_login_provider`는 실제 사용자 터미널에서 호출하며 stdin 리다이렉트/비TTY를 거부한다. `getpass`의 echo fallback 경고를 오류로 전환해 평문 입력으로 넘어가지 않는다. 입력은 파일·환경변수·argv·명령 기록에 넣지 않으며 네트워크 호출 없이 기존 provider만 반환한다. 검토된 OAuth trust와 실제 본인 계정이 연결되기 전에는 호출하지 않는다.
+
+입력 전후 같은 monotonic deadline을 검사한다. 사용자 입력 대기는 강제로 끊지 않으므로 입력 중 기한이 지나면 반환 뒤 중단한다. 기한을 새로 주거나 로그인 재시도를 하지 않는다. 성공한 provider는 기존 `build_login_supplier`로 넘기고, 조립 실패·사용 취소 시 caller가 `close()`한다. 입력 함수와 provider는 password 참조를 정리하지만 Python 메모리 소거를 보장하지 않는다. 입력 함수는 전용 로컬 caller에서 worker를 시작하기 전에 사용한다. 다른 스레드가 동시에 warning filter를 변경하는 환경은 지원하지 않는다.
+
+### 본인 OAuth 수동 회수 인계
+
+자동 회수 응답이 불명확하거나 Basic 제출 뒤 응답이 유실되면, 권욱의 별도 본인 세션에서 `oc get useroauthaccesstokens`로 실제 목록·EXPIRES를 조회한다. 비공개 인수한 정확한 객체 이름과 실행 시각을 대조한 **해당 본인 token 한 개**만 `oc delete useroauthaccesstokens <확인한 이름>`으로 회수한다. 목록 전체나 다른 사용자 자격을 일괄 삭제하지 않는다. 응답 손실로 객체를 특정할 수 없으면 미확인으로 인계하며 임의로 골라 지우지 않는다.
+
+DELETE 응답과 이후 목록 부재는 서버 회수 증적이다. API 불통·로컬 close·SA 만료를 OAuth 서버 회수로 대신하지 않는다. 조회·회수는 실제 실행 시 별도 수행할 절차이며 이번 코드 시험에서는 실행하지 않는다. 클러스터의 OAuth 기본 수명·정책값은 미확인으로 유지하며 24시간 등 추정값을 채택하지 않는다. OAuth origin/CA는 API origin/CA와 별개다. 최종 소비와 로그인 회수 인계는 임시 RoleBinding 두 개의 10/26 12:00 이전 회수·namespace 삭제보다 앞서 완료한다.
+
 | 조건 | 판정·인수 |
 |---|---|
 | READY 미수신·기한 만료 | 새 경로에서는 로그인 NOT_ATTEMPTED. password 참조 해제. OAuth를 미리 만들지 않아 이 경로가 생성한 토큰은 없음 |
@@ -54,6 +66,8 @@ Python 문자열 참조 해제는 메모리 zeroization이 아니다. caller가 
 | 하영/재환 | 담당 영역의 기존 사실이 달라졌을 때만 변경분 전달; 기존 역할·최종 회수 담당 유지 | 같은 질문 재요청 없음. 전체 실행 GO·10/26 12:00 정리 기한 변경 없음 |
 
 ## 검증과 근거
+
+로컬 입력 시험 5건과 로그인→공급→원본/control→6객체 기준선→finish 연계 시험 6건을 추가했다. 후자는 같은 발급 receipt와 credential이 기존 생산 코드 경로로 연결되는지, 원본 누락·control 철회·지문 불일치·finish 저장 실패 때 claim/fence를 보존하는지 확인한다. HTTP socket, 공개 READY/SSH bridge, pipe receive는 mock 경계다. 실제 IPC·SSH 배치·현장 자격·Runtime을 검증했다고 표시하지 않는다. 입력 테스트도 실제 비밀번호를 받지 않는다.
 
 시험에서는 모든 자격/응답을 SYNTHETIC fixture로 제공하고 네트워크·OpenSSH를 차단한다. HTTP 직렬화/파싱, TLS 정책, READY 전 로그인 금지, 오류·취소·원본 인수, 중복 호출·bad state·redirect·만료·peer/EOF 경계를 검사한다. 조립의 필수 입력·소유권·오류 정리와 bridge clock/기한·request Binding·source 오류에서 **login 호출 0회**, 충분한 대기 예산의 EACCES에서 **소켓 생성 1회**를 고정한다. 기존 Linux 로컬 IPC/native job/5역할 source·control/finish 시험도 함께 실행한다. 로컬 helper 시험은 실제 SSH 배치 검증이 아니다.
 
