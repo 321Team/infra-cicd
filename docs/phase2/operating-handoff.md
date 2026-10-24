@@ -2,7 +2,7 @@
 
 **기존 구현·원본·담당자 확인을 이 문서로 묶는다. 설계와 오프라인 구현은 준비됐지만, 전체 실행 SITE의 실제 배치·자격 공급·원본/control 연결은 미완료다.** `SITE=None`, dispatch false, Runtime NOT_RUN을 유지한다. 아래 문서는 실행 GO나 현재 호스트 점검 결과가 아니다.
 
-기준 코드는 PR132 병합 `329fe5d8`와 PR133 검토 HEAD `386f9f15`다. PR133 후속 변경은 이 인계표, 상태보고 정리와 비차단 시험 보완에 한정한다. 기존 두 사람 승인은 `386f9f15` 범위를 보존하고 후속 변경의 승인으로 확대하지 않는다.
+기준 코드는 PR133 병합 `7d42910f`다. 최신 HEAD `a401f528`의 하영·재환 승인과 검사 2건 SUCCESS를 확인한 뒤 병합했다. 이후 메모리 공급·공개 READY 왕복 변경은 별도 코드 리뷰 대상이다. [연결 계약과 실패 인수](memory-ready-connection.md)를 함께 본다.
 
 ## 1. 반복 요청 없이 재사용할 자료
 
@@ -28,14 +28,14 @@
 
 각 경로는 기존 `SiteConfiguration`의 명시 인자로만 연결한다. P1 store·kubeconfig·기존 작업 세션의 자격은 공유하지 않는다. input과 store를 겹치게 하거나 자동 생성·chmod·소유권 변경으로 검사 실패를 숨기지 않는다. 실제 배치 때 기존 owner/mode/link 검사 결과를 확인한다. 이 설계 선택은 담당자에게 새 경로를 만들어 달라는 요청이 아니다.
 
-## 2. 담당자별 한 번에 확인할 범위
+## 2. 담당자별 한 번의 회신 — 수신 완료
 
-[일괄 요청 6380386112](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6380386112)에 한 번만 회신한다. 이미 있는 링크를 재사용하며 `변경 없음 / 기존 기록 링크·값 / 미기록·미배치`를 구분한다. 새 SSH·API 조회·권한 변경·자격 발급은 요청하지 않는다.
+[일괄 요청 6380386112](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6380386112)의 두 회신을 수신했다. 같은 질문을 다시 요청하지 않는다. 아래 ‘미기록’은 이후 승인된 현재값 점검 항목이며 담당자 회신 대기가 아니다.
 
 | 담당 | 필요한 기존 사실 | 답변 후 중앙 처리 |
 |---|---|---|
-| 재환 | SSH 명시 port·host-key alias/known_hosts 표기의 기록, 위 workspace/Python의 변경 기록, job과 SSH의 계정/container/netns 예외 기록 | 기록에 맞춰 기존 SshBridgeConfig를 채움. 미기록이면 실행 준비 점검으로 넘김. `22`나 IP alias를 추정하지 않음 |
-| 하영 | 본인 전용 OAuth의 기존 메모리 공급 절차 유무, 실제 OAuth 수명/만료 확인·수동 회수 방법의 기존 기록 | 재사용 가능하면 연결, 없으면 권욱의 구현·실행 준비 항목으로 유지. 비밀번호·token 원문 요청 없음 |
+| 재환 | [6380691087](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6380691087): workspace·Python 변경 기록 없음, `/usr/bin/python3`는 10/13 명령 RC0 원본 있음. 명시 port·HostKeyAlias/known_hosts 표기 미기록, infra-cicd job/SSH 격리 예외 기록 없음 | 역사적 근거 재사용. `-p` 없는 과거 명령에서 22를 추정하지 않음. infra-ansible의 종료된 임시 podman Runner를 CICD netns로 쓰지 않음. 현재 신뢰·UID/netns는 실행 준비 |
+| 하영 | [6380606054](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6380606054): 기존 메모리 공급 절차 없음, 본인 CloudShell oc login 사용. 실제 OAuth 수명·설정 조회 기록 없음. 본인 useroauthaccesstokens 만료 확인·수동 삭제 방법 제시 | 메모리 공급 연결은 권욱 구현. 새 로그인 provider와 실제 EXPIRES/회수 권한은 실행 준비. 역할 회수는 기존 하영 담당 유지. 수명 기본값·만료 시각을 만들어 넣지 않음 |
 | 권욱 | 새 P2 파일 배치와 trusted caller, 메모리 자격 공급, 인증된 READY 왕복, 5역할 original/control 및 finish scope의 의미 연결 | 아래 구현·실행 준비 구분대로 마무리. 담당자 미회신을 중앙 코드 작업의 전체 중단 사유로 사용하지 않음 |
 
 미기록 회신은 완료나 안전의 증명이 아니다. 미해소 항목을 해당 단계에 남기되 같은 자료를 반복 요청하지 않는다. 변경된 사실 또는 새 결함이 있을 때만 그 차이를 추가 확인한다.
@@ -47,14 +47,14 @@
 | 순서·실행 위치 | 기존 진입점 / 입력 | 정상 판정·남은 중앙 작업 |
 |---|---|---|
 | 1. 중앙 구성 | `delivery_fds_operating.build_configuration` + 기존 profile, 명시 경로·Binding·기한 | `SiteConfiguration` 생성은 준비만 의미. 원본을 인증하는 materializer와 실제 source/control pin을 연결해야 함 |
-| 2. Runner job 준비 | `assemble_observed_job` → 기존 owned rendezvous + native job context/revision | 5역할·helper 기대 UID1000·post-close followup 2개 재사용. `publish_ready`의 **실제 인증된 왕복 caller**는 아직 연결 필요 |
-| 3. ansible01 자격 전달 | `build_job_bridge_configuration` + `build_actor_channel` → `send_over_bridge` | 실제 port/alias/endpoint·본인 actor·repository-scoped 자격을 명시. 사용자 확인→단회 TokenRequest→검토된 SSH/READY 전달. 로그인/메모리 입력 구현과 native request 결속은 중앙 잔여 |
+| 2. Runner job 준비 | `assemble_observed_job(ready_context=...)` → `ReadyMailbox` + 기존 owned rendezvous | 5역할·helper 기대 UID1000·post-close followup 2개 재사용. 자격 없는 request만 기존 관리 SSH 방향으로 회수. source/control 채택과 실제 배치는 별도 |
+| 3. ansible01 자격 전달 | `MemoryOperatingSupplier` → `SshReadyPull` → 기존 `ActorCredentialChannel` | 명시 메모리 자격·같은 SSH trust/clock/기한으로 연결. 공개 request 회수 뒤 사용자 확인→기존 helper READY→단회 발급·전달·회수. 본인 로그인 provider는 미공급 |
 | 4. 원본과 계획 조립 | `SourceRoleWiring`, `PrivateSourceSession`, 기존 prepared plan/materializer | 회차 Binding의 원본/control 인증 후 기존 6객체·previous·owner 검증. `approved=true`나 댓글 URL만으로 grant를 만들지 않음 |
 | 5. 적용·실패 차단 | 기존 job/provider·claim/fence·sender·baseline drift/SSA 검사 | 현재 단계에서는 미실행. replicas 인계와 새 기준선이 없으면 실행 준비 미완료. force/다른 계정/다른 endpoint 재시도 금지 |
 | 6. 종료 관측 | 기존 `ObservationRoute`: OBJECT_READBACK + ROLLOUT_READBACK | sender close 뒤 같은 Binding·기한으로 관측. 실제 progress와 authenticated control을 사용; 원본 부재/철회면 완료를 만들지 않고 fence 유지 |
 | 7. 자격·운영 인수 | actor DELETE 결과, SA 만료, 별도 자원 정리 책임 | 로컬 참조 해제·OAuth 회수·SA 만료·C-STOP·DB/Robot/클라우드 정리를 각각 기록 |
 
-READY 게시 callback에서 SSH 전달 **완료까지 동기 대기하지 않는다**. listener가 준비된 뒤 별도 소유 실행 경로로 발급측 전달을 시작하고 job은 accept를 계속해야 한다. 실제 transport/caller 구현에서 기존 peer/nonce/revision·단회 소비·기한 검사를 재사용하며, 공유 파일의 단순 READY 문자열을 인증 근거로 삼지 않는다. 양 호스트 monotonic 절대값을 공유하지 않는다.
+READY 게시 callback은 공개 request의 수신 ACK까지만 한정 대기하며 자격 전달 **완료까지 동기 대기하지 않는다**. 이미 준비된 자격 listener는 ACK 뒤 accept를 계속한다. 발급측은 공개 helper 종료/RC0를 확인한 뒤 기존 자격 helper를 별도로 시작한다. 기존 peer/nonce/revision·단회 소비·기한 검사를 재사용하며 공유 파일 READY나 UID 하나를 issuer/GO 근거로 삼지 않는다. 양 호스트 monotonic 절대값을 공유하지 않는다.
 
 ### 원본·control 5역할
 
@@ -83,11 +83,11 @@ READY 게시 callback에서 SSH 전달 **완료까지 동기 대기하지 않는
 
 ## 5. 지금 마무리할 것과 실행 때 생성할 것
 
-- **이번 준비 묶음:** 기존 자료·선택·구현 진입점·담당자 질문·회수 조건 통합, PR133의 비차단 시험 2건 반영. 새 wrapper나 실행 gate 추가 없음.
-- **권욱의 실제 코드 잔여:** 전용 actor/repository 자격의 메모리 공급 caller, 인증된 READY 왕복, 5역할 original/control materializer와 최종 SITE 조립. 이 문서 자체가 해당 구현을 완성하지는 않는다.
+- **이번 준비 묶음:** 담당자 회신 편입, 단회 메모리 공급 연결과 공개 READY pull/helper, 기존 5역할·control·finish 조립 연결 및 오프라인 시험. 새 GO/승인 파일·환경 자격 loader 없음.
+- **권욱의 실제 연결 잔여:** 본인 로그인 provider의 실제 메모리 입력, 실제 5역할 original/control pin·materializer 및 최종 SITE 값 연결. 코드 연결점이 생겼다고 미발행 grant나 미기록 SSH 값을 채운 것으로 보지 않는다.
 - **승인된 실행 준비 잔여:** 현재 SSH 신뢰·UID/netns·경로·endpoint/실효 권한, replicas 인계 뒤 새 baseline. 현재 보고/예상값과 실제 점검 결과를 구분한다.
 - **실행 중 생성:** GitHub native run/attempt는 workflow가, READY nonce는 rendezvous가, 발급 receipt/fingerprint/iat/exp는 실제 issuer가, finish 원본은 종료 관측기가 생성한다. 사전 합성·담당자 제출 항목에서 제외한다.
 
-변하지 않은 부분의 전체 리뷰와 시험을 다시 요구하지 않는다. 비차단 보완은 현재 PR133에 모아 처리하고, 안전·정확성에 영향을 주는 새 결함만 그 근거·변경분·재검증 조건을 분리한다. PR별 승인·Runtime·최종 인수는 서로 대체하지 않는다.
+변하지 않은 부분의 전체 리뷰를 다시 요구하지 않는다. 비차단 보완은 같은 변경 묶음에 모아 처리하고, 안전·정확성에 영향을 주는 새 결함만 그 근거·변경분·재검증 조건을 분리한다. PR별 승인·Runtime·최종 인수는 서로 대체하지 않는다.
 
 오프라인 상태 확인은 기존 `python3 -B tools/phase2/delivery_job.py status`다. **현재 기대 종료코드 2 / P2_JOB_UNCONFIGURED**가 정상 보고이며 PASS·실행 가능 상태가 아니다. 모든 원본·연결이 실제로 채워지기 전에는 이를 바꾸지 않는다.

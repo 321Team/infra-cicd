@@ -370,4 +370,33 @@ class AdoptedSourceConnectionTests(unittest.TestCase):
         self.assertFalse(self.selected.build._owner._published)
 
 
+class ReadyOperatingSelectionTests(unittest.TestCase):
+    def test_public_helper_uses_same_explicit_trust_and_native_checkout(self):
+        args=dict(workspace='/synthetic/work',context=CONTEXT,port=2222,
+            host_key_alias='SYNTHETIC-runner',remote_python='/usr/bin/python3',remote_timeout_seconds=5)
+        ready=operating.build_ready_pull_configuration(**args)
+        bridge=operating.build_job_bridge_configuration(**args)
+        self.assertEqual(bridge,replace(ready,remote_helper=bridge.remote_helper))
+        self.assertTrue(ready.remote_helper.endswith('/'+operating.READY_ENTRYPOINT))
+        self.assertTrue((Path(__file__).resolve().parents[2]/operating.READY_ENTRYPOINT).is_file())
+        for required in ('port','host_key_alias','remote_python','workspace'):
+            with self.assertRaises(TypeError):operating.build_ready_pull_configuration(**{k:v for k,v in args.items() if k!=required})
+
+    def test_public_mailbox_connected_to_five_roles_without_io_or_site_assignment(self):
+        from delivery_ready_pull import ReadyMailbox
+        f=AdoptedOperatingTests('runTest')
+        f.setUp();self.addCleanup(f.doCleanups)
+        args=f.args | {'publish_ready':None,'ready_context':CONTEXT}
+        selected=operating.assemble_observed_job(**args)
+        self.addCleanup(selected.build._owner.close)
+        mailbox=selected.build._owner._publish
+        self.assertIs(type(mailbox),ReadyMailbox)
+        self.assertEqual(args['config'].binding.key,mailbox._selected['target']['binding_key'])
+        self.assertEqual(5,len(selected.build._parent._wire._routes))
+        self.assertFalse(mailbox._used);f.f.clock.assert_not_called()
+        with self.assertRaises(operating.assembly.SiteAssemblyError):
+            operating.assemble_observed_job(**(args | {'publish_ready':Mock()}))
+        self.assertIsNone(declaration.SITE)
+
+
 if __name__ == '__main__': unittest.main()

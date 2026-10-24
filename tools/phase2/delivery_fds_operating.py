@@ -10,6 +10,7 @@ import delivery_fds_observed_baseline as baseline
 import delivery_fds_management_route as management
 import delivery_job as job
 import delivery_job_sources as sources
+from dataclasses import replace
 from delivery_finish_observation import FOLLOWUPS
 
 
@@ -21,6 +22,7 @@ ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46
 ISSUER_HOST = management.SOURCE_HOST
 ISSUER_ACCOUNT = management.SOURCE_ACCOUNT
 HELPER_ENTRYPOINT = 'tools/phase2/delivery_ssh_bridge_helper.py'
+READY_ENTRYPOINT = 'tools/phase2/delivery_ready_pull_helper.py'
 # Historical references for handoff/status ONLY. Neither is a default argument
 # or a current host observation; the trusted caller still supplies native inputs.
 RECORDED_WORKSPACE = '/home/server01_cicd-runner/actions-runner/_work/infra-cicd/infra-cicd'
@@ -76,8 +78,15 @@ def build_job_bridge_configuration(*, workspace, context, port, host_key_alias,
         raise assembly.SiteAssemblyError('P2_FDS_JOB_HELPER_CONFIGURATION_INVALID') from None
 
 
+def build_ready_pull_configuration(**inputs):
+    """Same explicit management trust and checkout, public-only helper."""
+    bridge = build_job_bridge_configuration(**inputs)
+    return replace(bridge, remote_helper=bridge.remote_helper.removesuffix(
+        HELPER_ENTRYPOINT) + READY_ENTRYPOINT)
+
+
 def assemble_observed_job(*, config, finish_slot, expected_peer, routes, role_routes,
-        finish_scope, wall, deadline, monotonic, publish_ready, plan=None,
+        finish_scope, wall, deadline, monotonic, publish_ready=None, ready_context=None, plan=None,
         materialize_plan=None, producer_repository=None, producer_pins=None):
     """Adopt the same-account helper and post-close observation finish policy.
 
@@ -91,6 +100,14 @@ def assemble_observed_job(*, config, finish_slot, expected_peer, routes, role_ro
         wire = sources.SourceRoleWiring(binding=config.binding, routes=role_routes,
             finish=sources.ObservationRoute(finish_scope, FOLLOWUPS),
             producer_repository=producer_repository, wall=wall, monotonic=monotonic)
+        if ready_context is not None:
+            if publish_ready is not None:
+                raise ValueError()
+            from delivery_ready_pull import ReadyMailbox, selector_for
+            selected = selector_for(ready_context, config.binding,
+                [r.repository.owner + '/' + r.repository.name for r in routes])
+            publish_ready = ReadyMailbox(selected, expected_uid=management.EXPECTED_HELPER_UID,
+                deadline=deadline, monotonic=monotonic)
     except Exception:
         raise assembly.SiteAssemblyError('P2_FDS_SITE_CONFIGURATION_INVALID') from None
     return assembly.assemble_existing_job_site(runner=EXPECTED_RUNNER,
@@ -140,6 +157,9 @@ def configuration_status():
             'actor_channel': {'adapter': 'NAMED_OAUTH_TOKENREQUEST_SSH',
                 'constructed_for_runtime': False, 'identity_verified': False,
                 'server_revocation_verified': False, 'runtime_authorized': False},
+            'memory_ready_connection': {'supplier': 'MemoryOperatingSupplier',
+                'ready': 'SshReadyPull/ReadyMailbox', 'helper': READY_ENTRYPOINT,
+                'login_provider_supplied': False, 'runtime_connected': False},
             'issuer_location_expectation': {'hostname': ISSUER_HOST,
                 'account': ISSUER_ACCOUNT, 'mode': 'DIRECT_ISSUE_AND_MANAGEMENT_SSH',
                 'current_location_verified': False, 'api_reachability_verified': False},
@@ -158,9 +178,9 @@ def configuration_status():
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
-             'support': '재환: SSH port/별칭·기존 경로/실행 격리 변경 기록, 하영: 기존 메모리 자격 공급·OAuth 수명/회수 기록',
-             'items': ['중앙 구현: 본인 전용 actor·repository 자격의 메모리 공급과 실제 caller 연결',
-                       '중앙 연결: 인증된 READY 왕복·양 호스트 deadline·P2 input/source/store',
+             'support': '재환·하영 기존 사실 회신 수신. 미기록 값은 현재 실행 준비에서 확인',
+             'items': ['중앙 연결: 본인 로그인 provider가 생산한 actor·repository 자격을 메모리 caller에 연결',
+                       '중앙 연결: 입력·source/store 및 두 호스트 caller의 실제 배치',
                        '실행 준비: 기존 workspace/Python의 현재 대조, 명시 SSH port/별칭·UID/netns·endpoint',
                        '실행 준비: 본인 actor 인증·API 도달·회수 adapter의 실응답 및 만료/수동 회수 인수']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
