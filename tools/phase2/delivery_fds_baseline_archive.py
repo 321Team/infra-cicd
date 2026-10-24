@@ -15,6 +15,10 @@ import delivery_fds_existing_inputs as existing
 import delivery_runtime_site as runtime
 from delivery_adopted_authority import AdoptedGrant
 from delivery_objects import decode, normalized
+from delivery_adopted_authority import CodeAdoptedGrantResolver, pin_identity
+from delivery_github_source import BlobPin
+from delivery_object_reader import BearerCredential
+from delivery_verifier import Progress, ReadRequest
 
 MAX_ARCHIVE = 1024 * 1024
 MAX_TAR = 7 * 1024 * 1024
@@ -27,6 +31,7 @@ OBJECT_FILES = tuple(kind.lower() + '-' + name + '.json'
                      for _, kind, name in core.OBJECTS)
 NOTES = ('00-time.txt', '00-target.txt', '10-summary.txt')
 DATA_FILES = frozenset(OBJECT_FILES + NOTES)
+ROOT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}')
 
 
 class BaselineArchiveError(RuntimeError):
@@ -50,7 +55,7 @@ def decode_baseline_archive(raw, *, expected_sha256, root_name):
              and type(expected_sha256) is str and core.HEX.fullmatch(expected_sha256)
              and core.digest(raw) == expected_sha256
              and type(root_name) is str
-             and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}', root_name))
+             and ROOT_NAME.fullmatch(root_name))
         with gzip.GzipFile(fileobj=io.BytesIO(raw), mode='rb') as compressed:
             payload = compressed.read(MAX_TAR + 1)
         need(0 < len(payload) <= MAX_TAR)
@@ -116,3 +121,53 @@ def connect_baseline_archive(config, plan, *, archive, expected_sha256, root_nam
         return existing.validate_existing_plan(config, connected)
     except Exception:
         raise BaselineArchiveError('FDS_BASELINE_CONNECTION_INVALID') from None
+
+
+def baseline_metadata_checked(binding, grant, root_name):
+    """Explicit deferred metadata only; never adopt a root/hash from the blob."""
+    need(type(grant) is AdoptedGrant and grant.binding == binding
+         and type(grant.original_pin) is BlobPin
+         and type(root_name) is str and ROOT_NAME.fullmatch(root_name))
+    pin_identity(grant.original_pin); pin_identity(grant.control_pin)
+
+
+def connect_authenticated_baseline(config, plan, *, grant, root_name, readers,
+        credential, deadline, wall, monotonic):
+    """Same-run private source blob + fresh adopted control -> actual baseline.
+
+    Called only inside post-handoff preparation. Uses existing readers/resolver
+    and bounded native archive decoder; no issuance, filesystem, retries,
+    current-object capture or fallback to RECEIVED_ARCHIVE_SHA256/old snapshot.
+    Owns its resolver only. Readers, credential and plan stay borrowed.
+    """
+    resolver = original = result = error = None
+    try:
+        need(type(plan) is runtime.RuntimeAuthorityPlan and plan.baseline is None
+             and type(readers) is runtime.SourceReaders
+             and type(credential) is BearerCredential and core.finite(deadline)
+             and callable(wall) and callable(monotonic))
+        readers.check()
+        baseline_metadata_checked(config.binding, grant, root_name)
+        progress = Progress()  # Preparation happens before claim/first write.
+        request = ReadRequest(config.binding, credential, progress, deadline)
+        resolver = CodeAdoptedGrantResolver(grant=grant, control_reader=readers.control,
+            credential=credential, progress=lambda: progress, wall=wall, monotonic=monotonic)
+        resolver.check(request)  # Expired grants stop BEFORE source-body access.
+        original = readers.original.blob(request, grant.original_pin)
+        resolver(request, original)  # Same original/request + fresh control, not a bool.
+        result = connect_baseline_archive(config, plan, archive=original.body,
+            expected_sha256=grant.original_pin.sha256, root_name=root_name, grant=grant)
+        resolver.check(request)  # Parsing consumes the SAME deadline/window.
+    except BaseException as exc:
+        if isinstance(exc, KeyboardInterrupt): error = KeyboardInterrupt()
+        elif isinstance(exc, SystemExit): error = SystemExit(130)
+        else: error = BaselineArchiveError('FDS_BASELINE_SOURCE_INVALID')
+    finally:
+        if resolver is not None: resolver.close()
+    # Foreign reader/parser errors may retain private bodies in traceback frames.
+    # Raise after leaving except and release those borrowed/private references.
+    original = resolver = readers = credential = plan = request = None
+    if error is not None:
+        result = None
+        raise error from None
+    return result

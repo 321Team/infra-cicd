@@ -138,6 +138,34 @@ class OperatingPolicyTests(unittest.TestCase):
             with self.assertRaises(policy.OperatingPolicyError): self.checked(finish_scope=finish)
         self.mono.assert_not_called(); self.wall.assert_not_called(); self.issue.assert_not_called()
 
+    def test_concrete_assembly_cannot_skip_policy_for_a_foreign_control(self):
+        selected = replace(self.selection, approval=replace(self.selection.approval,
+            control_pin=replace(policy.CONTROL_PIN, anchor_commit='e'*40)))
+        with patch.object(operating, 'assemble_observed_job') as construct:
+            with self.assertRaises(policy.OperatingPolicyError):
+                operating.assemble_observed_native_job(**(self.args | {'selection': selected}))
+        construct.assert_not_called()
+        self.mono.assert_not_called(); self.wall.assert_not_called(); self.issue.assert_not_called()
+
+    def test_malformed_native_stage_and_foreign_producer_repository_are_separate_failures(self):
+        malformed = (replace(self.pins[0], steps=()),) + self.pins[1:]
+        with self.assertRaises(policy.OperatingPolicyError): self.checked(producer_pins=malformed)
+        other = RepositoryPin('synthetic-other', 'synthetic-producer', 456, 654)
+        foreign = tuple(replace(p, run=replace(p.run, repository=other)) for p in self.pins)
+        actions.policy_checked(foreign)  # Valid native policy, wrong declared repository.
+        with self.assertRaises(policy.OperatingPolicyError): self.checked(producer_pins=foreign)
+
+    def test_run_and_finish_must_end_before_owner_planned_recall_without_changing_cleanup(self):
+        self.assertLess(policy.CONSUMPTION_END, policy.CLEANUP_END)
+        self.assertEqual('ALWAYS_OPEN', policy.selection_status()['scheduling'])
+        selected = replace(self.selection, approval=replace(self.selection.approval,
+                           expires_at=policy.CONSUMPTION_END))
+        self.assertIs(selected, self.checked(selection=selected))
+        for kw in ({'selection': replace(selected, approval=replace(selected.approval,
+                           expires_at=policy.CONSUMPTION_END + 1))},
+                   {'finish_scope': replace(self.finish, expires_at=policy.CONSUMPTION_END + 1)}):
+            with self.assertRaises(policy.OperatingPolicyError): self.checked(**kw)
+
     def test_preparation_only_comment_never_becomes_execution_approval_even_if_edited(self):
         for owner, name in (('321Team', 'fds-project-baseline'), ('321team', 'FDS-PROJECT-BASELINE')):
             repo = RepositoryPin(owner, name, 1, 2)

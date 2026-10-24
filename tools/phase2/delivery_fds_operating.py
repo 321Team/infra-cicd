@@ -232,7 +232,7 @@ def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
 
 def assemble_observed_native_job(*, config, context, selection, finish_slot,
         expected_peer, routes, role_routes, finish_scope, wall, deadline, monotonic,
-        producer_repository, producer_pins):
+        producer_repository, producer_pins, baseline_grant=None, baseline_root=None):
     """Actual reviewed grants -> existing native reader/materializer + JobSite.
 
     Creates no grant, timestamp, receipt, credential, listener or baseline.
@@ -240,10 +240,18 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
     Caller still owns actual scope/original meaning; source/authority checks run
     downstream. Global SITE remains untouched and absence never falls back.
     """
-    from delivery_token_materializer import NativeTokenMaterializer
+    from delivery_token_materializer import NativeTokenMaterializer, NativePlanSelection
     from delivery_source_session import native_original_reader
+    from delivery_fds_baseline_archive import (baseline_metadata_checked,
+                                               connect_authenticated_baseline)
+    policy.need(type(selection) is NativePlanSelection)
+    if baseline_grant is None:
+        policy.need(baseline_root is None)
+    else:
+        policy.need(selection.baseline is None)
+        baseline_metadata_checked(config.binding, baseline_grant, baseline_root)
     policy.selection_checked(config, context, selection, finish_scope,
-                             producer_repository, producer_pins)
+                             producer_repository, producer_pins, baseline_grant=baseline_grant)
 
     def materialize(actual_context, credential, source, roles, shared_deadline):
         policy.need(actual_context == context and core.finite(shared_deadline)
@@ -252,7 +260,16 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
             selection=selection, read_original=native_original_reader(config.binding),
             wall=wall)
         try:
-            return selected(actual_context, credential, source, roles, shared_deadline)
+            plan = selected(actual_context, credential, source, roles, shared_deadline)
+            if baseline_grant is not None:
+                readers = roles.get('readers')
+                policy.need(type(readers) is tuple and len(readers) == 5
+                            and source._state == 'CONSUMED' and source.now() < shared_deadline)
+                plan = connect_authenticated_baseline(config, plan, grant=baseline_grant,
+                    root_name=baseline_root, readers=readers[4], credential=credential,
+                    deadline=shared_deadline, wall=wall, monotonic=source.now)
+                policy.need(source._state == 'CONSUMED' and source.now() < shared_deadline)
+            return plan
         finally:
             # This connector owns the transient materializer, never its borrowed
             # source/credential. The PreparedAuthorityPlan owns single-use entry.
