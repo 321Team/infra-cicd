@@ -160,6 +160,25 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(1, self.baselines)
         self.safe(out)
 
+    def test_scale_subresource_is_not_adopted_as_main_resource_replicas_ownership(self):
+        # PR130 reviewer follow-up: the complete admission path rejects scale
+        # ownership before the narrow replicas guard, even for the same manager.
+        for i, obj in enumerate(json.loads(self.c.h.render)):
+            obj = owned(obj, i)
+            if obj['kind'] == 'Deployment':
+                obj['spec']['replicas'] = 0
+                obj['metadata']['managedFields'].append({
+                    'manager': 'fds-deployer', 'operation': 'Apply', 'apiVersion': 'apps/v1',
+                    'fieldsType': 'FieldsV1', 'subresource': 'scale',
+                    'fieldsV1': {'f:spec': {'f:replicas': {}}}})
+            self.c.h.objects[core.path_for(core.identity(obj))] = obj
+        out = self.app().run('deploy')
+        self.assertEqual('PREFLIGHT_DENIED', out['error_code'], out)
+        self.assertEqual([], self.c.storage.claims)
+        self.assertEqual(0, self.c.sender_calls)
+        self.assertEqual([], self.c.h.requests)
+        self.safe(out)
+
     def test_preflight_and_session_failure_keep_separate_immutable_diagnostics(self):
         files = {}
         def create_once(root, binding, progress, now, diagnostic, *, phase='session'):
