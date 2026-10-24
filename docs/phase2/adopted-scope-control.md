@@ -1,5 +1,10 @@
 # #46 운영 범위·상시 시간대·control 연결 — 2026-10-25
 
+**PR142 병합 후 후속:** 같은 RUN의 비공개 원본 채널에서 baseline archive를
+읽는 경로를 기존 native 조립 함수에 추가했다. 메모리 원본 tuple 방식과 아래 명시적
+archive 방식 중 하나만 선택한다. 실제 archive pin/root·RUN별 grant는 만들지 않는다.
+PR142 비차단 시험 공백 3건도 이 변경에 묶어 보강했다.
+
 [사용자 채택 기록6385867126](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6385867126)을
 기준으로 기존 운영 조립 함수에 실제 native 원본 reader/materializer를 연결했다.
 이 기록과 이 코드는 **운영 구성 채택 및 구현/오프라인 준비**다. 이번 요청의
@@ -13,7 +18,7 @@
 | 검토할 실행 범위 | 기존 두 앱6객체·승인 digest의 정상1·실제 Test/Scan 실패차단1·승인 previous 복원1·Health/Rule·앱0·보고 | 회차 수는 채택된 인수 범위다. 상태 dict가 횟수를 집행하지 않는다. 실제 실행별 정확한 grant/Binding 및 기존 claim/fence가 필요하며 임의 RUN 추가 권리는 없음 |
 | control | 기존 `operating-handoff.md`의 검토 snapshot + 전용 ref | 아래 정확한 pin을 코드 선택. 무관 main 병합을 control 변경으로 읽지 않으며 자동 repin 없음 |
 | native 운영 조립 | `assemble_observed_native_job` → 기존 `assemble_observed_job` → PreparedAuthorityPlan → 기존 native reader/materializer | FDS **deploy 전용** 경로다. 복원은 별도 승인된 render·grant와 기존 restore 경로가 필요하며 deploy profile을 자동 재사용하지 않음 |
-| baseline | 기존 검증의 raw/previous 검사를 순수 함수로 추출해 조립 전에 재사용 | 실제 baseline 6개와 previous가 필수. fake IssuerFacts·현재 GET·과거 snapshot으로 인계 후 baseline을 만들지 않음 |
+| baseline | 메모리 raw tuple 또는 실제 BlobPin grant/root의 XOR 선택. 후자는 같은 source의 5번째 역할 reader로 원본·control을 인증하고 기존 archive parser 연결 | 실제 baseline/previous는 여전히 필수. 미래 raw·fake IssuerFacts·현재 GET·과거 snapshot으로 인계 후 기준선을 만들지 않음 |
 
 ## 실제 선택한 control
 
@@ -44,6 +49,22 @@ control 문서 snapshot과 pin을 저장하는 SITE 코드는 분리해 자기 �
 `NativePlanSelection`, finish scope/slot, peer/source/role routes, producer repository/pins,
 wall/monotonic 및 deadline이다. 누락을 기본값·JSON·환경 설정으로 채우지 않는다.
 
+baseline 전달은 다음 두 방식 중 하나다.
+
+- 기존 방식: `NativePlanSelection.baseline`에 명시 채택한 6개 원본 tuple이 있다.
+  `baseline_grant`·`baseline_root` 추가 인자는 둘 다 없어야 한다.
+- 후행 원본 방식: `NativePlanSelection.baseline=None`이며 실제 `baseline_grant`와
+  `baseline_root`가 둘 다 있다. grant의 original은 정확한 `BlobPin`이어야 한다.
+  원본 sha는 이 pin에서만 가져오며 archive 내부 note·manifest를 권위로 읽지 않는다.
+
+후행 방식은 issuer 원본 해석 뒤, 같은 소비된 source의 `roles['readers'][4]`를 사용한다.
+기존 `CodeAdoptedGrantResolver`로 기간·같은 Binding/credential/request/deadline 및
+원문/control을 인증하고, `connect_baseline_archive`가 digest/manifest/6UID/spec/previous를
+검사한다. parser 종료 뒤에도 같은 기한을 확인한다. 역할 reader는 소스 세션에서 빌리며
+내부 resolver만 close한다. archive 추출·저장·새 API capture·재시도·과거 snapshot fallback은 없다.
+완성된 plan은 이후 기존 `wire.check_plan`, producer native 검증, fresh baseline/현재 RBAC,
+claim/fence/finish 검증을 그대로 거친다.
+
 1. 생성 시 파일·socket·clock·원본 reader·issuer를 호출하지 않는다.
 2. 기존 UID1000/helper/READY·5역할 private source 전달을 그대로 조립한다.
 3. 소비된 source의 prepared callback 안에서만 기존 `native_original_reader(binding)`와
@@ -72,3 +93,17 @@ API/CA/OAuth/SSH/UID/source/render/digest를 다시 제출받지 않는다.
 후 코드 리뷰 대상이며 RUNTIME/AC/최종 인수 완료가 아니다. 최종 자원 정리·복구·반출·보고는
 기존 **10/26 12:00 KST**를 유지한다. source/기준선이 부족하면 해당 단계만 미완료로 남기며
 이미 채택된 범위/control/시간대를 다시 묻거나 새 ledger·팀 제출양식·단계별 GO를 만들지 않는다.
+
+## 마지막 소비와 회수 비중첩
+
+[하영 회수 계획6378716458](https://github.com/321Team/infra-rosa/issues/8#issuecomment-6378716458)은
+10/26 08:30 앱0 확인, 08:35 SA 참조, 08:45 pull Secret/Robot 회수 착수를 제안한다.
+이는 계획·담당자 운영 방식이며 실제 회수 완료나 새 실행 GO의 증거가 아니다.
+PR142 두 리뷰어의 권고에 따라 **실제 approval/finish 만료 상한을 현재 소비 종료 경계
+10/26 08:30 KST 이하**로 대조한다. 전체 자원 정리 상한 12:00은 그대로 남긴다.
+
+상시 실행 가능 시간대를 다시 고정 시간대로 제한하는 결정은 아니다. 현재 쓰는 자원의
+회수와 시험이 겹치지 않게 하는 의존 조건이며, 08:30 직전 착수나 앱0·claim 해제의
+자동 보증도 아니다. 실제 착수 때 종료/복구 여유를 확보하고, 해제되지 않은 fence나
+잔여 앱/세션이 있으면 회수 담당에게 상태를 인계한다. 회수 계획이 변경되면 그 근거를
+확인해 이 선택도 갱신하며 계획 시각을 새 grant/자격 만료로 합성하지 않는다.

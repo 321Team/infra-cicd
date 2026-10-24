@@ -15,6 +15,7 @@ import delivery_job as job
 from delivery_adopted_authority import AdoptedGrant, pin_identity
 from delivery_github_source import RepositoryPin, BlobPin, CommentPin, repository_checked
 from delivery_token_materializer import NativePlanSelection
+from dataclasses import replace
 
 ACTOR = 'gwonuk'
 ADOPTION_REFERENCE = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6385867126'
@@ -30,6 +31,12 @@ CONTROL_PIN = BlobPin(
     '6531ba8e301858c0e180c377d06908f895158a70')
 CLEANUP_AT = '2026-10-26T12:00:00+09:00'
 CLEANUP_END = datetime.fromisoformat(CLEANUP_AT).timestamp()
+# Owner's current recall PLAN (#8 6378716458, reaffirmed by PR142 reviews),
+# not proof of actual revocation or a new execution grant. Keep global cleanup
+# 12:00 separate; app0/claim completion must precede recall starting at 08:30.
+RECALL_PLAN_REFERENCE = 'https://github.com/321Team/infra-rosa/issues/8#issuecomment-6378716458'
+CONSUMPTION_END_AT = '2026-10-26T08:30:00+09:00'
+CONSUMPTION_END = datetime.fromisoformat(CONSUMPTION_END_AT).timestamp()
 
 
 class OperatingPolicyError(RuntimeError):
@@ -42,7 +49,7 @@ def need(ok):
 
 
 def selection_checked(config, context, selection, finish_scope, producer_repository,
-                      producer_pins):
+                      producer_pins, *, baseline_grant=None):
     """Inert constraints on actual CODE selections, not authority discovery.
 
     A fresh control pin is a revocation fence only under the explicitly adopted
@@ -57,9 +64,18 @@ def selection_checked(config, context, selection, finish_scope, producer_reposit
         context.check()
         need(type(selection) is NativePlanSelection)
         selection.check(b)
-        need(selection.baseline is not None)
-        existing.validate_existing_baseline(b, selection.baseline,
-                                            selection.producer.facts.previous_images)
+        if selection.baseline is None:
+            # Exact deferred grant/root is required by the operating connector.
+            # Raw owner/spec is checked after private source read, BEFORE plan admission.
+            need(type(baseline_grant) is AdoptedGrant)
+            previous = selection.producer.facts.previous_images
+            need(type(previous) is tuple and len(previous) == len(core.services_for(b)))
+            core.binding_checked(replace(b, images=previous))
+        else:
+            need(baseline_grant is None)
+            existing.validate_existing_baseline(b, selection.baseline,
+                                                selection.producer.facts.previous_images)
+            baseline_grant = selection.baseline.grant
         _, _, namespace, name = profile.SUBJECT.split(':')
         need((selection.target.namespace, selection.target.name, selection.target.uid,
               selection.target.issuer, selection.target.audience) ==
@@ -70,7 +86,7 @@ def selection_checked(config, context, selection, finish_scope, producer_reposit
              and selection.endpoint_ip == connection.API_ENDPOINT_IP)
         need(selection.approval.principal == ACTOR)
         grants = (selection.approval, selection.issuer_grant,
-                  selection.producer.grant, selection.baseline.grant, finish_scope)
+                  selection.producer.grant, baseline_grant, finish_scope)
         for grant in grants:
             need(type(grant) is AdoptedGrant and grant.binding == b
                  and grant.control_pin == CONTROL_PIN
@@ -86,7 +102,9 @@ def selection_checked(config, context, selection, finish_scope, producer_reposit
         # Scheduling is always open; neither a made-up start nor 240-min cap.
         # Only execution/finish validity is bounded by actual final cleanup.
         need(selection.approval.expires_at <= CLEANUP_END
-             and finish_scope.expires_at <= CLEANUP_END)
+             and finish_scope.expires_at <= CLEANUP_END
+             and selection.approval.expires_at <= CONSUMPTION_END
+             and finish_scope.expires_at <= CONSUMPTION_END)
         actions.policy_checked(producer_pins)
         repository_checked(producer_repository)
         refs = tuple(getattr(selection.producer.facts, x + '_reference')
@@ -113,4 +131,7 @@ def selection_status():
             'sha256': CONTROL_PIN.sha256, 'ref': CONTROL_PIN.anchor_ref,
             'head': CONTROL_PIN.anchor_commit, 'live_checked': False},
         'cleanup_at': CLEANUP_AT, 'execution_authorized': False,
+        'consumption_end_at': CONSUMPTION_END_AT,
+        'consumption_end_basis': 'OWNER_PLANNED_RECALL_NOT_REVOCATION_PROOF',
+        'recall_plan_reference': RECALL_PLAN_REFERENCE,
         'actual_run_grants_supplied': False}
