@@ -3,6 +3,9 @@
 `delivery_token_materializer.py`는 기존 `PreparedAuthorityPlan` callback 위치에
 연결하는 선택적 구현이다. 실제 배포 SITE는 계속 미설정이며 발급·권한 변경·배포를 실행하지 않는다.
 
+후속 [비공개 원본 전달 reader](native-original-reader.md)는 선택적 v2 frame을 추가한다.
+기존 v1과 실제 운영 적용·출처/authority 검증은 구분한다.
+
 ## 원본에서 확인한 의미와 채택 범위
 
 2026-10-24 KST 기준 baseline #46 기존 댓글, 저장소 tree와 비공개 공유 원본의
@@ -46,14 +49,15 @@ commit/path/hash와 anchor ref/commit을 고정한다. 이는 내용·위치의 
 ## 운영 미연결 부분과 검증 한계
 
 `read_original`은 같은 job에 결속되고 실제 출처가 인증된 원본 bytes를 기존 마감 안에 반환하는
-신뢰 코드여야 한다. **현재 credential-only SSH frame은 TokenRequest 원본을 전달하지 않는다.**
+신뢰 코드여야 한다. **기존 credential-only v1 SSH frame은 TokenRequest 원본을 전달하지 않는다.**
 테스트의 같은 process receipt hook을 운영 원본 전달 구현으로 보고하지 않는다.
 callback을 제공하지 않은 상태의 자동 발견·file/env/global cache fallback은 없다.
 
 원본 parser는 일관성 검사이며 이 위치에서 TLS 201 출처·JWT 서명을 검증하지 않는다.
 `issuer_grant.original_pin`은 Binding의 기존 platform metadata 원본을 가리킨다. 발급 뒤 native
 TokenRequest 응답과 다른 산출물이므로 두 bytes의 hash가 같아야 한다고 요구하지 않는다.
-native 원본의 실제 출처·same-job 결속은 별도 reader 계약이며 현재 운영 구현이 남아 있다.
+native 원본의 실제 출처·same-job 결속은 별도 reader 계약이다. 후속 reader 구현과
+실제 운영 조립·선택/출처 검증 완료는 구분한다.
 원본 bytes가 있다는 이유로 발급 권한·RBAC·Route·배포 GO를 인증한 것으로 판단하지 않는다.
 선택한 실제 원본/control 채택과 인증 경로가 준비된 뒤에만 운영 구성을 완성할 수 있다.
 

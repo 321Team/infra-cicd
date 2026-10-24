@@ -49,7 +49,7 @@ class DeferredTests(unittest.TestCase):
         self.assertTrue(s.status()['password_reference_released'])
         self.assertIsNone(s.take_login_metadata());self.assertIsNone(s.take_receipt())
 
-    def execute(self, auth_ok=True, forward_error=None, login_error=False):
+    def execute(self, auth_ok=True, forward_error=None, login_error=False, include_original=False):
         c=self.channel();s=self.supplier(c)
         replies=[oauth.challenge(),oauth.challenge() if login_error else oauth.granted()]
         user=self.f.f.user()
@@ -65,7 +65,11 @@ class DeferredTests(unittest.TestCase):
             return self.f.request
         def forward(request,*,provide_credentials):
             self.assertTrue(s.status()['public_ready_received'])
-            token,sources=provide_credentials(request,20)
+            provided=provide_credentials(request,20)
+            self.assertEqual(3 if include_original else 2,len(provided))
+            token,sources=provided[:2]
+            if include_original:
+                self.assertEqual(core.encoded(self.f.f.f.response()),provided[2])
             self.assertEqual(self.f.f.f.token(),token)
             self.assertEqual(self.f.sources,sources)
             if forward_error:raise forward_error
@@ -78,7 +82,7 @@ class DeferredTests(unittest.TestCase):
                 with self.assertRaises(type(forward_error) if isinstance(forward_error,(KeyboardInterrupt,SystemExit)) else supply.SupplyError) as caught:s.send()
                 self.assertIsNone(caught.exception.__context__)
                 self.assertNotIn(TOKEN,str(caught.exception));self.assertNotIn(oauth.PASSWORD,str(caught.exception))
-            else:s.send()
+            else:s.send(include_original=include_original)
         self.assertEqual(1,pulled.call_count);self.assertEqual(len(replies),opened.call_count)
         self.assertTrue(all(x.closed for x in sockets))
         self.assertTrue(s.status()['password_reference_released'])
@@ -97,6 +101,14 @@ class DeferredTests(unittest.TestCase):
         self.assertEqual(self.f.f.revoked()['metadata']['name'],metadata['oauth_object_name'])
         self.assertIsNone(s.take_login_metadata())
         self.assertIsNotNone(s.take_receipt());self.assertIsNone(s.take_receipt())
+
+    def test_explicit_original_mode_forwards_same_native_bytes_and_retains_private_receipt(self):
+        s,_=self.execute(include_original=True)
+        receipt=s.take_receipt()
+        self.assertEqual(core.encoded(self.f.f.f.response()),receipt.raw)
+        self.assertEqual('ACKNOWLEDGED',s.status()['actor_server_revocation'])
+        self.assertFalse(s.status()['job_accepted'])
+        self.assertNotIn(receipt.credential.token,str(s.status())+repr(s))
 
     def test_failed_login_or_identity_never_issues_or_deletes_other_identity(self):
         for args in ({'login_error':True},{'auth_ok':False}):

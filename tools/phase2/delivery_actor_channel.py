@@ -165,7 +165,7 @@ class ActorCredentialChannel(wire.Sender, ingress._NoCopy):
                  'ACTOR_REVOCATION_UNCONFIRMED')
         self._revocation = 'ACKNOWLEDGED'  # Server response, NOT global cache invalidation proof.
 
-    def send_over_bridge(self, *, bridge, request, source_tokens):
+    def send_over_bridge(self, *, bridge, request, source_tokens, include_original=False):
         """Authenticate -> existing single-use issue/forward -> server cleanup.
 
         Retain the private issuance receipt even if handoff or cleanup fails.
@@ -179,7 +179,7 @@ class ActorCredentialChannel(wire.Sender, ingress._NoCopy):
             self._used = True
             supplier = issuer = error = cleanup_error = None
             try:
-                need(type(bridge) is SshCredentialBridge
+                need(type(include_original) is bool and type(bridge) is SshCredentialBridge
                      and bridge._budget.clock is self._clock
                      and bridge._budget.limit <= self._operation_end)
                 ingress._request(request)
@@ -192,7 +192,9 @@ class ActorCredentialChannel(wire.Sender, ingress._NoCopy):
                 supplier = issuance.RequestBoundSupplier(issuer=issuer,
                     request=request, source_tokens=source_tokens)
                 self._authenticate()
-                need(supplier.send_over_bridge(bridge) is True)
+                forwarded = (supplier.send_over_bridge(bridge, include_original=True) if include_original
+                             else supplier.send_over_bridge(bridge))
+                need(forwarded is True)
                 self._forwarded = True
             except BaseException as exc:
                 error = public_error(exc, 'ACTOR_HANDOFF_FAILED')

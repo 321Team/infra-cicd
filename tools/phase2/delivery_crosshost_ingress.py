@@ -6,6 +6,7 @@ peer, bind to this waiting job, enforce read deadlines, and avoid secret logs.
 Nonce/job matching is correlation, not transport/issuer/GO authentication.
 """
 from dataclasses import asdict, dataclass, field
+import base64
 import hmac
 import json
 import re
@@ -20,9 +21,11 @@ import delivery_job_handoff as handoff
 import delivery_site as site
 from delivery_credential_channel import TOKEN, MAX_TOKEN_BYTES
 from delivery_github_source import RepositoryPin, repository_checked, NAME
+from delivery_source_session import MAX_NATIVE_ORIGINAL_BYTES
 
 REQUEST_SCHEMA = 'P2-CICD-ingress-request-1'
 MESSAGE_SCHEMA = 'P2-CICD-ingress-message-1'
+NATIVE_MESSAGE_SCHEMA = 'P2-CICD-ingress-message-2'
 MAX_MESSAGE_BYTES = 96 * 1024
 CHUNK_BYTES = 4096
 HEX64 = re.compile(r'[a-f0-9]{64}')
@@ -114,7 +117,7 @@ def _tokens(values, repositories, rosa):
     return tuple(result)  # Same GitHub token across allowed repositories is valid.
 
 
-def encode_frame(request, *, rosa_token, source_tokens):
+def encode_frame(request, *, rosa_token, source_tokens, native_original=None):
     """Create private in-memory wire bytes, never an approval or send operation.
 
     The remote producer must authenticate the request/transport independently.
@@ -123,10 +126,42 @@ def encode_frame(request, *, rosa_token, source_tokens):
     try:
         _request(request)
         _tokens(source_tokens, request['repositories'], rosa_token)
-        raw = core.encoded({'schema': MESSAGE_SCHEMA, 'target': request['target'],
-            'nonce': request['nonce'], 'rosa_token': rosa_token, 'source_tokens': source_tokens})
+        message = {'schema': MESSAGE_SCHEMA, 'target': request['target'],
+            'nonce': request['nonce'], 'rosa_token': rosa_token, 'source_tokens': source_tokens}
+        if native_original is not None:
+            need(type(native_original) is bytes and 0 < len(native_original) <= MAX_NATIVE_ORIGINAL_BYTES,
+                 'INGRESS_MESSAGE_INVALID')
+            message.update(schema=NATIVE_MESSAGE_SCHEMA,
+                native_original=base64.b64encode(native_original).decode('ascii'))
+        raw = core.encoded(message)
         need(0 < len(raw) <= MAX_MESSAGE_BYTES, 'INGRESS_FRAME_INVALID')
         return struct.pack('!I', len(raw)) + raw
+    except IngressError:
+        raise
+    except Exception:
+        raise IngressError('INGRESS_MESSAGE_INVALID') from None
+
+
+def native_frame_budget_checked(request, source_tokens):
+    """Bound worst-case private wire size BEFORE issuance; no fake credential.
+
+    Tokens/base64 are JSON-safe ASCII. Account for exact selected source bytes,
+    maximum ROSA token and maximum original. This conservative bound can reject
+    a selection whose actual response would be smaller; no fallback or resize.
+    """
+    try:
+        _request(request)
+        need(type(source_tokens) is list and len(source_tokens) == len(request['repositories']),
+             'INGRESS_SOURCE_REJECTED')
+        for value, repository in zip(source_tokens, request['repositories']):
+            need(type(value) is dict and set(value) == {'repository','token'}
+                 and value['repository'] == repository, 'INGRESS_SOURCE_REJECTED')
+            _token(value['token'], source=True)
+        overhead = len(core.encoded({'schema': NATIVE_MESSAGE_SCHEMA, 'target': request['target'],
+            'nonce': request['nonce'], 'rosa_token': '', 'source_tokens': source_tokens,
+            'native_original': ''}))
+        need(overhead + MAX_TOKEN_BYTES + 4*((MAX_NATIVE_ORIGINAL_BYTES+2)//3)
+             <= MAX_MESSAGE_BYTES, 'INGRESS_FRAME_INVALID')
     except IngressError:
         raise
     except Exception:
@@ -189,9 +224,10 @@ class ReceivedCredentials(_NoCopy):
     """Owned one-use memory references; no authenticated issuer/GO assertion."""
     execution_authorized = False
 
-    def __init__(self, *, context, binding, rosa_token, sources, deadline, clock):
+    def __init__(self, *, context, binding, rosa_token, sources, deadline, clock, native_original=None):
         self._context, self._binding = context, binding
         self._rosa, self._sources = rosa_token, sources
+        self._native = native_original
         self._deadline, self._clock, self._used = deadline, clock, False
         self._lock = threading.Lock()
 
@@ -202,6 +238,7 @@ class ReceivedCredentials(_NoCopy):
         with self._lock:
             self._used = True
             self._rosa = self._sources = None  # Not secure memory erasure/server revocation.
+            self._native = None
 
     def build_invocation(self, context, command, *, config, plan, finish_slot, wire,
                          handoff_deadline, finish_capture=None, producer_pins=None):
@@ -209,6 +246,7 @@ class ReceivedCredentials(_NoCopy):
             need(not self._used, 'INGRESS_CONSUMED')
             self._used = True  # Invalid/failed builds consume this result too.
             rosa, sources = self._rosa, self._sources
+            native, self._native = self._native, None
             self._rosa = self._sources = None
         try:
             need(type(context) is job.JobContext and context == self._context
@@ -222,7 +260,7 @@ class ReceivedCredentials(_NoCopy):
             return handoff.build_owned_invocation(context, command, config=config, plan=plan,
                 finish_slot=finish_slot, rosa_token=rosa, sources=sources, wire=wire,
                 handoff_deadline=deadline, monotonic=self._clock,
-                finish_capture=finish_capture, producer_pins=producer_pins)
+                finish_capture=finish_capture, producer_pins=producer_pins, native_original=native)
         except IngressError:
             raise
         except handoff.HandoffError:
@@ -337,9 +375,20 @@ class CrossHostIngress(_NoCopy):
             raise IngressError('INGRESS_MESSAGE_INVALID')
         try:
             message = json.loads(raw.decode('utf-8'), object_pairs_hook=self._pairs, parse_constant=constant)
-            need(type(message) is dict and set(message) ==
-                 {'schema', 'target', 'nonce', 'rosa_token', 'source_tokens'}
-                 and message['schema'] == MESSAGE_SCHEMA, 'INGRESS_MESSAGE_INVALID')
+            need(type(message) is dict, 'INGRESS_MESSAGE_INVALID')
+            keys = {'schema', 'target', 'nonce', 'rosa_token', 'source_tokens'}
+            native = None
+            if message.get('schema') == NATIVE_MESSAGE_SCHEMA:
+                need(set(message) == keys | {'native_original'}, 'INGRESS_MESSAGE_INVALID')
+                value = message['native_original']
+                need(type(value) is str and 0 < len(value) <= 4 * ((MAX_NATIVE_ORIGINAL_BYTES+2)//3),
+                     'INGRESS_MESSAGE_INVALID')
+                native = base64.b64decode(value, validate=True)
+                need(0 < len(native) <= MAX_NATIVE_ORIGINAL_BYTES
+                     and base64.b64encode(native).decode('ascii') == value, 'INGRESS_MESSAGE_INVALID')
+            else:
+                need(set(message) == keys and message.get('schema') == MESSAGE_SCHEMA,
+                     'INGRESS_MESSAGE_INVALID')
             _target(message['target'])
             need(message['target'] == self._public()['target']
                  and type(message['nonce']) is str and HEX64.fullmatch(message['nonce'])
@@ -348,7 +397,8 @@ class CrossHostIngress(_NoCopy):
             sources = tuple(handoff.SourceHandoff(route.repository, token, route.local_use_until,
                             route.ca_pem, route.endpoint_ip) for route, token in zip(self._routes, tokens))
             return ReceivedCredentials(context=self._context, binding=self._binding,
-                rosa_token=message['rosa_token'], sources=sources, deadline=self._deadline, clock=self._now)
+                rosa_token=message['rosa_token'], sources=sources, deadline=self._deadline,
+                clock=self._now, native_original=native)
         except IngressError:
             raise
         except Exception:
