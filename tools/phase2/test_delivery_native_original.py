@@ -241,7 +241,11 @@ class NativeHelperReaderTests(SemanticFixture, unittest.TestCase):
         self.addCleanup(inv.close)
         cap=inv.source_session.prepare(inv.receiver,inv.handoff_deadline)
         credential=inv.receiver.receive(cap)
-        roles=inv.source_session.open(credential)
+        import delivery_github_source as github
+        # Source APIs are SYNTHETIC and never requested. Match the existing
+        # fixtures' mock TLS context; do not load the fake CA into real OpenSSL.
+        with patch.object(github.ssl,'SSLContext',return_value=t.f.context):
+            roles=inv.source_session.open(credential)
         result=plan.resolve(credential=credential,source=inv.source_session,roles=roles,deadline=cap)
         self.assertEqual(t.token(),credential.token)
         self.assertEqual((1000,1900),(result.issuer.facts.issued_at,result.issuer.facts.expires_at))
