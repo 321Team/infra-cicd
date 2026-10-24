@@ -104,6 +104,56 @@ def build_ready_pull_configuration(**inputs):
         HELPER_ENTRYPOINT) + READY_ENTRYPOINT)
 
 
+def build_login_supplier(config, *, login_provider, endpoint_ip, repositories,
+        source_tokens, context, workspace, port, host_key_alias, remote_python,
+        remote_timeout_seconds, operation_deadline, cleanup_deadline, monotonic, wall):
+    """Assemble the selected issuer side without starting it or configuring SITE.
+
+    Use the SAME explicit native context, Binding and ordered RepositoryPins as
+    the job-side routes. Repository identity is shape-checked here, authenticated
+    by the existing job source readers later. No original/control is generated.
+    Caller owns login_provider until successful return; failure never consumes
+    or closes it. On success the single-use supplier owns it; source token refs
+    are copied by the existing supplier. Constructors allocate no live channel,
+    invoke no clock/callback and do not log in. No fallback for missing inputs.
+    """
+    from delivery_actor_channel import public_error
+    from delivery_github_source import RepositoryPin, repository_checked
+    from delivery_ready_pull import SshReadyPull, selector_for
+    from delivery_ssh_bridge import SshCredentialBridge
+    from delivery_operating_supplier import MemoryOperatingSupplier
+    error = None
+    try:
+        binding = profile._binding_checked(config)
+        if type(repositories) is not tuple or not repositories:
+            raise ValueError()
+        for repository in repositories:
+            if type(repository) is not RepositoryPin:
+                raise ValueError()
+            repository_checked(repository)
+        selected = selector_for(context, binding,
+            [r.owner + '/' + r.name for r in repositories])
+        bridge_config = build_job_bridge_configuration(workspace=workspace,
+            context=context, port=port, host_key_alias=host_key_alias,
+            remote_python=remote_python, remote_timeout_seconds=remote_timeout_seconds)
+        ready_config = replace(bridge_config, remote_helper=
+            bridge_config.remote_helper.removesuffix(HELPER_ENTRYPOINT) + READY_ENTRYPOINT)
+        pull = SshReadyPull(ready_config, selected,
+            deadline=operation_deadline, monotonic=monotonic)
+        bridge = SshCredentialBridge(bridge_config,
+            deadline=operation_deadline, monotonic=monotonic)
+        channel = build_login_actor_channel(config, login_provider=login_provider,
+            endpoint_ip=endpoint_ip, operation_deadline=operation_deadline,
+            cleanup_deadline=cleanup_deadline, monotonic=monotonic, wall=wall)
+        return MemoryOperatingSupplier(ready_pull=pull, bridge=bridge,
+            actor_channel=channel, source_tokens=source_tokens)
+    except BaseException as exc:
+        error = public_error(exc, 'P2_FDS_LOGIN_SUPPLIER_INVALID')
+    # No close: all constructors are inert and provider is still caller-owned.
+    # Raise outside except so even __context__ cannot retain raw exception text.
+    raise error from None
+
+
 def assemble_observed_job(*, config, finish_slot, expected_peer, routes, role_routes,
         finish_scope, wall, deadline, monotonic, publish_ready=None, ready_context=None, plan=None,
         materialize_plan=None, producer_repository=None, producer_pins=None):
@@ -177,6 +227,7 @@ def configuration_status():
                 'constructed_for_runtime': False, 'identity_verified': False,
                 'server_revocation_verified': False, 'runtime_authorized': False},
             'memory_ready_connection': {'supplier': 'MemoryOperatingSupplier',
+                'assembly': 'build_login_supplier',
                 'ready': 'SshReadyPull/ReadyMailbox', 'helper': READY_ENTRYPOINT,
                 'login_provider_implementation': 'BasicChallengeLogin/LoginActorChannel',
                 'login_provider_supplied': False, 'runtime_connected': False},

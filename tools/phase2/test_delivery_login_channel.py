@@ -123,5 +123,25 @@ class DeferredTests(unittest.TestCase):
             with self.assertRaises(Exception):c.check_sources(values,['synthetic/evidence'])
         self.assertEqual('NOT_ATTEMPTED',c.status()['login'])
 
+    def test_each_prelogin_boundary_rejects_without_minting_actor(self):
+        other = copy.deepcopy(self.f.request)
+        other['target']['binding_key'] = 'f' * 64
+        cases = (
+            ('clock', ssh.SshCredentialBridge(self.f.bridge._config,
+                deadline=20, monotonic=lambda:10), self.f.request, self.f.sources),
+            ('deadline', ssh.SshCredentialBridge(self.f.bridge._config,
+                deadline=21, monotonic=self.f.f.clock), self.f.request, self.f.sources),
+            ('binding', self.f.bridge, other, self.f.sources),
+            ('sources', self.f.bridge, self.f.request, self.f.sources * 2),
+        )
+        for name, bridge, request, tokens in cases:
+            c = self.channel()
+            with self.subTest(boundary=name), patch.object(c._provider, 'login') as mint:
+                with self.assertRaises(Exception):
+                    c.send_over_bridge(bridge=bridge, request=request, source_tokens=tokens)
+                mint.assert_not_called()
+            self.assertEqual('NOT_ATTEMPTED', c.status()['login'])
+            self.assertIsNone(c.take_receipt())
+
 
 if __name__=='__main__':unittest.main()

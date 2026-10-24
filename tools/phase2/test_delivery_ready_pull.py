@@ -48,7 +48,9 @@ class ReadyPolicyTests(unittest.TestCase):
     def test_connect_permission_failure_or_expiry_never_retries_protocol(self):
         value=selected(fixtures.request())
         for code in (ready.errno.EACCES,ready.errno.ECONNREFUSED):
-            now=[10.0];budget=unix._Budget(10.01,lambda:now[0]);sock=Mock()
+            now=[10.0]
+            # EACCES must fail immediately even with time for many retries.
+            budget=unix._Budget(11 if code == ready.errno.EACCES else 10.01,lambda:now[0]);sock=Mock()
             sock.connect.side_effect=OSError(code,'SYNTHETIC')
             def sleep(seconds):now[0]+=seconds
             with patch.object(socket,'AF_UNIX',1,create=True), \
