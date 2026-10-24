@@ -194,6 +194,14 @@ class NativeHelperReaderTests(SemanticFixture, unittest.TestCase):
         f=local.BridgeLinuxTests('runTest')
         with patch.object(unix_fixture,'request',side_effect=receiver.request):f.setUp()
         self.addCleanup(f.doCleanups);self.addCleanup(f.tearDown)
+        # Bridge fixture deliberately randomizes its request nonce. Rebind its
+        # local listener to the EXACT receiver request; never relax target checks.
+        import delivery_job_rendezvous as rendezvous
+        f.listener.close();f.request=receiver.request()
+        f.listener=tokens.REAL_SOCKET(socket.AF_UNIX,socket.SOCK_STREAM)
+        f.addCleanup(f.listener.close)
+        f.listener.bind(rendezvous.abstract_address(f.request));f.listener.listen(16)
+        f.listener.settimeout(3)
         t.request=receiver.request
         supplied=[{'repository':repo.owner+'/'+repo.name,'token':'SYNTHETIC_SOURCE_TOKEN_12345'}]
         supplier=t.supplier(issuer=t.client(deadline=f.deadline,monotonic=time.monotonic),
