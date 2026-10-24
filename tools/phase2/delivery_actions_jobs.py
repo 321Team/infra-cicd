@@ -31,6 +31,42 @@ def check_jobs(payload, run_id, workflow_sha, gates):
         raise ValueError('ACTIONS_JOBS_INVALID') from None
 
 
+def resolve_named_jobs(payload, run_id, workflow_sha, gates, *, attempt):
+    """Exact reviewed names/steps -> IDs observed in this native response only.
+
+    No first/closest/latest match or inferred stage success. Ambiguous names,
+    incomplete pages and every existing native job/step guard fail closed.
+    The result is routing/observation, never image lineage or execution authority.
+    """
+    try:
+        if (not _pint(attempt) or type(payload) is not dict or type(payload.get('jobs')) is not list
+                or type(payload.get('total_count')) is not int
+                or not 1 <= payload['total_count'] <= 100
+                or payload['total_count'] != len(payload['jobs'])
+                or type(gates) is not tuple or not 1 <= len(gates) <= 100):
+            _fail()
+        seen, resolved = set(), []
+        for gate in gates:
+            if type(gate) is not tuple or len(gate) != 2:
+                _fail()
+            name, steps = gate
+            if not _text(name) or name in seen:
+                _fail()
+            seen.add(name)
+            hits = [j for j in payload['jobs'] if type(j) is dict and j.get('name') == name]
+            if (len(hits) != 1 or not _pint(hits[0].get('id'))
+                    or not _pint(hits[0].get('run_attempt'))
+                    or hits[0]['run_attempt'] != attempt):
+                _fail()
+            resolved.append((hits[0]['id'], name, steps))
+        result = tuple(resolved)
+        # The common validator also rejects malformed/duplicate unrelated IDs.
+        check_jobs(payload, run_id, workflow_sha, result)
+        return result
+    except Exception:
+        raise ValueError('ACTIONS_JOBS_INVALID') from None
+
+
 def _check(payload, run_id, workflow_sha, gates):
     if not _pint(run_id) or type(workflow_sha) is not str or not _SHA.fullmatch(workflow_sha):
         _fail()

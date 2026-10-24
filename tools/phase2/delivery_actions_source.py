@@ -16,7 +16,7 @@ from delivery_github_source import (RepositoryPin, GitHubOriginalAdapter,
 from delivery_private_source import PrivateGitHubOriginalAdapter
 from delivery_object_reader import BearerCredential
 from delivery_verifier import ReadRequest, Progress, ProducerEvidence
-from delivery_actions_jobs import check_jobs
+from delivery_actions_jobs import check_jobs, resolve_named_jobs
 
 STAGES=('test','build','scan','push')
 
@@ -52,24 +52,41 @@ class StagePin:
 
 
 @dataclass(frozen=True)
+class StageSelector:
+    """Explicit reviewed selection criteria; NO job_id/authority/default RunPin.
+
+    Resolve only a unique exact name and required steps in the pinned run's
+    authenticated native response. Never discover/select the run itself.
+    """
+    stage: str
+    producer_reference: str = field(repr=False)
+    run: RunPin
+    job_name: str = field(repr=False)
+    steps: tuple = field(repr=False)
+
+
+@dataclass(frozen=True)
 class ActionsObservation:
     request: ReadRequest = field(repr=False)
     stages: tuple
     receipts: tuple = field(repr=False)
+    resolved_pins: tuple = field(default=(),repr=False)
     execution_authorized: bool = field(default=False,init=False)
     app_lineage_authenticated: bool = field(default=False,init=False)
 
 
 def policy_checked(pins):
     need(type(pins) is tuple and len(pins)==4
-         and all(type(p) is StagePin for p in pins)
+         and (all(type(p) is StagePin for p in pins)
+              or all(type(p) is StageSelector for p in pins))
          and tuple(p.stage for p in pins)==STAGES,'ACTIONS_POLICY_INVALID')
     repos=set()
     for p in pins:
         run=p.run
         need(type(run) is RunPin,'ACTIONS_POLICY_INVALID')
         repository_checked(run.repository);repos.add(run.repository)
-        need(all(positive(x) for x in (run.run_id,run.attempt,run.workflow_id,p.job_id))
+        need(all(positive(x) for x in (run.run_id,run.attempt,run.workflow_id))
+             and (type(p) is StageSelector or positive(p.job_id))
              and type(run.workflow_commit) is str and SHA1.fullmatch(run.workflow_commit)
              and type(run.workflow_path) is str and re.fullmatch(
                  r'\.github/workflows/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.ya?ml',run.workflow_path)
@@ -89,7 +106,7 @@ def policy_checked(pins):
         if p.run.run_id in grouped:
             need(grouped[p.run.run_id]==p.run,'ACTIONS_RUN_POLICY_CONFLICT')
         grouped[p.run.run_id]=p.run
-        key=(p.run,p.job_id)
+        key=(p.run,p.job_id if type(p) is StagePin else p.job_name)
         if key not in jobs:jobs[key]=(p.job_name,{})
         name,steps=jobs[key]
         need(name==p.job_name,'ACTIONS_JOB_POLICY_CONFLICT')
@@ -139,7 +156,7 @@ class ActionsRunSource:
 
     def inspect(self,request):
         try:
-            self.check(request);receipts=[];observed=[]
+            self.check(request);receipts=[];observed=[];resolved=[]
             runs=tuple(dict.fromkeys(p.run for p in self.pins))
             for pin in runs:
                 prefix=self.reader.repository(request,pin.repository,receipts)
@@ -153,25 +170,39 @@ class ActionsRunSource:
                 attempt=latest+f'/attempts/{pin.attempt}'
                 before=self.run_checked(read(latest),pin)
                 need(before==self.run_checked(read(attempt),pin),'ACTIONS_ATTEMPT_CHANGED')
+                selected=tuple(p for p in self.pins if p.run==pin)
                 gates={}
-                for p in self.pins:
-                    if p.run!=pin:continue
-                    if p.job_id not in gates:gates[p.job_id]=(p.job_name,{})
-                    name,steps=gates[p.job_id]
+                for p in selected:
+                    key=p.job_id if type(p) is StagePin else p.job_name
+                    if key not in gates:gates[key]=(p.job_name,{})
+                    name,steps=gates[key]
                     need(name==p.job_name,'ACTIONS_JOB_POLICY_CONFLICT')
                     for number,step_name in p.steps:
                         need(number not in steps or steps[number]==step_name,'ACTIONS_STEP_POLICY_CONFLICT')
                         steps[number]=step_name
-                checked=check_jobs(read(attempt+'/jobs?per_page=100&page=1'),pin.run_id,
-                    pin.workflow_commit,tuple((job,name,tuple(sorted(steps.items())))
-                        for job,(name,steps) in gates.items()))
+                jobs=read(attempt+'/jobs?per_page=100&page=1')
+                if type(selected[0]) is StageSelector:
+                    actual=resolve_named_jobs(jobs,pin.run_id,pin.workflow_commit,
+                        tuple((name,tuple(sorted(steps.items()))) for name,steps in gates.values()),
+                        attempt=pin.attempt)
+                    ids={name:gid for gid,name,_ in actual}
+                    resolved.extend(StagePin(p.stage,p.producer_reference,p.run,
+                        ids[p.job_name],p.job_name,p.steps) for p in selected)
+                else:
+                    actual=tuple((job,name,tuple(sorted(steps.items())))
+                        for job,(name,steps) in gates.items())
+                    resolved.extend(selected)
+                checked=check_jobs(jobs,pin.run_id,pin.workflow_commit,actual)
                 need(before==self.run_checked(read(latest),pin),'ACTIONS_ATTEMPT_CHANGED')
                 # Bounded four-stage policy: at most 4 runs x 5 response bodies.
                 need(len(receipts)<=20 and all(type(raw) is bytes and len(raw)<=1024*1024 for raw in receipts),
                      'ACTIONS_RECEIPT_LIMIT')
                 observed.append((pin.run_id,pin.attempt,pin.workflow_commit,checked))
             self.check(request)
-            return ActionsObservation(request,tuple(observed),tuple(receipts))
+            # Preserve stage order even when stages share a native run/job.
+            ordered=tuple(next(p for p in resolved if p.stage==stage) for stage in STAGES)
+            policy_checked(ordered)
+            return ActionsObservation(request,tuple(observed),tuple(receipts),ordered)
         except ActionsSourceError:raise
         except Exception:raise ActionsSourceError('ACTIONS_SOURCE_UNVERIFIED') from None
 

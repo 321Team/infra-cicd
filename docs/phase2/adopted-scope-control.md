@@ -1,6 +1,10 @@
 # #46 운영 범위·상시 시간대·control 연결 — 2026-10-25
 
-**PR142 병합 후 후속:** 같은 RUN의 비공개 원본 채널에서 baseline archive를
+**PR143 병합 후 후속:** producer job ID를 아직 모르는 경우, 명시 채택된 RunPin과
+정확한 job 이름/필수 step으로 native job ID를 읽는 선택기를 추가했다. producer 원본
+의미·실행 grant·finish를 대신하지 않는다. PR143 비차단 root 단독 옵션 시험도 보강했다.
+
+**기존 baseline 연결:** 같은 RUN의 비공개 원본 채널에서 baseline archive를
 읽는 경로를 기존 native 조립 함수에 추가했다. 메모리 원본 tuple 방식과 아래 명시적
 archive 방식 중 하나만 선택한다. 실제 archive pin/root·RUN별 grant는 만들지 않는다.
 PR142 비차단 시험 공백 3건도 이 변경에 묶어 보강했다.
@@ -93,6 +97,40 @@ API/CA/OAuth/SSH/UID/source/render/digest를 다시 제출받지 않는다.
 후 코드 리뷰 대상이며 RUNTIME/AC/최종 인수 완료가 아니다. 최종 자원 정리·복구·반출·보고는
 기존 **10/26 12:00 KST**를 유지한다. source/기준선이 부족하면 해당 단계만 미완료로 남기며
 이미 채택된 범위/control/시간대를 다시 묻거나 새 ledger·팀 제출양식·단계별 GO를 만들지 않는다.
+
+## RUN별 producer native job 연결
+
+`producer_pins`는 기존 `StagePin` 4개(고정 job ID) 또는 새 `StageSelector` 4개 중
+하나만 명시 선택한다. 두 종류를 혼합하거나 누락 시 기본 selector로 대체하지 않는다.
+selector에는 job ID가 없고, 검토된 stage·producer 원본 reference·RunPin·정확한 job 이름과
+필수 step 번호/이름만 있다. 실제 RUN/attempt/workflow/저장소를 찾거나 합성하지 않는다.
+
+기존 GET 전용 순서(repository→latest run→지정 attempt→jobs 1회→latest run)와 공유 deadline,
+최대 20개 response 제한을 유지한다. 완전한 100개 이하 jobs 원문에서 정확한 이름이
+유일하고 `run_id`·`run_attempt`·workflow commit·job/필수 step 성공이 모두 일치할 때만
+그 원문의 양의 정수 ID를 읽어 `ActionsObservation.resolved_pins`로 반환한다.
+중복 이름·누락·다른 attempt·잘린 page·실패/skipped·새 rerun은 STOP이며 재조회/유사 이름/
+성공 job 골라잡기/최신 성공 RUN 탐색은 없다. 고정 ID 경로는 그대로 유지한다.
+
+native 응답의 `run_attempt` 필드는 [GitHub 공식 attempt jobs API](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)
+와 기존 CI 응답의 읽기 전용 스키마 조회로 확인했다. 스키마 확인에 쓴 CI RUN을
+앱의 실제 producer RUN이나 운영 selection으로 채택하지 않았다.
+
+이미 job ID가 특정된 producer 원문 reference는 그대로 고정 ID 경로를 쓴다.
+selector를 채택할 때는 reference가 지정 RunPin·job/step의 원본 의미와 맞는지 코드 검토로
+확인해야 하며, 다른 native ID를 관측했다고 기존 job URL·서명·이미지 출처를 바꾸지 않는다.
+앱 source SHA/digest/manifest와 workflow SHA는 별개다. 기존 producer 원본 전후 인증도
+유지하며 관측 결과의 `execution_authorized`·`app_lineage_authenticated`는 계속 false다.
+`resolved_pins`는 관측 기록이며 후속 RUN의 고정 pin이나 권한으로 자동 재사용하지 않는다.
+
+finish는 기존 같은 RUN의 sender 종료·독점 접근 종료·실제 원본/control·기간 검증을
+통과해야 한다. producer native 성공만으로 finish를 생성하거나 claim/fence를 해제하지 않는다.
+새 통합 모의시험에서 정상 sender-close 이후 해제, native 실패 시 PATCH 0건,
+finish 누락·sender-close 후 control 철회 시 fence 유지를 각각 확인한다.
+
+replicas 인계 후 새 baseline 원본은 권욱 본인의 기존 view/임시 관리자 계정으로 기존
+10/23 읽기 전용 절차를 사용할 수 있다는 PR143 리뷰 정정을 반영한다. 하영의 일요일
+가용 확인을 추가 선행조건으로 두지 않는다. 이 변경에서 실제 재수집·권한 부여는 하지 않았다.
 
 ## 마지막 소비와 회수 비중첩
 
