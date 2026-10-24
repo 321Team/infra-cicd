@@ -1,4 +1,4 @@
-# #46 운영 구성 채택 — 2026-10-23
+# #46 운영 구성 채택 — 2026-10-24
 
 **확인된 기대 설정을 `delivery_fds_operating`에 채택했다. 전체 운영 SITE와 실행 승인은 아직 완료되지 않았다.** `delivery_job_site.SITE=None`을 유지하고 self-hosted job 예약을 차단한다. 새 입력 양식·서명·중복 승인 절차는 추가하지 않는다.
 
@@ -8,11 +8,14 @@
 |---|---|---|
 | Runner | `cicd-runner01 / server01_cicd-runner / UID 1000`을 `assemble_job`의 고정 기대값으로 사용 | [기존 workflow](https://github.com/321Team/infra-cicd/blob/aa64731c0265d6f0cdc1e14d012f43dafa28616b/.github/workflows/app-test-build-scan.yml)와 PR109 재환 담당 리뷰. 현재 프로세스 실측은 아니다. native driver의 실제 host/account/UID 대조는 유지한다 |
 | 배포 대상·소스 | 기존 `delivery_fds_site_inputs`의 API·클러스터/namespace UID·CA·SA/UID·source `69e28c49`·rendered hash·2개 digest를 직접 재사용 | [제출 원본 정정](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6339313808), 기존 MSA PR42 배포 묶음. 값 복사나 새 현재값 추정 없음. 대상은 기존 6객체이며 first-empty로 폴백하지 않는다 |
-| 발급 담당 | `hayeoung`과 정정 댓글을 담당 지정 근거로 기록. 기존 TokenRequest issuer 진입점을 그대로 사용 | 10/22 `create serviceaccounts/token` 및 특정 SA token 권한 `yes`, `hayeoung-admin` RoleBinding 대조. **이름·과거 can-i는 현재 credential 인증이 아니다.** API 호출·토큰 발급·권한 추가 없음 |
-| 조립 진입점 | `build_configuration`·`build_token_issuer`는 기존 구현을 직접 참조하고, `assemble_job`만 고정 Runner를 기존 5역할/6객체 조립에 연결 | caller의 Runner 덮어쓰기를 받지 않는다. helper UID는 별도 명시 입력이며 1000으로 복사하지 않는다. 생성 중 callback·시계·소켓·원본 읽기 없음 |
+| 발급 담당·위치 | `gwonuk` 본인 actor, `ansible01 / server01_ansible`에서 직접 issue+관리 SSH하는 기대 구성을 채택 | [10/24 하영 인계 회신](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6379184704). 다른 사람의 token 공유 없음. **이름·위치 선택은 현재 credential·권한·API 도달의 인증이 아니다.** 원본 source-host UID는 추정하지 않음 |
+| 조립 진입점 | 기존 profile·issuer 진입점을 재사용. `assemble_observed_job`이 같은 계정 helper의 별도 기대 UID1000과 5역할·post-close 관측을 고정 선택 | 일반 `assemble_job`의 helper UID 명시 계약은 유지한다. UID를 관측했다고 표시하지 않는다. 생성 중 callback·시계·소켓·원본 읽기 없음 |
+| helper 경로 | `build_job_bridge_configuration`이 실제 workspace 명시 입력과 native job context로 기존 `p2-job-{run_id}-{attempt}/tools/phase2/delivery_ssh_bridge_helper.py` 규칙 연결 | 새 경로 탐색·설치·기본값 없음. native metadata와 경로 형식은 배치·현재 신뢰·revision 일치 증거가 아니며 기존 검증 유지 |
 | 상태 확인 | `delivery_job.py status`가 채택된 설정·미확정 연결·실행 중 생성값을 분리 출력 | `BLOCKED / dispatch_configured=false / execution_authorized=false / runtime=NOT_RUN` 유지. 보고서 수정으로 gate가 열리지 않는다 |
 
 운영 설정의 선택 근거와 실제 실행 증적을 구분한다. source/rendered 값은 검토한 배포 입력의 선택이며 현재 live spec의 증명이나 최근 수동 변경 수용은 아니다. 실행 때 native revision·원본/control·baseline drift 검증을 그대로 거친다.
+
+**현재 결정·미확정 값은 문서 말미의 ‘10/24 운영 구성 결정’을 우선 적용한다. 아래 10/23~10/24 초기 대조 내용은 근거와 진행 이력이며 당시 미채택 설명을 현재의 미결정으로 되돌리지 않는다.**
 
 ## SSH·배치 원본 대조 — PR125·126 병합 후
 
@@ -168,3 +171,67 @@ READY의 왕복 방식이다. `inventory/hosts.yml`의 svc_ansible은 다른 관
 같은 로그인 계정의 helper 기대 UID1000은 이 경로에만 명시 선택하며 현재 관측값으로
 표시하지 않는다. 포트·host-key 별칭·remote Python/helper·예산은 필수 입력이고,
 issuer 위치·helper 배치/netns·실제 원본/control/finish가 빠진 전체 SITE는 계속 차단한다.
+
+## 10/24 운영 구성 결정
+
+권욱이 10/24 권장안의 운영 구성 채택·연결 구현·오프라인 시험·검토 PR 준비를 지시했다.
+이는 **설계 선택**이며 실제 배치·권한 변경·Runtime·새 GO를 승인한 것이 아니다.
+기존 원본을 합성하거나 새 승인 파일·개별 파일 재승인 절차를 추가하지 않는다.
+
+| 결정 | 채택·코드 연결 | 현재 확인 범위 |
+|---|---|---|
+| 발급 | `ansible01 / server01_ansible`에서 기존 직접 `issue`+SSH, `gwonuk` 본인 actor | 기존 직접 supplier와 관리 경로의 결합 선택. source-host 실제 UID·API 도달·현재 개인 credential은 미확인. 이름 문자열은 인증에 사용하지 않음 |
+| helper 배치 | 현재 job exact workflow SHA checkout, 기존 entrypoint·일반 로그인 계정, 별도 기대 helper UID1000 | `build_job_bridge_configuration`은 명시 workspace+검증된 `JobContext`의 경로만 계산하고 기존 SSH 설정 검사를 사용. 빈값/상대/중복·dot·dotdot/명령문/다른 helper를 허용하지 않음. symlink·파일 소유권·현재 배치는 이 순수 함수가 확인하지 않음 |
+| 권한 | 본인 actor 사용과 기존 배포 SA 검증 유지, 권한 조작 구현 없음 | 권고한 최소 권한과 담당자가 보고한 임시 admin을 구분. 아래 보고는 실효 권한 검증이나 새 포괄 승인으로 바꾸지 않음 |
+| 자격 정리 | 메모리·소유 익명 pipe 전달, actor OAuth 서버 회수·발급 SA token 만료·로컬 참조 정리를 분리 | 기존 issuer API 재사용. 서버 회수 방식·실응답은 미연결. `oc logout` RC0는 서버 OAuth 회수 보장이 아님 |
+| 원본/control | 기존 approval/platform/producer/finish/baseline 5역할과 repository-scoped reader/materializer 재사용 | 실제 scope·단일 control ref 의미/pin·인증 채널은 명시 공급해야 함. 댓글 링크·해시·typed grant만으로 승인 원본을 만들지 않음 |
+| finish | `assemble_observed_job`이 기존 `ObservationRoute`와 `OBJECT_READBACK`·`ROLLOUT_READBACK`을 선택 | sender close 뒤 같은 credential·Binding·progress·기한으로 관측. 실제 completion scope grant는 caller가 공급하며 생성 시 읽지 않음. control 철회·관측 미확인은 claim/fence 유지. C-STOP·DB/Secret/Robot/VPN/클라우드 정리는 포함하지 않음 |
+| replicas | 임시 manager의 한정된 replicas0 인계 → 기존 manager의 **완전 intent+0, force 없음** → 공동 소유 확인 → 임시 manager replicas 해제 → 새 full baseline | 이전 `fds-deployer` replicas-only force 권고는 철회. 실제 인계·새 baseline·SSA는 미실행. 이전 raw와 새 현재값을 자동 교체하지 않음 |
+
+`assemble_observed_job`은 기존 `assemble_existing_job_site`에 위 정책을 연결한다.
+일반 `assemble_job` API는 호환성을 위해 유지하고, 새 운영 진입점에는 runner/helper UID,
+wire·별도 finish capture override를 받지 않는다. 기존 full plan 또는 수신 후 materializer
+XOR·소유권·정리 계약을 그대로 사용한다. 생성은 clock/callback/nonce/자격/원본/소켓 I/O를
+수행하지 않는다. 생성 성공은 후속 인증·실행 승인이 아니다.
+
+### 새 담당자 회신과 권한의 구분
+
+[하영 #5 기록 6379184539](https://github.com/321Team/infra-rosa/issues/5#issuecomment-6379184539)는
+`gwonuk-p2-admin-temp` → ClusterRole `admin`의 RoleBinding을 `fds-app`·`ci-cd`에
+추가했다고 보고했다. [#46 회신](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6379184704)은
+10/25 오전 하영 부재, 권욱 본인 계정 인계·월요일 하영 회수를 명시했다.
+이 PR에서는 실제 권한 조회·추가·삭제·원복을 수행하지 않는다. 이를 권고한
+Deployment2 get/patch+named SA TokenRequest 최소 권한이 적용됐다고 표시하지 않는다.
+10/26 12:00은 회수 책임·기한이며 annotation은 자동 만료 장치가 아니다.
+
+현재 actor의 patch/TokenRequest 가능 여부와 **발급된 배포 SA**의 CV/version·namespace
+GET·SSR/SSAR·6객체 get/patch 검증은 별개다. 기존 verifier를 생략하거나 다른 credential로
+대체하지 않는다. 실제 부족이 확인될 때만 해당 권한을 별도 검토한다.
+
+[oc RunLogout 소스](https://github.com/openshift/oc/blob/main/pkg/cli/logout/logout.go)는
+서버 token 삭제 실패와 로컬 config 정리 성공이 다를 수 있음을 보여 준다.
+현장 oc 버전·메모리 전용 회수 경로와 서버 응답은 미확인이다. 이 PR은 kubeconfig를
+생성하거나 `oc logout`을 호출하지 않으며, 로컬 참조 정리를 서버 회수 성공으로 보고하지 않는다.
+
+### 미확정 배치값·담당·완료조건
+
+| 묶음 | 담당·기존 사실 지원 | 남은 실제값 / 완료조건 |
+|---|---|---|
+| 발급측 | 권욱, 하영 기존 연결 사실 지원 | 선택한 host/account의 현재 실행 신원·API443 도달·본인 actor 인증/권한·메모리 전달·서버 회수 응답. source-host UID·credential을 추정하지 않음 |
+| SSH/helper | 권욱, 재환 기존 Runner 배치 사실 지원 | 실제 `GITHUB_WORKSPACE`, SSH port/host-key alias·현재 신뢰, remote Python, helper 실제 UID·같은 job netns·검토 코드/소유권, 인증된 READY 전달. 기존 key/known_hosts 경로 재제출 불필요 |
+| 파일/저장 | 권욱, 기존 호스트 자료 재사용 | 실제 input/source 위치와 checkout 밖의 P2 전용 영속 claim/checkpoint store. 이전 P1 store를 공유하거나 추정한 절대경로를 승인값으로 만들지 않음 |
+| 원본/control/finish | 권욱 구현·의미 연결, 하영·재환의 기존 원본 재사용 | 실제 5역할 original/control·repository-scoped source 채널·materializer·선택한 finish scope. grant 형식 검사와 실제 원본 인증을 구분 |
+| 기준선/운영 인수 | 권욱, 하영·재환 기존 인계 사실 지원 | 승인창 내 replicas 인계와 새 full baseline 명시 채택, fresh drift 확인 후 별도 Runtime/인수 판단. 미해소면 Runtime 미실행으로 남기고 10/26 12:00 최종 정리 우선 |
+
+미래 run/nonce·TokenRequest 응답·iat/exp·finish 관측/hash는 실행 중 생성될 값이다.
+지금 없는 배치값과 구분하며 사전 합성·제출을 요구하지 않는다. 같은 UID는 강한 프로세스
+격리가 아니며 Runner/SSH/shell을 모두 없애라는 뜻도 아니다. 경쟁 job·미승인 자격 소비가
+없는 승인 창과 기존 native context/revision/peer/nonce/기한·단회 소비 검증을 유지한다.
+
+### 검증 범위
+
+새 오프라인 시험은 SYNTHETIC 원본·grant·자격·객체만 사용한다. 경로/context 거부,
+구성 무I/O, 정책 override 거부, full/prepared 검증·정리, 새 운영 조립이 만든 5역할 wiring의
+private-source → 원본/control 인증 → sender close 뒤 관측을 확인한다. control 철회 시
+claim/fence 유지·완료 원본 미생성을 확인한다. 실제 발급/SSH/설치·권한·SSA/배포 증명은 아니다.
+`delivery_job_site.SITE=None`·기본 dispatch false·`runtime=NOT_RUN`을 유지한다.
