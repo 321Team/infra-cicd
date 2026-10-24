@@ -228,6 +228,31 @@ def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
         producer_pins=producer_pins)
 
 
+def reported_actor_grant_status():
+    """Owner-reported RBAC metadata, never a live check, Runtime grant or clock.
+
+    This period comes from the actual #5 RoleBinding expiry annotation, NOT the
+    resource-retention deadline. The source explicitly excludes #46 test GO.
+    No consumer may turn this diagnostic into adopted approval/control policy.
+    """
+    return {
+        'status': 'OWNER_REPORTED', 'subject': 'gwonuk',
+        'assignment_matches_report': ISSUANCE_OPERATOR == 'gwonuk',
+        'role_binding': 'gwonuk-p2-admin-temp', 'reported_role': 'admin',
+        'reported_bindings': [
+            {'namespace': 'fds-app', 'uid': 'c32620e3-8407-4871-a69b-3240553af1ee'},
+            {'namespace': 'ci-cd', 'uid': 'cc39d661-b8f1-4132-9cbc-49d99db96939'},
+        ],
+        'declared_expires_at': '2026-10-26T12:00:00+09:00',
+        'grant_starts_at': None, 'live_rbac_checked': False,
+        'automatic_expiry_verified': False, 'runtime_go': False,
+        'source': 'https://github.com/321Team/infra-rosa/issues/5#issuecomment-6379184539',
+        'source_creator_id': 95111439,
+        'source_updated_at': '2026-10-24T03:14:59Z',
+        'source_body_sha256': '0979aef9d7b3dc36c28023edf37959e656aabde7b1cc0bd2b48a3e6765aa9ca6',
+    }
+
+
 def configuration_status():
     """Fresh non-secret report of CODE selection only; never readiness/authority.
 
@@ -247,6 +272,7 @@ def configuration_status():
                 'rendered_sha256': profile.RENDERED_SHA256},
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
+            'reported_actor_permission': reported_actor_grant_status(),
             'actor_channel': {'adapter': 'NAMED_OAUTH_TOKENREQUEST_SSH',
                 'constructed_for_runtime': False, 'identity_verified': False,
                 'server_revocation_verified': False, 'runtime_authorized': False},
@@ -282,6 +308,7 @@ def configuration_status():
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
              'support': '하영·재환: 이미 제출한 담당 영역 원본 재사용',
              'items': ['원본 5역할과 control pin·보관 인증·materializer 결속',
+                       '실제 자동 실행 RUN/action/Binding·허가 창·control 근거 선택 (RBAC 회수기한과 분리)',
                        '사전 플랫폼 receipt와 사후 발급 receipt 구분',
                        '선택한 baseline의 실제 grant/control 및 fresh drift 검증',
                        '채택한 replicas0/3 인계의 실제 완료와 새 full baseline',
