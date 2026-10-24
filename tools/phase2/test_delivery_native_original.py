@@ -86,6 +86,17 @@ class NativeOriginalTests(unittest.TestCase):
         with self.assertRaises(source.SourceSessionError):self.take()
         self.assertIsNone(self.source._native)
 
+    def test_close_without_any_prior_take_releases_owned_original_immediately(self):
+        self.assertIsNotNone(self.source._native)
+        borrowed=self.source._native.raw
+        self.assertTrue(self.source.close())
+        self.assertIsNone(self.source._native)
+        self.assertEqual('CLOSED',self.source._state)
+        self.assertTrue(self.source.close());self.assertIsNone(self.source._native)
+        # An external alias remains; local close is not secure memory erasure.
+        self.assertEqual(self.raw,borrowed)
+        with self.assertRaises(source.SourceSessionError):self.take()
+
     def test_two_threads_only_one_take_succeeds(self):
         outcomes=[];barrier=threading.Barrier(3)
         def run():

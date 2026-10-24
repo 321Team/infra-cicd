@@ -49,6 +49,25 @@ class DeferredTests(unittest.TestCase):
         self.assertTrue(s.status()['password_reference_released'])
         self.assertIsNone(s.take_login_metadata());self.assertIsNone(s.take_receipt())
 
+    def test_oversized_original_selection_stops_before_login_identity_or_issuance(self):
+        # PR140 nonblocking review: the later supplier guard is insufficient to
+        # prove NO OAuth token was minted. Exercise the real pre-login budget.
+        repositories=['synthetic/repo'+str(i) for i in range(16)]
+        self.f.request['repositories']=repositories
+        self.f.pull._selected['repositories']=list(repositories)
+        self.f.sources=[{'repository':repo,'token':'SYNTHETIC_SOURCE_'+str(i)+'x'*4000}
+                        for i,repo in enumerate(repositories)]
+        c=self.channel();s=self.supplier(c)
+        with patch.object(self.f.pull,'pull',return_value=self.f.request), \
+             patch.object(c._provider,'login') as login_call, \
+             patch.object(self.f.bridge,'send_from_supplier') as bridge_call, \
+             patch.object(wire.socket,'socket') as network:
+            with self.assertRaises(supply.SupplyError):s.send(include_original=True)
+        login_call.assert_not_called();bridge_call.assert_not_called();network.assert_not_called()
+        self.assertEqual('NOT_ATTEMPTED',s.status()['login'])
+        self.assertFalse(s.status()['issuance_attempted'])
+        self.assertIsNone(s.take_receipt())
+
     def execute(self, auth_ok=True, forward_error=None, login_error=False, include_original=False):
         c=self.channel();s=self.supplier(c)
         replies=[oauth.challenge(),oauth.challenge() if login_error else oauth.granted()]

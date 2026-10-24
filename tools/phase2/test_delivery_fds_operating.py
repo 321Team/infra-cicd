@@ -417,4 +417,39 @@ class ReadyOperatingSelectionTests(unittest.TestCase):
         self.assertIsNone(declaration.SITE)
 
 
+class ReportedPermissionTests(unittest.TestCase):
+    def test_assignment_change_does_not_reassign_a_historical_role_report(self):
+        with patch.object(operating,'ISSUANCE_OPERATOR','synthetic-other'):
+            report=operating.reported_actor_grant_status()
+        self.assertEqual('gwonuk',report['subject'])
+        self.assertFalse(report['assignment_matches_report']);self.assertFalse(report['runtime_go'])
+
+    def test_reported_role_expiry_is_not_a_runtime_window_or_live_authority(self):
+        state=operating.configuration_status()
+        reported=state['selected']['reported_actor_permission']
+        self.assertEqual('OWNER_REPORTED',reported['status'])
+        self.assertEqual('2026-10-26T12:00:00+09:00',reported['declared_expires_at'])
+        self.assertIsNone(reported['grant_starts_at'])
+        self.assertFalse(reported['runtime_go']);self.assertFalse(reported['live_rbac_checked'])
+        self.assertFalse(reported['automatic_expiry_verified'])
+        self.assertFalse(state['execution_authorized']);self.assertIsNone(declaration.SITE)
+        # The report only cites existing metadata; it does not make a grant.
+        self.assertIn('issuecomment-6379184539',reported['source'])
+
+    def test_mutated_permission_report_cannot_change_fresh_status_or_default_gate(self):
+        state=operating.configuration_status()
+        reported=state['selected']['reported_actor_permission']
+        reported['reported_bindings'].clear();reported['runtime_go']=True
+        state['execution_authorized']=True
+        fresh=operating.configuration_status()
+        self.assertEqual(2,len(fresh['selected']['reported_actor_permission']['reported_bindings']))
+        self.assertFalse(fresh['selected']['reported_actor_permission']['runtime_go'])
+        output=io.StringIO()
+        with patch.object(job,'native_context',side_effect=AssertionError('NO_NATIVE_JOB')) as native, \
+             contextlib.redirect_stdout(output):rc=job.main(['deploy','--execute'])
+        native.assert_not_called()
+        self.assertEqual(2,rc);self.assertEqual('P2_JOB_UNCONFIGURED',json.loads(output.getvalue())['error_code'])
+        self.assertIsNone(declaration.SITE)
+
+
 if __name__ == '__main__': unittest.main()
