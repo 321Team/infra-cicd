@@ -204,14 +204,13 @@ class ReadyNativeIntegrationTests(unittest.TestCase):
         mailbox=ready.ReadyMailbox(selector,expected_uid=os.geteuid(),deadline=native.deadline,monotonic=native.clock)
         wrapped,owner=native.wrapped(mailbox);self.addCleanup(owner.close)
         event=threading.Event();procs=[];errors=[];responses=[]
-        class LocalSocket(REAL_SOCKET):
-            def __init__(self,family=socket.AF_UNIX,*args,**kw):
-                if family!=socket.AF_UNIX:raise AssertionError('NO_NETWORK')
-                super().__init__(family,*args,**kw)
-            def listen(self,*args):
-                result=super().listen(*args)
-                if self.getsockname().startswith(b'\0fds-p2-ready-'):event.set()
-                return result
+        original_listen=REAL_SOCKET.listen
+        def listen(sock,*args):
+            # Keep the exact native socket type required by the existing
+            # credential rendezvous; observe publication without substituting it.
+            result=original_listen(sock,*args)
+            if sock.getsockname().startswith(b'\0fds-p2-ready-'):event.set()
+            return result
         def launch(args,**kw):
             helper=HELPER if args[-3].endswith('delivery_ready_pull_helper.py') else HELPER.with_name('delivery_ssh_bridge_helper.py')
             proc=REAL_POPEN([sys.executable,'-I',str(helper),str(os.geteuid()),'3'],**kw)
@@ -231,7 +230,7 @@ class ReadyNativeIntegrationTests(unittest.TestCase):
         def build(config,*,credential,authority_factory):return native.f.app(factory=authority_factory)
         out=io.StringIO();thread=threading.Thread(target=issue)
         try:
-            with patch.object(socket,'socket',LocalSocket),patch.object(subprocess,'Popen',side_effect=launch), \
+            with patch.object(REAL_SOCKET,'listen',new=listen),patch.object(subprocess,'Popen',side_effect=launch), \
                  patch.object(source,'pipe_identity',new=handoff._identity), \
                  patch.object(runtime,'RuntimeAuthorityFactory',side_effect=factory), \
                  patch.object(site,'build_application',side_effect=build),contextlib.redirect_stdout(out):
@@ -243,7 +242,7 @@ class ReadyNativeIntegrationTests(unittest.TestCase):
             for proc in procs:
                 if proc.poll() is None:proc.kill();proc.wait(timeout=2)
             if thread.ident is not None:thread.join(6)
-        self.assertFalse(thread.is_alive());self.assertEqual([],errors)
+        self.assertFalse(thread.is_alive());self.assertEqual([],errors,out.getvalue())
         result=json.loads(out.getvalue())
         self.assertEqual((0,'SESSION_COMPLETED','RELEASED'),(rc,result['status'],result['result']['fence']),result)
         self.assertEqual(2,len(procs));self.assertTrue(all(p.returncode==0 for p in procs))
