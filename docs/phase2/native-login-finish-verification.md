@@ -26,8 +26,10 @@ deferred login 공급부와 로컬 helper 두 개를 같은 회차에 연결한�
 2. **공개 READY 뒤 로그인:** 실제 공개 helper의 ACK/EOF/RC0 뒤 공급부가 움직인다.
    공개 helper가 같은 프로토콜을 마친 뒤 RC1이면 로그인 HTTP와 발급은 0회이며
    claim·완료 원본이 생기지 않는다. child 프로세스의 실제 RC1도 대조한다.
-3. **원본/control 유지:** 독립된 fixture grant/pin을 그대로 쓴다. 시험 자격과 맞추는 것은
-   명시 platform principal/issuer facts뿐이다. control 철회는 claim 전 중단하고 write는 0회다.
+3. **원본/control 유지:** 원본 pin과 control을 유지하고, platform principal/issuer facts는
+   로그인 이전에 독립된 SYNTHETIC fixture로 미리 선택한다. receipt가 선택된 facts와
+   일치해야 하며 materializer가 receipt에서 grant/facts를 만들거나 고치지 않는다.
+   control 철회는 claim 전 중단하고 write는 0회다.
 4. **실제 sender close 뒤 종료 처리:** 정상은 관측6건·finish 저장1회·complete1회·fence 해제다.
    finish 저장 실패는 sender close가 있었음을 먼저 확인하고 complete0·fence 유지다.
    job 실패와 공급측 자기 OAuth 회수 모의 성공은 별도로 기록한다.

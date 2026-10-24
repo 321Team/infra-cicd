@@ -83,6 +83,15 @@ class LoginNativeFinishTests(unittest.TestCase):
         # The hook returns the EXACT production-parsed receipt unchanged. It
         # records before RequestBoundSupplier can encode its credential frame.
         original_issue=issuance.TokenRequestIssuer.issue
+        # Select every expected authority field BEFORE any login/receipt. The
+        # response must satisfy this independent fixture, not rewrite its grant.
+        subject=ExpectedSubject(t.claims['sub'],t.target.uid,('system:authenticated',))
+        expected_facts=replace(f.plan.issuer.facts,
+            credential_fingerprint=core.digest(t.token().encode()),
+            issuer=t.target.issuer,audience=t.target.audience,
+            issued_at=t.claims['iat'],expires_at=t.claims['exp'],requested_seconds=900)
+        selected_plan=replace(f.plan,subject=subject,issuer=replace(f.plan.issuer,
+            grant=replace(f.plan.issuer.grant,principal=subject.username),facts=expected_facts))
         def capture(client,*args,**kwargs):
             receipt=original_issue(client,*args,**kwargs)
             captured.append(receipt)
@@ -94,15 +103,12 @@ class LoginNativeFinishTests(unittest.TestCase):
             self.assertEqual(receipt.credential.token,credential.token)
             base.credential=base.p.credential=base.p.c.credential=credential
             base.p.c.providers.credential=credential
-            facts=replace(f.plan.issuer.facts,credential_fingerprint=credential.fingerprint,
-                issuer=receipt.target.issuer,audience=receipt.target.audience,
-                issued_at=receipt.issued_at,expires_at=receipt.expires_at,
-                requested_seconds=receipt.requested_seconds)
-            subject=ExpectedSubject(t.claims['sub'],receipt.target.uid,('system:authenticated',))
-            # All independent fixture grants/pins remain; only issuer's explicit
-            # expected principal/facts are aligned with this synthetic credential.
-            return replace(f.plan,subject=subject,issuer=replace(f.plan.issuer,
-                grant=replace(f.plan.issuer.grant,principal=subject.username),facts=facts))
+            self.assertEqual(expected_facts.credential_fingerprint,credential.fingerprint)
+            self.assertEqual((expected_facts.issuer,expected_facts.audience,
+                expected_facts.issued_at,expected_facts.expires_at,expected_facts.requested_seconds),
+                (receipt.target.issuer,receipt.target.audience,receipt.issued_at,
+                 receipt.expires_at,receipt.requested_seconds))
+            return selected_plan
         plan=runtime.PreparedAuthorityPlan(binding=base.h.binding,materialize=materialize)
         self.addCleanup(plan.close)
         selected_parent=f.selected.build._parent
