@@ -1,6 +1,6 @@
 # #46 READY 이후 메모리 로그인 공급 연결
 
-**코드 구현과 실제 운영 구성을 구분한다.** `BasicChallengeLogin`과 `LoginActorChannel`을 추가했지만 실제 OAuth 주소·CA·endpoint·로그인 입력은 아직 공급하지 않았다. `SITE=None`, dispatch false, Runtime NOT_RUN이다. 이전에 제출된 SA issuer URL을 OAuth 로그인 주소로 사용하지 않는다.
+**코드 구현과 실제 운영 구성을 구분한다.** `BasicChallengeLogin`과 `LoginActorChannel`에 연결할 OAuth 주소·CA·숫자 endpoint와 관리 SSH 값은 10/24 읽기 조회로 확인해 아래 선택 모듈에 연결했다. 본인 로그인 입력·repository 자격·실제 job 원본/control은 아직 공급하지 않았다. `SITE=None`, dispatch false이며 로그인·발급·배포는 미실행이다. 이전에 제출된 SA issuer URL을 OAuth 로그인 주소로 사용하지 않는다.
 
 ## 연결 범위
 
@@ -56,12 +56,31 @@ DELETE 응답과 이후 목록 부재는 서버 회수 증적이다. API 불통�
 
 Python 문자열 참조 해제는 메모리 zeroization이 아니다. caller가 가진 사본과 비공개 receipt 보관 책임도 별도다. 기존 직접 actor 공급 경로의 READY 실패 시 수동 회수 조건은 그대로 유지한다. 새 경로도 프로세스 강제 종료/응답 손실의 고아 토큰 가능성을 완전히 제거하지 않는다.
 
+## 10/24 읽기 확인값의 SITE 연결
+
+관측 시각은 **2026-10-24 19:35:50 KST**다. 기존 Windows 관리 키로 ansible01에, 기존 ansible 관리 키·known_hosts로 Runner에 접속해 호스트명·계정·UID·Python·workspace와 공개 helper 존재 여부만 읽었다. 개인키 원문·kubeconfig·token은 열지 않았다. ansible01에서 인증정보 없는 API metadata GET 1회(HTTP200)와 API/OAuth TLS 검증을 수행했다. TLS 우회·redirect·로그인·TokenRequest·SSH 파일 변경은 없었다.
+
+| 확인값 | 코드 연결과 한계 |
+|---|---|
+| OAuth origin `https://oauth.fds-rosa-hcp.khht.p3.openshiftapps.com:443` | 실제 `authorization_endpoint`에서 수신. `token`/`implicit` 지원 광고 확인. 실제 Basic challenge·본인 인증·발급은 미검증 |
+| OAuth peer `52.78.218.60`, API peer `13.125.150.237` | 해당 시각 실제 TLS peer. 무기한 유효 IP나 다른 DNS 주소의 도달성으로 확대하지 않음 |
+| 명시 public Root X1 SHA256 `22b557a27055b33606b6559f37703928d3e4ad79f110b407d04986e1843543d1` | API·OAuth 각각 호스트명/SNI·체인 검증 성공. API와 같은 root라는 이유로 추정한 값이 아님. leaf를 CA로 쓰지 않음 |
+| 관리 SSH port22, HostKeyAlias `10.250.10.20` | 관리호스트의 config/Include 확인 후 실효 port와 기존 키 조회 이름 대조. 그 명시값·기존 known_hosts·BatchMode로 실제 Runner 읽기 접속 성공. 별칭 선택은 과거 설정에 alias가 있었다는 주장이 아님 |
+| Runner `server01_cicd-runner` UID1000, `/usr/bin/python3` 3.12.15 | 해당 관리 SSH 프로세스 관측. 실제 job/helper의 peer·netns 인증과 별개 |
+| 상위 workspace는 기존 기록과 일치, checkout `b5effa840f6b8166cd6f6f52edafe98c7d7a94f4` | 이 오래된 상위 checkout에는 helper 두 파일과 p2-job 디렉터리가 없음. 기존 workflow가 실제 run의 exact checkout을 생성할 때 확인할 배치이며 이번에는 갱신/설치하지 않음 |
+
+`delivery_fds_observed_connection`은 위 날짜가 있는 비밀 없는 선택값을 보관한다. `delivery_fds_operating.observed_login_inputs()`는 기존 `read_login_provider`/`BasicChallengeLogin`에 넘길 OAuth 입력·본인 사용자만 반환한다. 호출해도 prompt·통신·발급은 없다. 실제 비밀번호는 이후 허용된 실행에서 기존 hidden prompt에만 넣는다.
+
+`build_observed_login_supplier`는 실제 provider와 원본 자격을 받은 뒤 **기존 `build_login_supplier`**에 관측 API endpoint·SSH port/키 조회 이름·Python을 넘긴다. 새로운 sender·issuer·원본 판정기를 만들지 않는다. workspace/context·기한·repository 자격은 필수 caller 입력으로 남기므로 과거 상위 경로가 미래 job의 경로가 되지 않는다. 공개 READY와 credential helper는 같은 실제 `p2-job-{run_id}-{attempt}` checkout을 사용한다. 조립 성공 때만 기존 supplier로 provider 소유권이 넘어가고, 실패 때는 caller가 소유한다.
+
+선택값은 그 관측 시점의 프로필이며 자동 discovery/default/fallback이 아니다. 실행 준비 시 대상·trust·배치가 바뀌면 변경 근거로 갱신한다. 실제 원본/control·replicas 인계 기준선·finish 범위와 job READY가 연결되기 전 `SITE=None`을 유지한다. 오프라인 조립은 성공하더라도 현장 helper 배치·본인 로그인·발급·배포·최종 인수 완료를 뜻하지 않는다.
+
 ## 실제 연결 잔여 — 중복 회신 요청 없음
 
 | 담당 | 남은 값·행위 | 현재 상태 |
 |---|---|---|
-| 권욱 | OAuth origin·CA·숫자 endpoint 및 본인 password를 신뢰하는 메모리 caller에 연결; repository 자격도 메모리로 공급 | 코드 있음 / 실제 공급 없음. API SA issuer에서 추정 금지 |
-| 권욱 | 기존 SSH key·known_hosts를 재사용하되 실제 port·HostKeyAlias, 현재 workspace/Python·UID/netns 확인 | 재환의 역사적 원본 수신 완료. 미기록 값은 현장 준비에서 확인하며 22/별칭을 임의 입력하지 않음 |
+| 권욱 | 확인한 OAuth 입력과 본인 password를 신뢰하는 메모리 caller에 연결; repository 자격도 메모리로 공급 | OAuth metadata/TLS 관측 선택 연결 완료. 실제 자격 공급·로그인 없음 |
+| 권욱 | 기존 SSH key·known_hosts와 확인한 port/키 조회 이름·Python을 사용하고 실제 job/helper UID/netns·배치 확인 | 관리 SSH 읽기 성공. 미래 exact-job checkout과 인증된 READY는 미실행 |
 | 권욱 | 원본/control 5역할 pin·materializer, replicas 인계 뒤 baseline, 사후 finish scope 연결 | 기존 제출 원본 재사용. 미발행 grant·미래 관측 원본 생성 금지 |
 | 하영/재환 | 담당 영역의 기존 사실이 달라졌을 때만 변경분 전달; 기존 역할·최종 회수 담당 유지 | 같은 질문 재요청 없음. 전체 실행 GO·10/26 12:00 정리 기한 변경 없음 |
 
