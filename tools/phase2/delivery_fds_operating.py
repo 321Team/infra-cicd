@@ -21,6 +21,10 @@ ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46
 ISSUER_HOST = management.SOURCE_HOST
 ISSUER_ACCOUNT = management.SOURCE_ACCOUNT
 HELPER_ENTRYPOINT = 'tools/phase2/delivery_ssh_bridge_helper.py'
+# Historical references for handoff/status ONLY. Neither is a default argument
+# or a current host observation; the trusted caller still supplies native inputs.
+RECORDED_WORKSPACE = '/home/server01_cicd-runner/actions-runner/_work/infra-cicd/infra-cicd'
+RECORDED_REMOTE_PYTHON = '/usr/bin/python3'
 
 # Reuse the fixed, reviewed source/target profile directly; no copied hash table,
 # alternate input parser or implicit current-object -> previous-image fallback.
@@ -142,6 +146,9 @@ def configuration_status():
             'helper_layout': {'mode': 'NATIVE_JOB_EXACT_CHECKOUT',
                 'checkout': 'p2-job-{run_id}-{attempt}', 'entrypoint': HELPER_ENTRYPOINT,
                 'workspace_selected': False, 'deployment_verified': False,
+                'historical_workspace': RECORDED_WORKSPACE,
+                'recorded_python': RECORDED_REMOTE_PYTHON,
+                'current_paths_verified': False,
                 'helper_uid_expectation': management.EXPECTED_HELPER_UID},
             'finish_policy': {'mode': 'POST_CLOSE_OBSERVATION', 'followups': list(FOLLOWUPS),
                 'scope_control_connected': False, 'observation_produced': False,
@@ -151,11 +158,11 @@ def configuration_status():
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
-             'support': '재환: 기존 Runner/SSH 배치 사실, 하영: 발급측 연결 사실',
-             'items': ['채택한 issuer 위치의 현재 본인 actor 인증·API 도달·회수 adapter의 실응답',
-                       '실제 job workspace·SSH port/host-key 별칭·remote Python·현재 UID/netns',
-                       '인증된 READY 전달·양 호스트 deadline 연결',
-                       'input/source/persistent store 위치·현재 endpoint']},
+             'support': '재환: SSH port/별칭·기존 경로/실행 격리 변경 기록, 하영: 기존 메모리 자격 공급·OAuth 수명/회수 기록',
+             'items': ['중앙 구현: 본인 전용 actor·repository 자격의 메모리 공급과 실제 caller 연결',
+                       '중앙 연결: 인증된 READY 왕복·양 호스트 deadline·P2 input/source/store',
+                       '실행 준비: 기존 workspace/Python의 현재 대조, 명시 SSH port/별칭·UID/netns·endpoint',
+                       '실행 준비: 본인 actor 인증·API 도달·회수 adapter의 실응답 및 만료/수동 회수 인수']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
              'support': '하영·재환: 이미 제출한 담당 영역 원본 재사용',
              'items': ['원본 5역할과 control pin·보관 인증·materializer 결속',

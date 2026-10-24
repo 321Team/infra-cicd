@@ -1,5 +1,7 @@
 # #46 기존 관리 SSH 설정 연결
 
+현재 발급 위치·helper 배치의 선택과 담당자 확인 범위는 [운영 구성 통합 인계](operating-handoff.md)를 따른다. 아래는 초기 연결 이력이다. `/usr/bin/python3`와 역사적 workspace 근거는 확인됐으므로 전부 미기록으로 취급하지 않으며, 실제 실행 인자는 현재값 대조 뒤 명시한다.
+
 2026-10-24. 기존 경로를 코드에 선택하는 단계다. 실제 접속·helper 설치·발급 위치 채택이나
 Runtime GO가 아니다. `delivery_job_site.SITE=None`과 원본/control/finish 인증 계약을 유지한다.
 

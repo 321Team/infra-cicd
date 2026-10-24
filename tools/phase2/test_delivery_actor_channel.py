@@ -124,7 +124,10 @@ class ActorChannelTests(unittest.TestCase):
         self.assertIsNone(c._name); self.assertIsNone(c._delete_path)
 
     def test_only_modern_dedicated_oauth_and_valid_deadlines(self):
-        for token in ('legacy-token', self.f.token(), 'sha256~short', 'sha256~../'+'a'*45, 'sha256~'+'a'*257):
+        # A realistic-length legacy base64url value must not enter a URL-path
+        # fallback, even though its length alone looks like a modern token.
+        for token in ('legacy-token', 'a'*43, self.f.token(), 'sha256~short',
+                      'sha256~../'+'a'*45, 'sha256~'+'a'*257):
             with self.subTest(token_type='synthetic'), self.assertRaises(channel.ActorChannelError):
                 self.client(actor=BearerCredential(token))
         for change in ({'operation_deadline':True}, {'cleanup_deadline':20},
@@ -222,6 +225,35 @@ class ActorChannelTests(unittest.TestCase):
             self.execute(c,after_forward=lambda:setattr(self.f,'mono',31))
         self.assertEqual(2,self.socket_count)
         self.assertEqual('UNCONFIRMED',c.status()['actor_server_revocation'])
+
+    def test_cancellation_survives_simultaneous_delete_failure_and_preserves_receipt(self):
+        for cancel in (KeyboardInterrupt, SystemExit):
+            for failure in ('http500', 'timeout'):
+                with self.subTest(cancel=cancel.__name__, failure=failure):
+                    c = self.client(); original = c._exchange
+                    deletes = []
+                    def exchange(request, deadline):
+                        if request.method == 'DELETE':
+                            deletes.append(request.method)
+                            if failure == 'timeout':
+                                raise TimeoutError('SYNTHETIC_PRIVATE_CLEANUP')
+                        return original(request, deadline)
+                    with patch.object(c, '_exchange', side_effect=exchange), \
+                         self.assertRaises(cancel) as caught:
+                        self.execute(c, forward_error=cancel('SYNTHETIC_PRIVATE_HANDOFF'),
+                                     revoke_status=500)
+                    self.assertEqual(['DELETE'], deletes)  # no automatic retry
+                    self.assertEqual(3 if failure == 'http500' else 2, self.socket_count)
+                    self.assertIsNone(caught.exception.__cause__)
+                    self.assertIsNone(caught.exception.__context__)
+                    self.assertNotIn('SYNTHETIC_PRIVATE', str(caught.exception))
+                    self.assertEqual('UNCONFIRMED', c.status()['actor_server_revocation'])
+                    self.assertFalse(c.status()['credential_forwarded'])
+                    self.assertTrue(c.status()['local_references_released'])
+                    self.assertIsNone(c._token)
+                    receipt = c.take_receipt()
+                    self.assertEqual(self.f.token(), receipt.credential.token)
+                    self.assertIsNone(c.take_receipt())
 
     def test_invalid_bridge_request_sources_stop_before_network(self):
         cases = [
