@@ -100,8 +100,9 @@ class NativeTokenMaterializer(ingress._NoCopy):
     read_original(context, credential, source, roles, deadline) returns PRIVATE
     exact TokenRequest response bytes. The reader must authenticate the actual
     original/transport, bind it to this invocation and honor the same deadline.
-    No live reader is supplied by default; the credential-only SSH frame does
-    not currently carry this original. This class does not fill that gap.
+    No reader is selected by default. The operating connector may explicitly
+    select native_original_reader after the opt-in v2 handoff; legacy token-only
+    frames cannot supply it. This class itself installs no transport or reader.
     """
     def __init__(self, *, binding, context, selection, read_original, wall):
         error = None

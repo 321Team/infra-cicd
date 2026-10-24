@@ -1,5 +1,10 @@
 # #46 운영 구성 통합 인계 — 2026-10-24
 
+**10/25 후속:** [범위·상시 시간대·control 및 native 운영 조립](adopted-scope-control.md)을
+현재 선택에 적용한다. 기존 문서 snapshot과 전용 ref를 control로 실제 선택했으며,
+상시 시간대·240분 참고 예산을 코드에 편입했다. 실제 grant/새 baseline/원본 의미는
+명시 입력으로 남겨 `SITE=None`을 유지한다. 아래 표의 미선택 설명은 작성 당시 이력이다.
+
 **기존 구현·원본·담당자 확인을 이 문서로 묶는다. 설계와 오프라인 구현은 준비됐지만, 전체 실행 SITE의 실제 배치·자격 공급·원본/control 연결은 미완료다.** `SITE=None`, dispatch false, Runtime NOT_RUN을 유지한다. 아래 문서는 실행 GO나 현재 호스트 점검 결과가 아니다.
 
 기준 코드는 PR134 병합 `34e4924a`다. 최신 HEAD `60d279eb`의 하영·재환 승인과 검사 2건 SUCCESS, 병합 SHA의 검사 2건 SUCCESS를 확인했다. 이후 로그인 공급 변경은 별도 코드 리뷰 대상이다. [로그인 연결과 미확정 입력](memory-login-connection.md)을 함께 본다. [연결 계약과 실패 인수](memory-ready-connection.md)를 함께 본다.

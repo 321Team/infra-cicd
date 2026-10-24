@@ -22,16 +22,16 @@ def need(ok):
         raise FdsExistingInputError('FDS_EXISTING_INPUT_MISMATCH')
 
 
-def validate_existing_plan(config, plan):
-    """Shape/profile agreement, NOT authentication or owner-policy adoption.
+def validate_existing_baseline(binding, baseline, previous):
+    """Check explicit raw/previous before native issuance facts exist. No I/O.
 
-    Return the SAME actual plan and immutable original bytes. Existing factory
-    authenticates baseline original/control and fresh UID/spec/owner equality
-    before claim/write. Missing raw/previous stays blocked, not synthesized.
+    Reused by full-plan and prepared operating selection; never fabricates
+    IssuerFacts just to validate an already supplied baseline before handoff.
+    This is shape/profile consistency, not authentication or live admission.
     """
     try:
-        fds._source_profile(config, plan)
-        b, baseline, previous = config.binding, plan.baseline, plan.producer.facts.previous_images
+        b = binding
+        core.binding_checked(b)
         need(type(baseline) is runtime.BaselineAdoption
              and type(baseline.grant) is AdoptedGrant and baseline.grant.binding == b
              and type(baseline.objects) is tuple and len(baseline.objects) == 6
@@ -54,6 +54,17 @@ def validate_existing_plan(config, plan):
                      and type(containers[0]) is dict and containers[0].get('name') == key[2]
                      and containers[0].get('image') == dict(previous)[key[2]]
                      and not pod.get('initContainers') and not pod.get('ephemeralContainers'))
+        return baseline
+    except Exception:
+        raise FdsExistingInputError('FDS_EXISTING_INPUT_MISMATCH') from None
+
+
+def validate_existing_plan(config, plan):
+    """Profile + same raw baseline; fresh source/control checks stay downstream."""
+    try:
+        fds._source_profile(config, plan)
+        validate_existing_baseline(config.binding, plan.baseline,
+                                   plan.producer.facts.previous_images)
         return plan
     except Exception:
         raise FdsExistingInputError('FDS_EXISTING_INPUT_MISMATCH') from None
