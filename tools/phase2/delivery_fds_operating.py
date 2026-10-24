@@ -21,6 +21,10 @@ ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46
 ISSUER_HOST = management.SOURCE_HOST
 ISSUER_ACCOUNT = management.SOURCE_ACCOUNT
 HELPER_ENTRYPOINT = 'tools/phase2/delivery_ssh_bridge_helper.py'
+# Historical references for handoff/status ONLY. Neither is a default argument
+# or a current host observation; the trusted caller still supplies native inputs.
+RECORDED_WORKSPACE = '/home/server01_cicd-runner/actions-runner/_work/infra-cicd/infra-cicd'
+RECORDED_REMOTE_PYTHON = '/usr/bin/python3'
 
 # Reuse the fixed, reviewed source/target profile directly; no copied hash table,
 # alternate input parser or implicit current-object -> previous-image fallback.
@@ -28,6 +32,24 @@ build_configuration = profile.build_configuration
 build_token_issuer = profile.build_token_issuer
 connect_baseline = baseline.connect_selected_baseline
 build_management_bridge_configuration = management.build_configuration
+
+
+def build_actor_channel(config, *, actor, endpoint_ip, operation_deadline,
+                        cleanup_deadline, monotonic, wall):
+    """Connect adopted personal actor and SA profile to an inert memory channel.
+
+    Credentials, current numeric endpoint and both deadlines remain explicit.
+    This never creates credentials, connects a host or configures global SITE.
+    """
+    from delivery_actor_channel import ActorCredentialChannel
+    from delivery_token_request import TokenTarget
+    binding = profile._binding_checked(config)
+    _, _, namespace, name = profile.SUBJECT.split(':')
+    return ActorCredentialChannel(binding, actor=actor, expected_username=ISSUANCE_OPERATOR,
+        target=TokenTarget(namespace, name, profile.SUBJECT_UID, profile.ISSUER, profile.AUDIENCE),
+        ca_pem=profile.CA_PEM, endpoint_ip=endpoint_ip,
+        operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
+        monotonic=monotonic, wall=wall)
 
 
 def build_job_bridge_configuration(*, workspace, context, port, host_key_alias,
@@ -115,12 +137,18 @@ def configuration_status():
                 'rendered_sha256': profile.RENDERED_SHA256},
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
+            'actor_channel': {'adapter': 'NAMED_OAUTH_TOKENREQUEST_SSH',
+                'constructed_for_runtime': False, 'identity_verified': False,
+                'server_revocation_verified': False, 'runtime_authorized': False},
             'issuer_location_expectation': {'hostname': ISSUER_HOST,
                 'account': ISSUER_ACCOUNT, 'mode': 'DIRECT_ISSUE_AND_MANAGEMENT_SSH',
                 'current_location_verified': False, 'api_reachability_verified': False},
             'helper_layout': {'mode': 'NATIVE_JOB_EXACT_CHECKOUT',
                 'checkout': 'p2-job-{run_id}-{attempt}', 'entrypoint': HELPER_ENTRYPOINT,
                 'workspace_selected': False, 'deployment_verified': False,
+                'historical_workspace': RECORDED_WORKSPACE,
+                'recorded_python': RECORDED_REMOTE_PYTHON,
+                'current_paths_verified': False,
                 'helper_uid_expectation': management.EXPECTED_HELPER_UID},
             'finish_policy': {'mode': 'POST_CLOSE_OBSERVATION', 'followups': list(FOLLOWUPS),
                 'scope_control_connected': False, 'observation_produced': False,
@@ -130,11 +158,11 @@ def configuration_status():
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
-             'support': '재환: 기존 Runner/SSH 배치 사실, 하영: 발급측 연결 사실',
-             'items': ['채택한 issuer 위치의 현재 본인 actor 인증·API 도달·서버 회수 경로',
-                       '실제 job workspace·SSH port/host-key 별칭·remote Python·현재 UID/netns',
-                       '인증된 READY 전달·양 호스트 deadline 연결',
-                       'input/source/persistent store 위치·현재 endpoint']},
+             'support': '재환: SSH port/별칭·기존 경로/실행 격리 변경 기록, 하영: 기존 메모리 자격 공급·OAuth 수명/회수 기록',
+             'items': ['중앙 구현: 본인 전용 actor·repository 자격의 메모리 공급과 실제 caller 연결',
+                       '중앙 연결: 인증된 READY 왕복·양 호스트 deadline·P2 input/source/store',
+                       '실행 준비: 기존 workspace/Python의 현재 대조, 명시 SSH port/별칭·UID/netns·endpoint',
+                       '실행 준비: 본인 actor 인증·API 도달·회수 adapter의 실응답 및 만료/수동 회수 인수']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
              'support': '하영·재환: 이미 제출한 담당 영역 원본 재사용',
              'items': ['원본 5역할과 control pin·보관 인증·materializer 결속',

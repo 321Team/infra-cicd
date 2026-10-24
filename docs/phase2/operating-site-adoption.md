@@ -1,5 +1,7 @@
 # #46 운영 구성 채택 — 2026-10-24
 
+**현재 인계 기준은 [운영 구성 통합 인계](operating-handoff.md)를 먼저 읽는다.** 기존 자료·중앙 설계·담당자별 한 번의 확인·실행 준비·미래 생성값을 구분했다. 아래 기록은 원본 대조와 구현 이력으로 보존한다. 과거의 미확정 설명을 현재의 재제출 요청으로 사용하지 않는다.
+
 **확인된 기대 설정을 `delivery_fds_operating`에 채택했다. 전체 운영 SITE와 실행 승인은 아직 완료되지 않았다.** `delivery_job_site.SITE=None`을 유지하고 self-hosted job 예약을 차단한다. 새 입력 양식·서명·중복 승인 절차는 추가하지 않는다.
 
 ## 이번에 연결한 설정
@@ -235,3 +237,64 @@ GET·SSR/SSAR·6객체 get/patch 검증은 별개다. 기존 verifier를 생략�
 private-source → 원본/control 인증 → sender close 뒤 관측을 확인한다. control 철회 시
 claim/fence 유지·완료 원본 미생성을 확인한다. 실제 발급/SSH/설치·권한·SSA/배포 증명은 아니다.
 `delivery_job_site.SITE=None`·기본 dispatch false·`runtime=NOT_RUN`을 유지한다.
+
+
+## 10/24 본인 OAuth 인증·발급 전달·서버 회수 연결
+
+PR132 병합본 `329fe5d8` 위에 `build_actor_channel`을 추가했다.
+선택된 본인 actor와 기존 SA/CA/대상 profile을 `ActorCredentialChannel`에 연결한다.
+현재 실제 자격·endpoint·SSH 배치·승인 원본이 공급된 전체 SITE는 아니며
+`SITE=None`·dispatch false·Runtime NOT_RUN을 유지한다.
+
+### 별도 실행 승인이 있을 때의 호출 계약
+
+1. 발급 위치는 기존 결정인 ansible01/server01_ansible이다. 신뢰한 호출자가
+   **본인 전용 OAuth token**을 메모리로 공급하고 현재 endpoint와 전달·회수 deadline을 명시한다.
+   로그인·암호 입력·kubeconfig 로딩·환경 자격 탐색·권한 추가는 이 구현에 없다.
+2. `build_actor_channel(config, actor=..., endpoint_ip=..., operation_deadline=...,
+   cleanup_deadline=..., monotonic=..., wall=...)`는 무통신 생성이다.
+   예상 사용자명은 채택한 `gwonuk`, SA/CA는 기존 profile이며 override를 받지 않는다.
+3. caller가 이미 인증·채택한 native request와 source credential 목록, 검토된
+   `SshCredentialBridge`를 `send_over_bridge`에 전달한다.
+   같은 시계·명시 전달 기한을 대조하고, 고정 TLS GET users/~의 User 이름·UID 형식을 확인한 뒤
+   기존 단회 TokenRequest 및 READY/peer/revision/기한 검증을 거쳐 전달한다.
+   본인 이름 확인은 SA RBAC·실행 GO·현재 host 인증을 대신하지 않는다.
+4. 인증이 확인된 actor는 전달 성공/실패와 별개로 **그 token 자신만 DELETE 1회**한다.
+   전달 기한보다 뒤에 명시한 회수 기한 안에서 최대 10초 요청을 사용하며 자동 연장·재시도하지 않는다.
+   인증 불일치/실패에서는 발급·타인 자격 삭제를 하지 않고 서버 정리 미확인으로 인계한다.
+5. 정상 삭제 객체 또는 엄격한 성공 Status가 담긴 HTTP200만 서버 응답 확인으로 기록한다.
+   202/204/401/403/404·비정상200·timeout·회수 기한 초과는 성공이 아니다.
+   local close는 참조 해제만 하며 네트워크를 호출하지 않는다.
+6. 발급 후 전달·회수가 실패해도 `take_receipt()`로 실제 비공개 발급 응답을 1회 가져올 수 있다.
+   이 원본에는 SA token이 있으므로 공개 로그/PR에 넣지 않는다. receipt는 승인 원본으로 자동 채택하지 않는다.
+   이미 발급된 SA token은 actor 회수와 별개로 만료·receiver 검증을 따르며 재발급하지 않는다.
+
+| 보고 항목 | 의미 / 한계 |
+|---|---|
+| actor_identity=CONFIRMED | 같은 TLS endpoint의 users/~가 기대 본인 이름을 반환. 권한·GO는 별도 |
+| issuance_attempted | POST 시도 진입. 실패하면 발급 여부가 불명확할 수 있음 |
+| credential_forwarded | 기존 SSH 전달기가 완료. job 수용·배포 성공은 아님 |
+| actor_server_revocation=ACKNOWLEDGED | 정확한 자기 DELETE의 성공 응답. 캐시 전파·모든 사본 무효 증명은 아님 |
+| UNCONFIRMED / NOT_ATTEMPTED | 회수 확인 불가 / 미시도. 성공·삭제 안 됨으로 단정하지 않음 |
+| local_references_released | 이 객체의 참조 정리. Python 문자열 zeroization·caller 사본 폐기를 보장하지 않음 |
+
+동시 재호출은 단회 reservation으로 차단한다. KeyboardInterrupt/SystemExit의 취소 의미를
+보존하며 정리 결과는 status에 따로 남긴다. SIGKILL·프로세스 소멸 때 finally 실행은 보장되지
+않으므로 전용 actor의 외부 회수 책임과 SA 만료 확인이 필요하다. 자동 credential 공유나
+다른 기존 로그인 세션을 재사용하지 않는다.
+
+현대 `sha256~` OAuth token만 지원한다. 파생 object name은
+[oc logout 구현](https://github.com/openshift/oc/blob/main/pkg/cli/logout/logout.go)의
+prefix 제외 SHA256/base64url 규칙을 사용한다. token 원문을 URL에 넣는 legacy fallback은 없다.
+[WhoAmI 구현](https://github.com/openshift/oc/blob/main/pkg/helpers/project/whoami.go)의
+users/~ 경로만 사용하며, oc의 토큰 해시/로컬 사용자 fallback은 인증으로 채택하지 않는다.
+[OAuth store](https://github.com/openshift/oauth-apiserver/blob/master/pkg/oauth/apiserver/registry/oauthaccesstoken/etcd/etcd.go)는
+삭제 객체를 반환한다. 참고 소스 대조는 현장 oc/API 버전의 실동작 검증과 구분한다.
+
+**미확정 잔여:** 실제 host/SSH workspace·Python/UID/netns/READY/store, 본인 전용 자격의
+안전한 입력 경로·현재 endpoint 및 실행/회수 예산, 기존 5역할 원본/control·finish scope,
+replicas 인계 뒤 새 full baseline. 현재 원본을 재작성하거나 미래 token/run/hash를 합성하지 않는다.
+
+오프라인 확인: 전송·SSH를 fake/차단한 Windows 전체 시험 1,016건 중 854 PASS·162 SKIP.
+본인 확인 실패, 발급/전달 실패, 회수 불명확·기한 초과, 중복 호출과 취소를 포함한다.
+현장 로그인·TokenRequest·SSH·DELETE·배포는 실행하지 않았다.

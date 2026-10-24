@@ -50,6 +50,34 @@ class OperatingSelectionTests(unittest.TestCase):
         self.assertIsNone(value.build._owner._listener)
         self.f.clock.assert_not_called(); self.f.publish.assert_not_called()
 
+    def test_actor_channel_uses_fixed_profile_and_requires_all_current_inputs_without_io(self):
+        from delivery_object_reader import BearerCredential
+        import delivery_actor_channel as actor_channel
+        clock = Mock(side_effect=AssertionError('NO_CLOCK'))
+        args = dict(actor=BearerCredential('sha256~SYNTHETIC_ACTOR_TOKEN_ONLY_1234567890'),
+            endpoint_ip='192.0.2.10', operation_deadline=20, cleanup_deadline=30,
+            monotonic=clock, wall=clock)
+        # This fixture already patches fixed profile values to SYNTHETIC ones.
+        with patch.object(actor_channel, 'ActorCredentialChannel') as create:
+            operating.build_actor_channel(self.args['config'], **args)
+        passed = create.call_args.kwargs
+        self.assertEqual(operating.ISSUANCE_OPERATOR, passed['expected_username'])
+        self.assertEqual(profile.SUBJECT_UID, passed['target'].uid)
+        self.assertEqual(profile.CA_PEM, passed['ca_pem'])
+        self.assertEqual(args['endpoint_ip'], passed['endpoint_ip'])
+        for field in args:
+            missing = args.copy(); del missing[field]
+            with self.subTest(field=field), self.assertRaises(TypeError):
+                operating.build_actor_channel(self.args['config'], **missing)
+        with self.assertRaises(TypeError):
+            operating.build_actor_channel(self.args['config'], **args, expected_username='other')
+        foreign = replace(self.args['config'], binding=replace(
+            self.args['config'].binding, namespace_uid='SYNTHETIC_OTHER'))
+        with patch.object(actor_channel, 'ActorCredentialChannel') as create, \
+             self.assertRaises(profile.FdsSiteInputError):
+            operating.build_actor_channel(foreign, **args)
+        create.assert_not_called(); clock.assert_not_called(); self.assertIsNone(declaration.SITE)
+
     def test_selected_runner_cannot_be_overridden_and_missing_helper_does_not_fallback(self):
         with self.assertRaises(TypeError):
             operating.assemble_job(**self.args, runner=job.RunnerIdentity('other', 'other', 2000))
@@ -147,6 +175,7 @@ class AdoptedOperatingTests(unittest.TestCase):
                     '.github/workflows/p2-rosa-delivery.yml').read_text(encoding='utf-8')
         self.assertIn('P2_CODE_CHECKOUT: p2-job-${{ github.run_id }}-${{ github.run_attempt }}', workflow)
         self.assertIn('ref: ${{ github.sha }}', workflow)
+        self.assertTrue((Path(__file__).resolve().parents[2] / operating.HELPER_ENTRYPOINT).is_file())
         with patch.object(Path, 'open', side_effect=AssertionError('NO_FILE')), \
              patch.object(job, 'native_context', side_effect=AssertionError('NO_ENV_CONTEXT')), \
              patch.object(job.subprocess, 'Popen', side_effect=AssertionError('NO_SSH')):
@@ -266,6 +295,7 @@ class AdoptedOperatingTests(unittest.TestCase):
         self.assertFalse(picked['issuer_location_expectation']['current_location_verified'])
         self.assertFalse(picked['helper_layout']['workspace_selected'])
         self.assertFalse(picked['finish_policy']['scope_control_connected'])
+        self.assertIs(picked['finish_policy']['includes_resource_cleanup'], False)
         picked['finish_policy']['followups'].clear()
         self.assertEqual(list(observation.FOLLOWUPS), operating.configuration_status()['selected']['finish_policy']['followups'])
         self.assertFalse(job.workflow_gate(context=CONTEXT, revision=lambda: CONTEXT.workflow_sha)['dispatch_configured'])
