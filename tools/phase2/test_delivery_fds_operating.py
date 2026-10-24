@@ -78,6 +78,23 @@ class OperatingSelectionTests(unittest.TestCase):
             operating.build_actor_channel(foreign, **args)
         create.assert_not_called(); clock.assert_not_called(); self.assertIsNone(declaration.SITE)
 
+    def test_deferred_login_builder_uses_adopted_actor_and_sa_without_oauth_defaults(self):
+        import delivery_login_channel as deferred
+        clock=Mock(side_effect=AssertionError('NO_CLOCK'))
+        args=dict(login_provider=object(), endpoint_ip='192.0.2.10',
+                  operation_deadline=20, cleanup_deadline=30, monotonic=clock, wall=clock)
+        with patch.object(deferred,'LoginActorChannel') as create:
+            operating.build_login_actor_channel(self.args['config'],**args)
+        passed=create.call_args.kwargs
+        self.assertIs(args['login_provider'],passed['login_provider'])
+        self.assertEqual(operating.ISSUANCE_OPERATOR,passed['expected_username'])
+        self.assertEqual(profile.SUBJECT_UID,passed['target'].uid)
+        self.assertEqual(profile.CA_PEM,passed['ca_pem'])
+        for key in args:
+            with self.subTest(key=key), self.assertRaises(TypeError):
+                operating.build_login_actor_channel(self.args['config'],**{k:v for k,v in args.items() if k!=key})
+        clock.assert_not_called(); self.assertIsNone(declaration.SITE)
+
     def test_selected_runner_cannot_be_overridden_and_missing_helper_does_not_fallback(self):
         with self.assertRaises(TypeError):
             operating.assemble_job(**self.args, runner=job.RunnerIdentity('other', 'other', 2000))
@@ -391,6 +408,7 @@ class ReadyOperatingSelectionTests(unittest.TestCase):
         self.addCleanup(selected.build._owner.close)
         mailbox=selected.build._owner._publish
         self.assertIs(type(mailbox),ReadyMailbox)
+        self.assertEqual(management.EXPECTED_HELPER_UID, mailbox._uid)
         self.assertEqual(args['config'].binding.key,mailbox._selected['target']['binding_key'])
         self.assertEqual(5,len(selected.build._parent._wire._routes))
         self.assertFalse(mailbox._used);f.f.clock.assert_not_called()

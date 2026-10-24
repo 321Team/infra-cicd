@@ -31,6 +31,35 @@ def selected(request):
 
 
 class ReadyPolicyTests(unittest.TestCase):
+    def test_only_not_yet_listening_connect_retries_within_original_budget(self):
+        value=selected(fixtures.request()); now=[10.0]
+        budget=unix._Budget(11,lambda:now[0])
+        first,second=Mock(),Mock()
+        first.connect.side_effect=ConnectionRefusedError(ready.errno.ECONNREFUSED,'SYNTHETIC')
+        def sleep(seconds):now[0]+=seconds
+        with patch.object(socket,'AF_UNIX',1,create=True), \
+             patch.object(socket,'socket',side_effect=[first,second]) as create, \
+             patch.object(ready.time,'sleep',side_effect=sleep):
+            result=ready._connect_mailbox(value,budget)
+        self.assertIs(second,result);self.assertEqual(2,create.call_count)
+        first.close.assert_called_once();second.close.assert_not_called()
+        first.sendall.assert_not_called();second.sendall.assert_not_called()
+
+    def test_connect_permission_failure_or_expiry_never_retries_protocol(self):
+        value=selected(fixtures.request())
+        for code in (ready.errno.EACCES,ready.errno.ECONNREFUSED):
+            now=[10.0]
+            # EACCES must fail immediately even with time for many retries.
+            budget=unix._Budget(11 if code == ready.errno.EACCES else 10.01,lambda:now[0]);sock=Mock()
+            sock.connect.side_effect=OSError(code,'SYNTHETIC')
+            def sleep(seconds):now[0]+=seconds
+            with patch.object(socket,'AF_UNIX',1,create=True), \
+                 patch.object(socket,'socket',return_value=sock) as create, \
+                 patch.object(ready.time,'sleep',side_effect=sleep),self.assertRaises(Exception):
+                ready._connect_mailbox(value,budget)
+            self.assertEqual(1,create.call_count);sock.close.assert_called_once()
+            sock.recv.assert_not_called();sock.sendall.assert_not_called()
+
     def test_inert_single_ownership_and_value_bound_context(self):
         clock = Mock(side_effect=AssertionError('NO_CLOCK'))
         value = selected(fixtures.request())
