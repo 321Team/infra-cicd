@@ -285,4 +285,3 @@ def remote_main(argv=None):
         for fd in fds:
             try: os.close(fd)
             except BaseException: pass
-

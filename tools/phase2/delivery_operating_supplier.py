@@ -112,4 +112,3 @@ class MemoryOperatingSupplier(ingress._NoCopy):
             self._sources = self._actor = self._ready = self._bridge = self._receipt = None
             self._status['local_references_released'] = True
         return True  # Local refs only; not server revocation or resource cleanup.
-
