@@ -249,8 +249,13 @@ class SshCredentialBridge(ingress._NoCopy):
                 self._supply_attempted = True
             credentials = provide_credentials(copy.deepcopy(expected), b.limit)
             b.remaining(b.limit)
-            need(type(credentials) is tuple and len(credentials) == 2)
-            frame = ingress.encode_frame(expected, rosa_token=credentials[0], source_tokens=credentials[1])
+            need(type(credentials) is tuple and len(credentials) in (2, 3))
+            original = None
+            if len(credentials) == 3:
+                original = credentials[2]
+                need(type(original) is bytes and 0 < len(original) <= ingress.MAX_NATIVE_ORIGINAL_BYTES)
+            frame = ingress.encode_frame(expected, rosa_token=credentials[0],
+                source_tokens=credentials[1], native_original=original)
             writer.write_all(frame)
             need(_clean(writer), 'P2_SSH_CLEANUP_FAILED'); writer = None  # EOF, no packet file.
             ack = _receipt('forwarded', expected)
@@ -261,7 +266,7 @@ class SshCredentialBridge(ingress._NoCopy):
         except BaseException as exc:
             error = exc
         finally:
-            credentials = frame = None  # Reference release, not erasure/revocation.
+            credentials = frame = original = None  # Reference release, not erasure/revocation.
             for end in (writer, reader):
                 if end is not None:
                     cleanup = _clean(end) and cleanup

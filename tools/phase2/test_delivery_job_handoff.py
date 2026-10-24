@@ -78,6 +78,12 @@ class HandoffTests(unittest.TestCase):
             self.call(sources=(source,))
         allocate.assert_not_called()
 
+    def test_bad_native_original_is_rejected_before_any_owned_pipe(self):
+        for raw in (b'',b'x'*(48*1024+1),{},'SYNTHETIC_RAW'):
+            with self.subTest(kind=type(raw)),patch.object(handoff,'_prebuffer') as allocate, \
+                 self.assertRaises(handoff.HandoffError):self.call(native_original=raw)
+            allocate.assert_not_called()
+
     def test_repr_redacts_borrowed_tokens_ca_and_endpoint(self):
         text = repr(self.args['sources'][0])
         for secret in (fixture.TOKEN, '192.0.2.10', 'BEGIN CERTIFICATE'):

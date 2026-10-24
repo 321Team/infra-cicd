@@ -63,18 +63,22 @@ class MemoryOperatingSupplier(ingress._NoCopy):
     def __repr__(self):
         return '<P2 operating memory supplier: single-use, private, no Runtime GO>'
 
-    def send(self):
+    def send(self, *, include_original=False):
         with self._lock:  # Serialize close/take_receipt with the bounded operation.
             if self._used:
                 raise SupplyError('P2_MEMORY_SUPPLY_CONSUMED')
             self._used = True
             error = None; request = None
             try:
+                need(type(include_original) is bool)
                 request = self._ready.pull()
                 ready._matches(request, self._ready._selected)
                 self._status['public_ready_received'] = True
+                if include_original:
+                    ingress.native_frame_budget_checked(request, self._sources)
+                options = {'include_original': True} if include_original else {}
                 self._actor.send_over_bridge(bridge=self._bridge, request=request,
-                                             source_tokens=self._sources)
+                                             source_tokens=self._sources, **options)
             except BaseException as exc:
                 if isinstance(exc, KeyboardInterrupt):
                     error = KeyboardInterrupt()

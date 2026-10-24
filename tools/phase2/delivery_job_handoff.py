@@ -145,7 +145,7 @@ def _receiver(raw, clock, deadline, source=None):
 
 def build_owned_invocation(context, command, *, config, plan, finish_slot,
         rosa_token, sources, wire, handoff_deadline, monotonic=time.monotonic,
-        finish_capture=None, producer_pins=None):
+        finish_capture=None, producer_pins=None, native_original=None):
     """A trusted JobSite.build helper, not a default builder or credential broker.
 
     Caller owns borrowed input strings. Before successful return this helper
@@ -172,6 +172,11 @@ def build_owned_invocation(context, command, *, config, plan, finish_slot,
         deadline = min(handoff_deadline, start + MAX_HANDOFF_SECONDS)
         need(start < deadline, 'P2_HANDOFF_DEADLINE_EXCEEDED')
         rosa_raw = _token(rosa_token, 1, MAX_TOKEN_BYTES)
+        from delivery_source_session import NativeIssuanceOriginal
+        native = None
+        if native_original is not None:
+            native = NativeIssuanceOriginal(context, config.binding, core.digest(rosa_raw), native_original)
+            native.check()  # Before any pipe allocation; no parser or authority claim.
         repos, payloads = set(), []
         for source in sources:
             repository_checked(source.repository)
@@ -192,7 +197,8 @@ def build_owned_invocation(context, command, *, config, plan, finish_slot,
             channels.append(SourceChannel(pending_receiver, source.ca_pem, source.endpoint_ip))
             pending_receiver = None
         need(clock() < deadline, 'P2_HANDOFF_DEADLINE_EXCEEDED')
-        session = PrivateSourceSession(tuple(channels), wire=wire, monotonic=clock)
+        session = PrivateSourceSession(tuple(channels), wire=wire, monotonic=clock,
+                                       native_original=native)
         invocation = job.RuntimeInvocation(context, config, plan, finish_slot,
             rosa, deadline, source_session=session, finish_capture=finish_capture,
             producer_pins=producer_pins)

@@ -261,7 +261,7 @@ class RequestBoundSupplier(ingress._NoCopy):
     def __call__(self, request, deadline):
         return self._provide(request, deadline, transported=False)
 
-    def _provide(self, request, deadline, *, transported):
+    def _provide(self, request, deadline, *, transported, include_original=False):
         with self._lock:
             need(not self._used and self._transport is transported, 'TOKEN_REQUEST_CONSUMED')
             self._used = True
@@ -272,6 +272,8 @@ class RequestBoundSupplier(ingress._NoCopy):
             self._receipt = receipt  # Retain actual issuance even if handoff later fails.
             ingress._tokens(self._sources, request['repositories'], receipt.credential.token)
             result = receipt.credential.token, self._sources
+            if include_original:
+                result += (receipt.raw,)
         except BaseException as e: error = _public_error(e, 'TOKEN_SUPPLY_FAILED')
         finally:
             self._sources = self._request = None
@@ -284,7 +286,7 @@ class RequestBoundSupplier(ingress._NoCopy):
             raise error from None
         return result
 
-    def send_over_bridge(self, bridge):
+    def send_over_bridge(self, bridge, *, include_original=False):
         """Explicit one-shot issuance -> existing SSH bridge, never a SITE GO.
 
         Caller has already authenticated/adopted this request and actual SSH
@@ -299,13 +301,15 @@ class RequestBoundSupplier(ingress._NoCopy):
             self._transport = True
         error = None
         try:
-            need(type(bridge) is SshCredentialBridge
+            need(type(include_original) is bool and type(bridge) is SshCredentialBridge
                  and bridge._budget.clock is self._issuer.monotonic
                  and bridge._budget.limit <= self._issuer.deadline,
                  'TOKEN_TRANSPORT_INVALID')
+            if include_original:
+                ingress.native_frame_budget_checked(self._request, self._sources)
             result = bridge.send_from_supplier(self._request,
                 provide_credentials=lambda request, deadline:
-                    self._provide(request, deadline, transported=True))
+                    self._provide(request, deadline, transported=True, include_original=include_original))
             need(result is True, 'TOKEN_TRANSPORT_FAILED')
         except BaseException as e:
             error = _public_error(e, 'TOKEN_TRANSPORT_FAILED')

@@ -139,7 +139,7 @@ class NativeTokenMaterializer(ingress._NoCopy):
                  and source.deadline == deadline and source.now() < deadline)
             context.check()
             raw = read(context, credential, source, roles, deadline)
-            need(source.now() < deadline)
+            need(source.now() < deadline and source._state == 'CONSUMED')
             now = wall(); need(core.finite(now))
             # Reuse the issuer's exact native parser. Unlike issue(), this read
             # has NOT proved a TLS 201 origin. It is only consistency checking.
@@ -153,7 +153,7 @@ class NativeTokenMaterializer(ingress._NoCopy):
             plan = runtime.RuntimeAuthorityPlan(selected.approval,
                 runtime.EvidenceAdoption(selected.issuer_grant, facts), selected.producer,
                 selected.subject, selected.baseline)
-            need(source.now() < deadline)
+            need(source.now() < deadline and source._state == 'CONSUMED')
             with self._lock:
                 need(not self._closed)
         except BaseException as exc:

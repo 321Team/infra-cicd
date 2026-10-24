@@ -7,7 +7,9 @@ from dataclasses import dataclass, field
 import hmac
 import json
 import os
+import threading
 import time
+from types import MappingProxyType
 
 import delivery_adapter as core
 import delivery_cli as cli
@@ -27,8 +29,10 @@ SOURCE_SESSION_CLOCK_INVALID SOURCE_SESSION_CHANNEL_INVALID SOURCE_SESSION_CHANN
 SOURCE_SESSION_HANDOFF_EXPIRED SOURCE_SESSION_CONSUMED SOURCE_SESSION_CREDENTIAL_INVALID
 SOURCE_SESSION_REPOSITORY_MISMATCH SOURCE_SESSION_TOKEN_ALIASED SOURCE_SESSION_ROLES_INVALID
 SOURCE_SESSION_REPOSITORY_UNCONFIGURED SOURCE_SESSION_REQUIRED SOURCE_SESSION_ROLE_CONFLICT
+SOURCE_SESSION_NATIVE_ORIGINAL_INVALID SOURCE_SESSION_NATIVE_ORIGINAL_REQUIRED
 RUNTIME_SITE_UNCONFIGURED RUNTIME_SITE_BINDING_MISMATCH RUNTIME_SITE_ACTION_MISMATCH
 '''.split())
+MAX_NATIVE_ORIGINAL_BYTES = 48 * 1024
 
 
 def need(ok, code):
@@ -48,6 +52,33 @@ def pipe_identity(fd):
     return info.st_dev, info.st_ino
 
 
+@dataclass(frozen=True, repr=False)
+class NativeIssuanceOriginal:
+    """PRIVATE same-frame bytes/correlation, not source or grant authentication.
+
+    The reviewed transport must authenticate its real peer/job before making
+    this record. The native parser and existing authority checks still run.
+    """
+    context: object = field(repr=False)
+    binding: object = field(repr=False)
+    credential_fingerprint: str = field(repr=False)
+    raw: bytes = field(repr=False)
+
+    def check(self):
+        from delivery_job import JobContext
+        need(type(self.context) is JobContext, 'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+        self.context.check(); core.binding_checked(self.binding)
+        need(type(self.raw) is bytes and 0 < len(self.raw) <= MAX_NATIVE_ORIGINAL_BYTES
+             and type(self.credential_fingerprint) is str
+             and core.HEX.fullmatch(self.credential_fingerprint),
+             'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+
+    def _no_copy(self, *unused):
+        raise SourceSessionError('SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+
+    __copy__ = __deepcopy__ = __reduce_ex__ = _no_copy
+
+
 class PrivateSourceSession:
     """Own exact private receivers from successful construction through close.
 
@@ -57,7 +88,7 @@ class PrivateSourceSession:
     """
     ROLES = frozenset(('readers', 'producer_run_reader', 'finish_collection', 'finish_observation'))
 
-    def __init__(self, channels, *, wire, monotonic=time.monotonic):
+    def __init__(self, channels, *, wire, monotonic=time.monotonic, native_original=None):
         # Invalid shapes transfer no ownership, avoiding arbitrary close calls.
         need(type(channels) is tuple and 0 < len(channels) <= 16
              and all(type(c) is SourceChannel and type(c.receiver) is GitHubPipeCredentialReceiver
@@ -65,8 +96,14 @@ class PrivateSourceSession:
         self.channels, self.wire, self.clock = channels, wire, monotonic
         self._handles, self._readers, self._state, self._last = [], {}, 'NEW', None
         self.cleanup_ok = True
+        self._native, self._native_lock = None, threading.RLock()
         try:
             need(callable(wire) and callable(monotonic), 'SOURCE_SESSION_CONFIGURATION_INVALID')
+            need(native_original is None or type(native_original) is NativeIssuanceOriginal,
+                 'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+            if native_original is not None:
+                native_original.check()
+                self._native = native_original
             repos = tuple(c.receiver.repository for c in channels)
             need(len(set(repos)) == len(repos), 'SOURCE_SESSION_REPOSITORY_DUPLICATE')
         except BaseException:
@@ -129,17 +166,62 @@ class PrivateSourceSession:
              'SOURCE_SESSION_REPOSITORY_UNCONFIGURED')
         return self._readers[repository]
 
+    def take_native_original(self, context, binding, credential, deadline):
+        """One private take AFTER source handoff; no retry or authority promotion."""
+        from delivery_job import JobContext
+        with self._native_lock:
+            value, self._native = self._native, None  # Bad takes consume too.
+            raw = error = None
+            try:
+                need(type(value) is NativeIssuanceOriginal,
+                     'SOURCE_SESSION_NATIVE_ORIGINAL_REQUIRED')
+                need(self._state == 'CONSUMED' and type(context) is JobContext
+                     and type(credential) is BearerCredential and value.context == context
+                     and type(binding) is core.Binding and value.binding == binding
+                     and core.finite(deadline) and deadline == self.deadline
+                     and self.now() < deadline
+                     and hmac.compare_digest(value.credential_fingerprint, credential.fingerprint),
+                     'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+                raw = value.raw
+                current = self.now()
+                need(current < deadline and self._state == 'CONSUMED',
+                     'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+            except BaseException as exc:
+                if isinstance(exc, KeyboardInterrupt): error = KeyboardInterrupt()
+                elif isinstance(exc, SystemExit): error = SystemExit(130)
+                else:
+                    code = ('SOURCE_SESSION_NATIVE_ORIGINAL_REQUIRED' if value is None
+                            else 'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+                    error = SourceSessionError(code)
+            value = context = binding = credential = None
+            if error is not None:
+                raw = None
+                raise error from None
+            return raw
+
     def close(self):
         # Detach first; repeated cleanup cannot close a reused FD/handle.
-        handles, self._handles = self._handles, []
-        channels, self.channels = self.channels, ()
-        self._state, self.wire, self._readers = 'CLOSED', None, {}
+        with self._native_lock:
+            handles, self._handles = self._handles, []
+            channels, self.channels = self.channels, ()
+            self._state, self.wire, self._readers = 'CLOSED', None, {}
+            self._native = None
         for handle in tuple(reversed(handles)) + tuple(c.receiver for c in channels):
             try:
                 handle.close()
             except BaseException:
                 self.cleanup_ok = False
         return self.cleanup_ok
+
+
+def native_original_reader(binding):
+    """Explicit trusted reader selection; no original/global/file/env discovery."""
+    core.binding_checked(binding)
+    def read(context, credential, source, roles, deadline):
+        need(type(source) is PrivateSourceSession and type(roles) is MappingProxyType,
+             'SOURCE_SESSION_NATIVE_ORIGINAL_INVALID')
+        return source.take_native_original(context, binding, credential, deadline)
+    return read
 
 
 def run_site(argv, *, source_session, config, plan, readers, finish_slot, receiver,

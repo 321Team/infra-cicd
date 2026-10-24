@@ -67,13 +67,13 @@ class LoginActorChannel(ingress._NoCopy):
                        and item['repository'] == repository)
             ingress._token(item['token'], source=True)
 
-    def send_over_bridge(self, *, bridge, request, source_tokens):
+    def send_over_bridge(self, *, bridge, request, source_tokens, include_original=False):
         with self._lock:
             actor.need(not self._used, 'ACTOR_CHANNEL_CONSUMED'); self._used = True
             channel = credential = error = None
             try:
                 ingress._request(request)
-                actor.need(type(bridge) is ssh.SshCredentialBridge
+                actor.need(type(include_original) is bool and type(bridge) is ssh.SshCredentialBridge
                            and bridge._budget.clock is self._clock
                            and bridge._budget.limit <= self._operation_end
                            and request['target']['binding_key'] == self._binding.key)
@@ -81,7 +81,8 @@ class LoginActorChannel(ingress._NoCopy):
                 credential = self._provider.login()
                 channel = actor.ActorCredentialChannel(self._binding, actor=credential, **self._args)
                 credential = None
-                channel.send_over_bridge(bridge=bridge, request=request, source_tokens=source_tokens)
+                options = {'include_original': True} if include_original else {}
+                channel.send_over_bridge(bridge=bridge, request=request, source_tokens=source_tokens, **options)
             except BaseException as exc:
                 error = actor.public_error(exc, 'ACTOR_HANDOFF_FAILED')
             finally:

@@ -158,6 +158,31 @@ class NativeMaterializerTests(SemanticFixture, unittest.TestCase):
         with self.assertRaises(materializer.MaterializationError): self.call(value)
         self.read.assert_not_called(); self.wall.assert_not_called()
 
+    def test_each_pre_read_state_deadline_and_expiry_condition_stops_before_reader(self):
+        end=self.source.deadline
+        for case in ('state','deadline','expired'):
+            self.source._state='CONSUMED';self.source._last=None;self.h.mono=end-10
+            call_end=end
+            if case=='state':self.source._state='PREPARED'
+            if case=='deadline':call_end=end+1
+            if case=='expired':self.h.mono=end
+            self.read.reset_mock();self.wall.reset_mock()
+            with self.subTest(case=case),self.assertRaises(materializer.MaterializationError):
+                self.build()(CONTEXT,self.credential,self.source,self.roles,call_end)
+            self.read.assert_not_called();self.wall.assert_not_called()
+
+    def test_requested_900_and_actual_shorter_lifetime_are_distinct_from_invalid_901(self):
+        for seconds in (600,901):
+            response=self.tokens.response();response['spec']['expirationSeconds']=seconds
+            response['status']['expirationTimestamp']=token_fixture.stamp(1000+seconds)
+            self.read.return_value=core.encoded(response)
+            if seconds==901:
+                with self.assertRaises(materializer.MaterializationError):self.call(self.build())
+            else:
+                plan=self.call(self.build())
+                self.assertEqual((900,1000,1600),(plan.issuer.facts.requested_seconds,
+                                 plan.issuer.facts.issued_at,plan.issuer.facts.expires_at))
+
     def test_reader_failure_and_interrupt_have_no_private_exception_chain_or_retry(self):
         for error in (RuntimeError('PRIVATE_TOKEN_OR_BODY'),KeyboardInterrupt('PRIVATE'),SystemExit('PRIVATE')):
             self.read.reset_mock(); self.read.side_effect=error

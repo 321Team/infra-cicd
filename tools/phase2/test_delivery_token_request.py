@@ -381,5 +381,28 @@ class TokenRequestTests(unittest.TestCase):
         self.assertEqual(core.encoded(self.response()),s.take_receipt().raw)
         self.assertIsNone(s.take_receipt())
 
+    def test_original_forward_failure_retains_actual_private_receipt_without_retry(self):
+        s=self.supplier();b=self.bridge(s);seen=[]
+        def forward(request,*,provide_credentials):
+            supplied=provide_credentials(request,20);seen.append(len(supplied))
+            self.assertEqual(core.encoded(self.response()),supplied[2])
+            raise ValueError('SYNTHETIC_PRIVATE_ORIGINAL')
+        with patch.object(b,'send_from_supplier',side_effect=forward), \
+             patch.object(s._issuer,'_exchange',return_value=core.encoded(self.response())) as exchange:
+            with self.assertRaises(issuer.IssuanceError) as error:s.send_over_bridge(b,include_original=True)
+        self.assertIsNone(error.exception.__context__)
+        self.assertEqual([3],seen);exchange.assert_called_once()
+        self.assertEqual(core.encoded(self.response()),s.take_receipt().raw)
+        self.assertIsNone(s.take_receipt());self.assertIsNone(s._sources)
+
+    def test_oversized_original_wire_selection_stops_before_bridge_or_issuance(self):
+        request=self.request();request['repositories']=['synthetic/repo'+str(i) for i in range(16)]
+        sources=[{'repository':r,'token':'SYNTHETIC_SOURCE_'+str(i)+'x'*4000}
+                 for i,r in enumerate(request['repositories'])]
+        s=self.supplier(request=request,source_tokens=sources);b=self.bridge(s)
+        with patch.object(b,'send_from_supplier') as forward,patch.object(s._issuer,'issue') as issue:
+            with self.assertRaises(issuer.IssuanceError):s.send_over_bridge(b,include_original=True)
+        forward.assert_not_called();issue.assert_not_called();self.assertIsNone(s.take_receipt())
+
 
 if __name__=='__main__':unittest.main()
