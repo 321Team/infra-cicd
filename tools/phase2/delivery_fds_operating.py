@@ -8,6 +8,7 @@ import delivery_fds_job_site as assembly
 import delivery_fds_site_inputs as profile
 import delivery_fds_observed_baseline as baseline
 import delivery_fds_management_route as management
+import delivery_fds_observed_connection as connection
 import delivery_job as job
 import delivery_job_sources as sources
 from dataclasses import replace
@@ -34,6 +35,29 @@ build_configuration = profile.build_configuration
 build_token_issuer = profile.build_token_issuer
 connect_baseline = baseline.connect_selected_baseline
 build_management_bridge_configuration = management.build_configuration
+
+
+def observed_login_inputs():
+    """Dated OAuth trust plus adopted username; no input or login is performed."""
+    return connection.login_inputs() | {'username': ISSUANCE_OPERATOR}
+
+
+def build_observed_login_supplier(config, *, login_provider, repositories,
+        source_tokens, context, workspace, remote_timeout_seconds,
+        operation_deadline, cleanup_deadline, monotonic, wall):
+    """Use read-only observed transport inputs in the EXISTING supplier builder.
+
+    Current native job workspace/context, credentials and operation budgets must
+    still be supplied. No historical workspace default or helper installation.
+    Provider ownership/error handling is exactly build_login_supplier's contract.
+    The dated endpoint/SSH selection must be rechecked when the environment
+    changes; construction does not discover, log in, connect or configure SITE.
+    """
+    return build_login_supplier(config, login_provider=login_provider,
+        repositories=repositories, source_tokens=source_tokens, context=context,
+        workspace=workspace, remote_timeout_seconds=remote_timeout_seconds,
+        operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
+        monotonic=monotonic, wall=wall, **connection.supplier_inputs())
 
 
 def build_actor_channel(config, *, actor, endpoint_ip, operation_deadline,
@@ -246,13 +270,14 @@ def configuration_status():
                 'includes_resource_cleanup': False},
             'baseline_expectation': baseline.selection_status(),
             'management_route_expectation': management.selection_status(),
+            'observed_readonly_connection': connection.selection_status(),
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
-             'support': '재환·하영 기존 사실 회신 수신. 미기록 값은 현재 실행 준비에서 확인',
-             'items': ['중앙 연결: 명시 OAuth origin·CA·endpoint와 본인 메모리 password, repository 자격 연결',
+             'support': '기존 회신과 10/24 읽기 OAuth/TLS·관리SSH 원본 대조. 실제 로그인·job 배치는 별개',
+             'items': ['중앙 연결: 확인한 OAuth 입력과 본인 메모리 password, repository 자격 연결',
                        '중앙 연결: 입력·source/store 및 두 호스트 caller의 실제 배치',
-                       '실행 준비: 기존 workspace/Python의 현재 대조, 명시 SSH port/별칭·UID/netns·endpoint',
+                       '실행 준비: 실제 job의 exact checkout/helper·UID/netns와 확인 시점 이후 transport 변경 대조',
                        '실행 준비: 본인 actor 인증·API 도달·회수 adapter의 실응답 및 만료/수동 회수 인수']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
              'support': '하영·재환: 이미 제출한 담당 영역 원본 재사용',
