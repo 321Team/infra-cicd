@@ -30,6 +30,24 @@ connect_baseline = baseline.connect_selected_baseline
 build_management_bridge_configuration = management.build_configuration
 
 
+def build_actor_channel(config, *, actor, endpoint_ip, operation_deadline,
+                        cleanup_deadline, monotonic, wall):
+    """Connect adopted personal actor and SA profile to an inert memory channel.
+
+    Credentials, current numeric endpoint and both deadlines remain explicit.
+    This never creates credentials, connects a host or configures global SITE.
+    """
+    from delivery_actor_channel import ActorCredentialChannel
+    from delivery_token_request import TokenTarget
+    binding = profile._binding_checked(config)
+    _, _, namespace, name = profile.SUBJECT.split(':')
+    return ActorCredentialChannel(binding, actor=actor, expected_username=ISSUANCE_OPERATOR,
+        target=TokenTarget(namespace, name, profile.SUBJECT_UID, profile.ISSUER, profile.AUDIENCE),
+        ca_pem=profile.CA_PEM, endpoint_ip=endpoint_ip,
+        operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
+        monotonic=monotonic, wall=wall)
+
+
 def build_job_bridge_configuration(*, workspace, context, port, host_key_alias,
                                    remote_python, remote_timeout_seconds):
     """Select the existing native job's exact-checkout helper, without I/O.
@@ -115,6 +133,9 @@ def configuration_status():
                 'rendered_sha256': profile.RENDERED_SHA256},
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
+            'actor_channel': {'adapter': 'NAMED_OAUTH_TOKENREQUEST_SSH',
+                'constructed_for_runtime': False, 'identity_verified': False,
+                'server_revocation_verified': False, 'runtime_authorized': False},
             'issuer_location_expectation': {'hostname': ISSUER_HOST,
                 'account': ISSUER_ACCOUNT, 'mode': 'DIRECT_ISSUE_AND_MANAGEMENT_SSH',
                 'current_location_verified': False, 'api_reachability_verified': False},
@@ -131,7 +152,7 @@ def configuration_status():
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
              'support': '재환: 기존 Runner/SSH 배치 사실, 하영: 발급측 연결 사실',
-             'items': ['채택한 issuer 위치의 현재 본인 actor 인증·API 도달·서버 회수 경로',
+             'items': ['채택한 issuer 위치의 현재 본인 actor 인증·API 도달·회수 adapter의 실응답',
                        '실제 job workspace·SSH port/host-key 별칭·remote Python·현재 UID/netns',
                        '인증된 READY 전달·양 호스트 deadline 연결',
                        'input/source/persistent store 위치·현재 endpoint']},
