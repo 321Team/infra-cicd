@@ -8,13 +8,19 @@ import delivery_fds_job_site as assembly
 import delivery_fds_site_inputs as profile
 import delivery_fds_observed_baseline as baseline
 import delivery_fds_management_route as management
+import delivery_job as job
+import delivery_job_sources as sources
+from delivery_finish_observation import FOLLOWUPS
 
 
 EXPECTED_RUNNER = management.EXPECTED_RUNNER
 # Assignment only. Never treat this name or historical can-i as authentication
 # of a BearerCredential. The existing issuer API still needs the actual actor.
-ISSUANCE_OPERATOR = 'hayeoung'
-ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6339313808'
+ISSUANCE_OPERATOR = 'gwonuk'
+ISSUANCE_ASSIGNMENT = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6379184704'
+ISSUER_HOST = management.SOURCE_HOST
+ISSUER_ACCOUNT = management.SOURCE_ACCOUNT
+HELPER_ENTRYPOINT = 'tools/phase2/delivery_ssh_bridge_helper.py'
 
 # Reuse the fixed, reviewed source/target profile directly; no copied hash table,
 # alternate input parser or implicit current-object -> previous-image fallback.
@@ -22,6 +28,54 @@ build_configuration = profile.build_configuration
 build_token_issuer = profile.build_token_issuer
 connect_baseline = baseline.connect_selected_baseline
 build_management_bridge_configuration = management.build_configuration
+
+
+def build_job_bridge_configuration(*, workspace, context, port, host_key_alias,
+                                   remote_python, remote_timeout_seconds):
+    """Select the existing native job's exact-checkout helper, without I/O.
+
+    workspace is an explicit actual GITHUB_WORKSPACE supplied by trusted site
+    code, NOT a guessed root or an environment read here. Native context and
+    lexical path validation do not prove revision, installation, ownership,
+    current trust or an authenticated READY. Those existing checks remain.
+    No path normalization, discovery, helper override or layout fallback.
+    """
+    try:
+        if (type(context) is not job.JobContext or type(workspace) is not str
+                or not workspace.startswith('/')):
+            raise ValueError()
+        context.check()
+        helper = (workspace + '/p2-job-' + context.run_id + '-' + str(context.attempt)
+                  + '/' + HELPER_ENTRYPOINT)
+        return management.build_configuration(port=port, host_key_alias=host_key_alias,
+            remote_python=remote_python, remote_helper=helper,
+            remote_timeout_seconds=remote_timeout_seconds)
+    except Exception:
+        raise assembly.SiteAssemblyError('P2_FDS_JOB_HELPER_CONFIGURATION_INVALID') from None
+
+
+def assemble_observed_job(*, config, finish_slot, expected_peer, routes, role_routes,
+        finish_scope, wall, deadline, monotonic, publish_ready, plan=None,
+        materialize_plan=None, producer_repository=None, producer_pins=None):
+    """Adopt the same-account helper and post-close observation finish policy.
+
+    Actual scope/control and five repository roles stay explicit, not copied
+    from deploy approval or created from status. No alternate finish capture or
+    caller wiring can replace the selected two followups. Construction invokes
+    no callback. Existing assembly retains plan validation/ownership and native
+    identity, receipt, original/control, sender-close, claim/fence checks.
+    """
+    try:
+        wire = sources.SourceRoleWiring(binding=config.binding, routes=role_routes,
+            finish=sources.ObservationRoute(finish_scope, FOLLOWUPS),
+            producer_repository=producer_repository, wall=wall, monotonic=monotonic)
+    except Exception:
+        raise assembly.SiteAssemblyError('P2_FDS_SITE_CONFIGURATION_INVALID') from None
+    return assembly.assemble_existing_job_site(runner=EXPECTED_RUNNER,
+        config=config, finish_slot=finish_slot, expected_peer=expected_peer,
+        routes=routes, wire=wire, expected_helper_uid=management.EXPECTED_HELPER_UID,
+        deadline=deadline, monotonic=monotonic, publish_ready=publish_ready,
+        plan=plan, materialize_plan=materialize_plan, producer_pins=producer_pins)
 
 
 def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
@@ -61,14 +115,24 @@ def configuration_status():
                 'rendered_sha256': profile.RENDERED_SHA256},
             'issuance_assignment': {'operator': ISSUANCE_OPERATOR,
                 'reference': ISSUANCE_ASSIGNMENT, 'credential_authenticated': False},
+            'issuer_location_expectation': {'hostname': ISSUER_HOST,
+                'account': ISSUER_ACCOUNT, 'mode': 'DIRECT_ISSUE_AND_MANAGEMENT_SSH',
+                'current_location_verified': False, 'api_reachability_verified': False},
+            'helper_layout': {'mode': 'NATIVE_JOB_EXACT_CHECKOUT',
+                'checkout': 'p2-job-{run_id}-{attempt}', 'entrypoint': HELPER_ENTRYPOINT,
+                'workspace_selected': False, 'deployment_verified': False,
+                'helper_uid_expectation': management.EXPECTED_HELPER_UID},
+            'finish_policy': {'mode': 'POST_CLOSE_OBSERVATION', 'followups': list(FOLLOWUPS),
+                'scope_control_connected': False, 'observation_produced': False,
+                'includes_resource_cleanup': False},
             'baseline_expectation': baseline.selection_status(),
             'management_route_expectation': management.selection_status(),
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
              'support': '재환: 기존 Runner/SSH 배치 사실, 하영: 발급측 연결 사실',
-             'items': ['issuer 실행 위치·기존 관리 SSH와의 결합',
-                       'SSH port/host-key 별칭·remote Python/helper 경로·현재 UID/netns',
+             'items': ['채택한 issuer 위치의 현재 본인 actor 인증·API 도달·서버 회수 경로',
+                       '실제 job workspace·SSH port/host-key 별칭·remote Python·현재 UID/netns',
                        '인증된 READY 전달·양 호스트 deadline 연결',
                        'input/source/persistent store 위치·현재 endpoint']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',
@@ -76,7 +140,8 @@ def configuration_status():
              'items': ['원본 5역할과 control pin·보관 인증·materializer 결속',
                        '사전 플랫폼 receipt와 사후 발급 receipt 구분',
                        '선택한 baseline의 실제 grant/control 및 fresh drift 검증',
-                       'replicas0/3 SSA 충돌 처리와 실행·finish 범위 채택']},
+                       '채택한 replicas0/3 인계의 실제 완료와 새 full baseline',
+                       '선택한 post-close 관측 범위의 실제 scope/control 연결·별도 Runtime GO']},
         ],
         'produced_during_run': ['native job run/attempt', 'READY nonce',
             '실제 발급 응답·fingerprint·iat/exp', '실제 finish 관측 원본'],
