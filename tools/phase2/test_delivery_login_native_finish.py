@@ -121,6 +121,9 @@ class LoginNativeFinishTests(unittest.TestCase):
         self.addCleanup(supplier.close)
         def launch(args,**kwargs):
             self.assertEqual(cfg.ssh_binary,args[0])
+            for secret in (oauth.PASSWORD,actor_fixture.TOKEN,t.token(),
+                           'SYNTHETIC_PRIVATE_SOURCE_TOKEN_0123456789'):
+                self.assertNotIn(secret,repr(args)+repr(kwargs.get('env')))
             public=args[-3].endswith('delivery_ready_pull_helper.py')
             helper=HELPER if public else HELPER.with_name('delivery_ssh_bridge_helper.py')
             if public and mode=='bad_ready_exit':
@@ -167,11 +170,14 @@ class LoginNativeFinishTests(unittest.TestCase):
         result=json.loads(stdout.getvalue())
         for value in (oauth.PASSWORD,actor_fixture.TOKEN,t.token()):self.assertNotIn(value,stdout.getvalue())
         self.assertTrue(owner._closed);self.assertIsNone(declaration.SITE)
+        self.assertTrue(all(t._closed for t in f.f.f.transports))
         if mode=='bad_ready_exit':
             self.assertEqual(2,rc,result);self.assertEqual(['SupplyError'],errors)
+            self.assertEqual(1,len(processes));self.assertEqual(1,processes[0].returncode)
             self.assertEqual([],sent);self.assertEqual([],captured)
             self.assertIsNone(supplier.take_receipt())
             self.assertEqual('NOT_ATTEMPTED',supplier.status()['login'])
+            self.assertFalse(supplier.status()['public_ready_received'])
             self.assertEqual([],base.p.c.storage.claims)
         else:
             self.assertEqual([],errors,result)
@@ -179,6 +185,7 @@ class LoginNativeFinishTests(unittest.TestCase):
             self.assertEqual([b'GET',b'GET',b'GET',b'POST',b'DELETE'],[bytes(s.sent).split(b' ',1)[0] for s in sent])
             self.assertTrue(all(s.closed for s in sent))
             self.assertEqual(2,len(processes));self.assertTrue(all(p.returncode==0 for p in processes))
+            self.assertTrue(supplier.status()['public_ready_received'])
             self.assertIs(captured[0],supplier.take_receipt());self.assertIsNone(supplier.take_receipt())
             self.assertEqual('ACKNOWLEDGED',supplier.status()['actor_server_revocation'])
             if mode=='success':
