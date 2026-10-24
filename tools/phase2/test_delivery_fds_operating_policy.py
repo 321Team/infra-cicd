@@ -147,6 +147,18 @@ class OperatingPolicyTests(unittest.TestCase):
         construct.assert_not_called()
         self.mono.assert_not_called(); self.wall.assert_not_called(); self.issue.assert_not_called()
 
+    def test_memory_baseline_does_not_silently_ignore_root_without_a_deferred_grant(self):
+        with self.assertRaises(policy.OperatingPolicyError):
+            self.build(baseline_root='SYNTHETIC_ROOT_WITHOUT_GRANT')
+        self.mono.assert_not_called(); self.wall.assert_not_called(); self.issue.assert_not_called()
+
+    def test_explicit_native_selectors_use_same_profile_and_reference_policy_without_io(self):
+        selection = tuple(actions.StageSelector(p.stage, p.producer_reference, p.run,
+                                                p.job_name, p.steps) for p in self.pins)
+        self.assertIs(self.selection, self.checked(producer_pins=selection))
+        self.build(producer_pins=selection)
+        self.mono.assert_not_called(); self.wall.assert_not_called(); self.issue.assert_not_called()
+
     def test_malformed_native_stage_and_foreign_producer_repository_are_separate_failures(self):
         malformed = (replace(self.pins[0], steps=()),) + self.pins[1:]
         with self.assertRaises(policy.OperatingPolicyError): self.checked(producer_pins=malformed)
