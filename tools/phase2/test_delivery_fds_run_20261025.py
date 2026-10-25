@@ -61,6 +61,7 @@ class ActiveRunTests(unittest.TestCase):
     def test_actual_context_derives_only_native_input_path_without_new_runtime_values(self):
         value=self.inputs()
         b=value['config'].binding
+        self.assertTrue(value['config'].local_time_checks)
         self.assertEqual(active.RUN_ID,b.run_id)
         self.assertEqual('deploy',b.action)
         self.assertTrue(str(value['config'].input_root).endswith('/'+CONTEXT.run_id+'-1'))
@@ -90,6 +91,21 @@ class ActiveRunTests(unittest.TestCase):
         self.assertNotIn('receipt',value)
         self.assertNotIn('credential',value)
         self.assertNotEqual(active.PLATFORM_PIN.sha256,baseline.SNAPSHOT_SHA256)
+
+    def test_final_native_input_builder_preserves_explicit_mode_and_legacy_default(self):
+        value=self.inputs()
+        args={k:value[k] for k in ('selection','finish_scope','baseline_grant',
+            'baseline_root','expected_peer','routes','deadline','monotonic','wall')}
+        args.update(input_files=baseline.INPUT_FILES,budget_seconds=600,finalize=True)
+        default=operating.build_observed_run_inputs(CONTEXT,'deploy',**args)
+        selected=operating.build_observed_run_inputs(CONTEXT,'deploy',**args,local_time_checks=True)
+        self.assertFalse(default['config'].local_time_checks)
+        self.assertTrue(selected['config'].local_time_checks)
+        self.assertEqual(default['config'].binding,selected['config'].binding)
+        self.assertEqual(value['config'],selected['config'])
+        for bad in (1,'true',None):
+            with self.subTest(bad=bad),self.assertRaises(policy.OperatingPolicyError):
+                operating.build_observed_run_inputs(CONTEXT,'deploy',**args,local_time_checks=bad)
 
     def test_wrong_action_attempt_and_first_start_day_are_rejected_before_io(self):
         cases=[(CONTEXT,'restore'),(CONTEXT,'preflight'),(CONTEXT,'status'),

@@ -307,7 +307,7 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
 
 def build_observed_run_inputs(context, command, *, selection, finish_scope,
         baseline_grant, baseline_root, input_files, expected_peer, routes,
-        budget_seconds, finalize, deadline, monotonic, wall):
+        budget_seconds, finalize, deadline, monotonic, wall, local_time_checks=False):
     """Join explicit actual grants to prepared paths and existing native wiring.
 
     This inert CODE helper returns existing assembly kwargs, never a new policy,
@@ -325,7 +325,7 @@ def build_observed_run_inputs(context, command, *, selection, finish_scope,
     from delivery_token_materializer import NativePlanSelection
     result = error = None
     try:
-        policy.need(type(context) is job.JobContext)
+        policy.need(type(context) is job.JobContext and type(local_time_checks) is bool)
         context.check()
         policy.need(type(command) is str and command in ('preflight', 'deploy')
             and type(selection) is NativePlanSelection
@@ -338,6 +338,7 @@ def build_observed_run_inputs(context, command, *, selection, finish_scope,
             supply_receipt_sha256=b.supply_receipt_sha256,
             input_root=run_input_root(context), budget_seconds=budget_seconds,
             finalize=finalize, **configuration_paths())
+        config = replace(config, local_time_checks=local_time_checks)
         # Reuse the already adopted supply/native pins; never infer previous
         # from desired images or replace mismatching caller facts silently.
         producer, pins = connect_reviewed_producer(config,
