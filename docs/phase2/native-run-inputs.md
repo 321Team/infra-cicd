@@ -54,6 +54,42 @@ native metadata도 실행 GO가 아니다. `SITE=None`·기본 dispatch 차단�
 같은 UID의 다른 프로세스를 격리하는 구현은 아니다. 기존 job 비중첩 조건을 유지한다.
 POSIX 권한/FD 시험은 hosted Linux에서, Windows에서는 무I/O 조립·거부 경계만 확인한다.
 
-최종 입력 파일 회수는 권욱 담당이다. 마지막 소비·앱/claim/fence·메모리 세션 상태와 필요한 증적 보존/반출을
+최종 입력 파일 회수는 권욱 담당이다. 성공한 RUN과 실패 후 남은 `inputs/{run_id}-{attempt}` 부분 디렉터리를
+모두 #55의 권욱 P2 자기 파일 회수에 포함한다. 마지막 소비·앱/claim/fence·메모리 세션 상태와 필요한 증적 보존/반출을
 확인한 뒤 P2 자기 파일만 회수한다. 소비 종료 계획10/26 08:30·정리/복구/반출/보고12:00은 유지한다.
 ROSA/RoleBinding 회수와 나중 Runner 등록 해제→VM 폐기는 별개다.
+
+## 실제 RUN grant·baseline·인증·finish 연결
+
+`build_observed_run_inputs(context, command, ...)`는 기존 selector에서 사용할 무I/O 조립 함수다.
+검토된 site 코드가 명시한 `NativePlanSelection`, 별도 baseline grant/root와 `RunInputFiles`,
+별도 finish scope, 실제 source 채널·peer·clock/deadline·budget/finalize를 받는다.
+원문·환경변수·파일 본문에서 정책을 읽거나 새 grant를 만들지 않는다. 기본 `SITE=None`은 유지한다.
+
+1. 실제 driver context를 확인하고, 기존 prepared source/state·파일명과 native RUN 입력 경로를 연결한다.
+   **논리 Binding.run_id는 실제 grant에 명시한 값을 보존**한다. Actions의 숫자 RUN ID와 같다고 추정하거나
+   이를 덮어쓰지 않는다. Actions RUN/attempt는 입력 경로와 기존 native context 결속에 사용한다.
+2. 기존 `connect_reviewed_producer`로 이미 채택한 공급/native4를 연결한다. 명시한 previous가 필요하며
+   caller의 producer facts가 다르면 정정·대체하지 않고 거부한다. source/공급 원문 의미 검증은 그대로 남는다.
+3. 기존 private metadata/policy 검사를 통해 같은 Binding·control·기간·SA/target·baseline 파일 선택을 확인한다.
+   이 함수는 **인계 후 새 private baseline 파일 경로**만 사용하며 old raw/기존 full plan으로 자동 전환하지 않는다.
+4. 명시 grant 5개(approval/platform/producer/finish/baseline)의 original/control 저장소를 기존 role routing으로
+   연결하고, 비어 있는 `FinishAdoptionSlot`을 만든 뒤 기존 native assembly 인자만 반환한다.
+   grant는 검토된 site 코드의 선택이고 routing은 원문 승인 파서나 독립적인 권위 근거가 아니다.
+   기존 `SourceRoleWiring`의 실제 채널·repository 검사와 원문/control의 사전·사후 인증을 생략하지 않는다.
+5. selector가 반환한 인자는 `declare_observed_native_job`의 기존 조립→파일 배치→READY 순서로 진행한다.
+   발급측 `build_observed_login_supplier`에도 **같은 반환 config와 context**, routes에서 선택한 동일 repository
+   순서 및 실제 source 자격을 전달한다. 본인 메모리 로그인·현재 실효 권한·인증된 READY는 실제 실행 때 확인한다.
+   자격을 파일·환경변수로 쓰거나 과거 workspace·하영 token으로 대체하지 않는다.
+6. finish scope는 deploy grant에서 복사하지 않는다. sender close 뒤 기존 객체/rollout 관측이 실제 원본을
+   생산·검증해 slot을 설치한다. 미래 finish hash를 제출하거나 지금 성공 기록을 만들지 않는다.
+
+| 현재 상태 | 남은 행동·담당 |
+|---|---|
+| 준비된 실제 값 | 기존 Runner/관리 SSH·API/OAuth 입력, source/template/private interpreter, 공급/native4 선택을 재사용 |
+| 권욱의 실제 입력 필요 | RUN/action별 grant의 원문 의미·기간/control, replicas 인계 뒤 새 full baseline metadata·원본·staging, 별도 finish scope를 기존 조립에 명시 |
+| 실제 실행 때 생성·검증 | native context·nonce·본인 인증·TokenRequest 응답·인증된 READY·fresh drift·finish 원본. 미리 합성하거나 담당자 사전 제출 대상으로 만들지 않음 |
+
+상시 실행 시간대는 무기한 grant가 아니다. 실제 grant 기간·예산은 기존 policy/실행 경로가 검사하며
+wall-clock 만료를 monotonic deadline과 직접 비교하거나 240분을 새 기본 예산으로 넣지 않는다.
+이 연결의 오프라인 시험·코드 리뷰·병합을 실제 파일 배치·발급·배포 또는 Runtime 인수로 확대하지 않는다.

@@ -293,6 +293,76 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
         producer_repository=producer_repository, producer_pins=producer_pins)
 
 
+def build_observed_run_inputs(context, command, *, selection, finish_scope,
+        baseline_grant, baseline_root, input_files, expected_peer, routes,
+        budget_seconds, finalize, deadline, monotonic, wall):
+    """Join explicit actual grants to prepared paths and existing native wiring.
+
+    This inert CODE helper returns existing assembly kwargs, never a new policy,
+    grant or executable SITE. Logical Binding.run_id remains the explicit grant's
+    value; only the input path uses the actual native context's run/attempt.
+    The same returned config/context can feed the existing issuer-side supplier.
+    Actual scope meanings/periods, baseline metadata/file, source channels and
+    authenticated personal login remain caller-owned; nothing is discovered.
+    """
+    from delivery_adopted_authority import AdoptedGrant
+    from delivery_fds_prepared_environment import configuration_paths
+    from delivery_fds_private_baseline import private_metadata_checked
+    from delivery_fds_producer_inputs import PRODUCER_REPOSITORY
+    from delivery_fds_run_inputs import files_checked, run_input_root
+    from delivery_runtime_site import EvidenceAdoption, FinishAdoptionSlot
+    from delivery_token_materializer import NativePlanSelection
+    result = error = None
+    try:
+        policy.need(type(context) is job.JobContext)
+        context.check()
+        policy.need(type(command) is str and command in ('preflight', 'deploy')
+            and type(selection) is NativePlanSelection
+            and type(selection.approval) is AdoptedGrant
+            and type(selection.producer) is EvidenceAdoption)
+        files_checked(input_files)
+        b = selection.approval.binding
+        config = build_configuration(run_id=b.run_id,
+            platform_receipt_sha256=b.platform_receipt_sha256,
+            supply_receipt_sha256=b.supply_receipt_sha256,
+            input_root=run_input_root(context), budget_seconds=budget_seconds,
+            finalize=finalize, **configuration_paths())
+        # Reuse the already adopted supply/native pins; never infer previous
+        # from desired images or replace mismatching caller facts silently.
+        producer, pins = connect_reviewed_producer(config,
+            grant=selection.producer.grant,
+            previous_images=selection.producer.facts.previous_images)
+        policy.need(selection.producer == producer and selection.baseline is None)
+        private_metadata_checked(config.binding, baseline_grant, baseline_root,
+                                 input_files.baseline_file)
+        policy.selection_checked(config, context, selection, finish_scope,
+            PRODUCER_REPOSITORY, pins, baseline_grant=baseline_grant)
+        # Grant objects are explicit trusted CODE selections, not source bodies.
+        # SourceRoleWiring still checks these roles against actual channels and
+        # authenticates original/control later; deriving a route is not adoption.
+        grants = (selection.approval, selection.issuer_grant, selection.producer.grant,
+                  finish_scope, baseline_grant)
+        role_routes = tuple(sources.RoleRoute(role, grant.original_pin.repository,
+            grant.control_pin.repository) for role, grant in zip(
+                sources.ROLES + ('baseline',), grants, strict=True))
+        result = dict(config=config, selection=selection,
+            finish_slot=FinishAdoptionSlot(config.binding), expected_peer=expected_peer,
+            routes=routes, role_routes=role_routes, finish_scope=finish_scope,
+            wall=wall, deadline=deadline, monotonic=monotonic,
+            producer_repository=PRODUCER_REPOSITORY, producer_pins=pins,
+            baseline_grant=baseline_grant, baseline_root=baseline_root,
+            baseline_file=input_files.baseline_file)
+    except BaseException as exc:
+        if isinstance(exc, KeyboardInterrupt): error = KeyboardInterrupt()
+        elif isinstance(exc, SystemExit): error = SystemExit(130)
+        else: error = policy.OperatingPolicyError('FDS_RUN_INPUT_SELECTION_INVALID')
+    if error is not None:
+        result = selection = finish_scope = baseline_grant = input_files = None
+        b = config = producer = pins = grants = role_routes = routes = expected_peer = None
+        raise error from None
+    return result
+
+
 def declare_observed_native_job(*, select_inputs, input_files=None):
     """Inert JobSite whose existing assembly receives the ACTUAL native context.
 
