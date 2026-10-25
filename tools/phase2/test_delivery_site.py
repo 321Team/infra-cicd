@@ -149,6 +149,14 @@ class PosixSiteTests(SiteFixture, unittest.TestCase):
         factory.assert_not_called()
         self.assertEqual([],list((self.root/'store').iterdir()))
 
+    def test_explicit_local_time_mode_survives_private_input_application_build(self):
+        self.config=replace(self.config,local_time_checks=True)
+        app=self.build()
+        self.assertIs(app.inputs.local_time_checks,True)
+        self.assertEqual([],list((self.root/'store').iterdir()))
+        for n in site.ADAPTERS:
+            getattr(self.adapters,n).assert_not_called()
+
     def test_main_prepares_before_dispatch_and_does_not_run_a_real_app(self):
         with patch.object(site.cli, 'main', return_value=2) as dispatch:
             self.assertEqual(2, site.main(['preflight'], config=self.config,

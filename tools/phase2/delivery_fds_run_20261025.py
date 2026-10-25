@@ -111,7 +111,8 @@ def selected_inputs(context, command, *, monotonic=time.monotonic, wall=time.tim
         baseline_grant=grant(baseline.METADATA_PIN,policy.ACTOR),
         baseline_root=baseline.SNAPSHOT_ROOT,input_files=baseline.INPUT_FILES,
         expected_peer=EXPECTED_PEER,routes=routes,budget_seconds=OPERATION_SECONDS,
-        finalize=True,deadline=deadline,monotonic=monotonic,wall=wall)
+        finalize=True,deadline=deadline,monotonic=monotonic,wall=wall,
+        local_time_checks=True)
 
 
 def declare_site():
