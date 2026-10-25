@@ -293,7 +293,7 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
         producer_repository=producer_repository, producer_pins=producer_pins)
 
 
-def declare_observed_native_job(*, select_inputs):
+def declare_observed_native_job(*, select_inputs, input_files=None):
     """Inert JobSite whose existing assembly receives the ACTUAL native context.
 
     select_inputs(context, command) is explicitly reviewed Python site code. It
@@ -304,17 +304,24 @@ def declare_observed_native_job(*, select_inputs):
     never invented before dispatch. Gate/status invoke neither selector nor
     assembler. A declaration is routing, not authorization or host readiness.
     The existing assembly/parent retains policy, context, channel and cleanup
-    checks. No global SITE assignment, network, login, issuance or path creation.
+    checks. Optional explicit input_files prepares a new actual-RUN directory
+    only inside build, after assembly and before READY. Declaration/gate/status
+    still create no paths. No global SITE, network, login or issuance here.
     """
     policy.need(callable(select_inputs))
+    from delivery_fds_run_inputs import files_checked, prepare_run_inputs
+    if input_files is not None:
+        files_checked(input_files)
     lock = threading.Lock()
     selected = select_inputs
+    selected_files = input_files
 
     def build(context, command):
-        nonlocal selected
+        nonlocal selected, selected_files
         with lock:
             policy.need(selected is not None)
             select, selected = selected, None  # Consume even rejected attempts.
+            files, selected_files = selected_files, None
         error, interrupted, result, cleanup_failed = False, None, None, False
         inputs = inner = None
         try:
@@ -326,6 +333,9 @@ def declare_observed_native_job(*, select_inputs):
             # Explicit context cannot be replaced by selector kwargs. Unknown
             # inputs, missing actual grants and all existing policy failures stop.
             inner = assemble_observed_native_job(context=context, **inputs)
+            if files is not None:
+                policy.need(inputs.get('baseline_file') == files.baseline_file)
+                prepare_run_inputs(inputs['config'], context, files=files)
             result = inner.build(context, command)
         except BaseException as exc:
             interrupted = (KeyboardInterrupt if isinstance(exc, KeyboardInterrupt)
@@ -346,7 +356,7 @@ def declare_observed_native_job(*, select_inputs):
                         cleanup_failed = True
                         if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
                             interrupted = KeyboardInterrupt if isinstance(exc, KeyboardInterrupt) else SystemExit
-            select = inputs = inner = close = closes = None
+            select = files = inputs = inner = close = closes = None
             if error:
                 result = None
         # Outside except: never retain callback exceptions or source/secret text.

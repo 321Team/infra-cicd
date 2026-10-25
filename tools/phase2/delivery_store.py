@@ -68,7 +68,7 @@ def root_open(root):
         need(inode(directory(fd)) == inode(path.lstat()), 'ROOT_CHANGED')
         os.fsync(fd)  # Unsupported durability semantics fail BEFORE any claim.
         return path, fd
-    except Exception:
+    except BaseException:
         os.close(fd)
         raise
 
