@@ -233,7 +233,8 @@ def assemble_job(*, config, finish_slot, expected_peer, routes, wire,
 
 def assemble_observed_native_job(*, config, context, selection, finish_slot,
         expected_peer, routes, role_routes, finish_scope, wall, deadline, monotonic,
-        producer_repository, producer_pins, baseline_grant=None, baseline_root=None):
+        producer_repository, producer_pins, baseline_grant=None, baseline_root=None,
+        baseline_file=None):
     """Actual reviewed grants -> existing native reader/materializer + JobSite.
 
     Creates no grant, timestamp, receipt, credential, listener or baseline.
@@ -245,12 +246,17 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
     from delivery_source_session import native_original_reader
     from delivery_fds_baseline_archive import (baseline_metadata_checked,
                                                connect_authenticated_baseline)
+    from delivery_fds_private_baseline import (private_metadata_checked,
+                                               connect_authenticated_private_baseline)
     policy.need(type(selection) is NativePlanSelection)
     if baseline_grant is None:
-        policy.need(baseline_root is None)
+        policy.need(baseline_root is None and baseline_file is None)
     else:
         policy.need(selection.baseline is None)
-        baseline_metadata_checked(config.binding, baseline_grant, baseline_root)
+        if baseline_file is None:
+            baseline_metadata_checked(config.binding, baseline_grant, baseline_root)
+        else:
+            private_metadata_checked(config.binding, baseline_grant, baseline_root, baseline_file)
     policy.selection_checked(config, context, selection, finish_scope,
                              producer_repository, producer_pins, baseline_grant=baseline_grant)
 
@@ -266,9 +272,12 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
                 readers = roles.get('readers')
                 policy.need(type(readers) is tuple and len(readers) == 5
                             and source._state == 'CONSUMED' and source.now() < shared_deadline)
-                plan = connect_authenticated_baseline(config, plan, grant=baseline_grant,
+                connect = (connect_authenticated_baseline if baseline_file is None
+                           else connect_authenticated_private_baseline)
+                file_args = {} if baseline_file is None else {'selected': baseline_file}
+                plan = connect(config, plan, grant=baseline_grant,
                     root_name=baseline_root, readers=readers[4], credential=credential,
-                    deadline=shared_deadline, wall=wall, monotonic=source.now)
+                    deadline=shared_deadline, wall=wall, monotonic=source.now, **file_args)
                 policy.need(source._state == 'CONSUMED' and source.now() < shared_deadline)
             return plan
         finally:
