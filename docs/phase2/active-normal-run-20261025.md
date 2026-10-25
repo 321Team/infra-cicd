@@ -40,10 +40,12 @@ SA 그룹3개는 Kubernetes ServiceAccount에 대한 **기대 설정**이다. �
    python3 -I -B -c 'import sys; sys.path.insert(0,"tools/phase2"); from delivery_fds_run_20261025 import issuer_main; raise SystemExit(issuer_main())' --run-id ACTUAL_RUN_ID --workflow-sha EXACT_WORKFLOW_SHA
    ```
 
-   실행 디렉터리는 그 검토 코드의 root다. 본인 ROSA `gwonuk` 전용 비밀번호를 터미널의
-   숨김 입력에 직접 입력한다. 채팅·명령줄·환경변수·일반 파일에 쓰지 않는다.
-   기존 `/usr/bin/gh`의 **GWONUK** 자격만 `gh auth token`의 출력을 캡처해 메모리로
-   사용한다. 토큰을 표시하는 셸 명령이나 새 키/토큰 생성·권한 확대를 요구하지 않는다.
+   실행 디렉터리는 그 검토 코드의 root다. **미리 권한을 확인한 GitHub 원본 읽기 전용
+   자격**, 그다음 본인 ROSA `gwonuk` 전용 비밀번호를 터미널의 숨김 입력에 직접 입력한다.
+   채팅·명령줄·환경변수·일반 파일에 쓰지 않는다. 입력은 같은 최초600초 deadline을
+   공유하며 non-TTY·getpass의 echo fallback·기한 초과는 로그인/발급 전에 거부한다.
+   기존 `/usr/bin/gh`는 GWONUK·실제 run metadata의 로컬 GET에만 쓴다.
+   `gh auth token`을 호출하거나 기존 광범위 OAuth 자격을 Runner에 자동 전달하지 않는다.
 4. supplier는 기존 엄격한 SSH trust/key와 실제 job checkout의 helper를 사용한다.
    **READY가 실제로 일치하기 전 OAuth 로그인·SA 발급을 하지 않는다.**
    공급 출력 `FORWARDED_NOT_JOB_ACCEPTANCE`는 전달 결과이며 앱/Job 성공이 아니다.
@@ -53,6 +55,14 @@ SA 그룹3개는 Kubernetes ServiceAccount에 대한 **기대 설정**이다. �
    이 앱0 조치나 전체 자원 회수는 공급 성공만으로 완료 처리하지 않는다.
 
 ## 시간·메모리·복구
+
+- 실행 전 확인한 기존 gh OAuth scope는 `gist, read:org, repo, workflow`였다.
+  이는3개 저장소 읽기 전용 자격이 아니므로 자동 전달을 제거했다. 별도로 준비할
+  fine-grained 자격은 baseline·infra-cicd·evidence3개 저장소에만 Metadata/Contents/
+  Issues/Actions 읽기, 계정/조직 쓰기 권한 없음, 최종 회수 전에 만료/폐기하는 안이다.
+  실제 발급 화면의 권한·조직 승인 상태를 확인한 뒤 사용한다. 문자열 검사는 서버 권한을
+  증명하지 않으며, 이 코드/PR은 해당 자격의 생성·준비 완료나 새 발급 승인이 아니다.
+  클라이언트의3개 source route·local-use cap도 서버 권한 제한이나 폐기 증명이 아니다.
 
 - 대화형 입력/인증·handoff는 같은 **최초600초 절대 deadline**을 유지한다.
   입력 후 supplier를 만들 때 갱신하지 않는다. consumer 애플리케이션 예산은600초,

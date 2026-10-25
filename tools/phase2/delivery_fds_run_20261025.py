@@ -6,12 +6,14 @@ the reviewed FDS workflow explicitly selects declare_site for this finite RUN.
 """
 import argparse
 from datetime import datetime, timezone, timedelta
+import getpass
 import json
 import os
 import socket
 import subprocess
 import sys
 import time
+import warnings
 
 import delivery_adapter as core
 import delivery_fds_observed_baseline as baseline
@@ -132,14 +134,42 @@ def build_supplier(context, *, login_provider, source_tokens, operation_deadline
 
 
 def _github(args):
-    # Explicit use of the already authenticated GWONUK CLI on ansible01.
-    # Never print child stdout/stderr. No shell, token argv/env or new key.
+    # Local metadata GETs only. The broader existing CLI credential is never
+    # extracted or forwarded as a source credential to the Runner.
+    need(args and args[0] == 'api')
     env={k:v for k,v in os.environ.items() if k not in ('GH_DEBUG','GH_FORCE_TTY','GH_PAGER')}
     env['GH_PROMPT_DISABLED']='1'
-    p=subprocess.run(['/usr/bin/gh',*args],stdin=subprocess.DEVNULL,
+    p=subprocess.run(['/usr/bin/gh','api','--method','GET',*args[1:]],stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=15,env=env)
     need(p.returncode==0 and len(p.stdout)<=1024*1024)
     return p.stdout
+
+
+def read_source_token(*, deadline, monotonic=time.monotonic):
+    """Explicit hidden input; permission scope must be reviewed at its issuer.
+
+    Shape validation cannot prove server permissions. Never fall back to gh's
+    stored OAuth token. Same original input deadline covers source and login.
+    Python reference release is not memory zeroization.
+    """
+    token = None
+    try:
+        need(sys.stdin is not None and sys.stdin.isatty())
+        before = monotonic()
+        need(core.finite(deadline) and core.finite(before) and before < deadline)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', getpass.GetPassWarning)
+            token = getpass.getpass('검토된 GitHub 원본 읽기 전용 자격: ')
+        after = monotonic()
+        need(core.finite(after) and before <= after < deadline)
+        _token(token, source=True)
+        return token
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        raise ActiveRunError('FDS_SOURCE_TERMINAL_INPUT_FAILED') from None
+    finally:
+        token = None
 
 
 def _actual_context(run_id, revision):
@@ -183,10 +213,9 @@ def issuer_main(argv=None):
         selected_inputs(context,'deploy') # Time/scope/type checks before secret input.
         login=_github(['api','--hostname','github.com','user','--jq','.login']).decode().strip()
         need(login=='GWONUK')
-        token=_github(['auth','token','--hostname','github.com']).decode('ascii').strip()
-        _token(token,source=True)
-        sources=[{'repository':r.owner+'/'+r.name,'token':token} for r in SOURCE_REPOSITORIES]
         deadline=time.monotonic()+HANDOFF_SECONDS
+        token=read_source_token(deadline=deadline,monotonic=time.monotonic)
+        sources=[{'repository':r.owner+'/'+r.name,'token':token} for r in SOURCE_REPOSITORIES]
         provider=read_login_provider(**connection.login_inputs(),username=policy.ACTOR,
             deadline=deadline,monotonic=time.monotonic)
         supplier=build_supplier(context,login_provider=provider,source_tokens=sources,

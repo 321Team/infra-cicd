@@ -11,6 +11,7 @@ from dataclasses import replace
 from pathlib import PurePosixPath
 from types import SimpleNamespace
 import unittest
+import warnings
 from unittest.mock import Mock, patch
 
 import delivery_fds_run_20261025 as active
@@ -152,10 +153,12 @@ class ActiveRunTests(unittest.TestCase):
                  self.assertRaises(active.ActiveRunError):
                 active._actual_context(CONTEXT.run_id,CONTEXT.workflow_sha)
 
-    def run_issuer(self,supplier,*,provider=None,build_error=None):
+    def run_issuer(self,supplier,*,provider=None,build_error=None,overrides=(),expect_source=True):
         provider=provider or Mock()
         source='SYNTHETIC_SOURCE_TOKEN_0123456789'
-        def gh(args):return b'GWONUK\n' if args[0]=='api' else source.encode()
+        def gh(args):
+            self.assertEqual('api',args[0])
+            return b'GWONUK\n'
         fake_pwd=SimpleNamespace(getpwuid=lambda uid:SimpleNamespace(pw_name='server01_ansible'))
         stream=io.StringIO()
         with patch.dict('sys.modules',{'pwd':fake_pwd}),patch.object(active.sys,'platform','linux'), \
@@ -164,12 +167,93 @@ class ActiveRunTests(unittest.TestCase):
              patch.object(active,'_actual_context',return_value=CONTEXT), \
              patch.object(active,'selected_inputs',return_value={}), \
              patch.object(active,'_github',side_effect=gh), \
-             patch.object(active,'read_login_provider',return_value=provider), \
-             patch.object(active,'build_supplier',return_value=supplier,side_effect=build_error), \
+             patch.object(active,'read_source_token',return_value=source) as source_input, \
+             patch.object(active,'read_login_provider',return_value=provider) as login_input, \
+             patch.object(active,'build_supplier',return_value=supplier,side_effect=build_error) as build, \
+             contextlib.ExitStack() as extra, \
              contextlib.redirect_stdout(stream):
+            for target,kw in overrides:extra.enter_context(patch(target,**kw))
             rc=active.issuer_main(['--run-id',CONTEXT.run_id,'--workflow-sha',CONTEXT.workflow_sha])
+        if not expect_source:
+            source_input.assert_not_called();login_input.assert_not_called();build.assert_not_called()
+        if build.called:
+            deadline=source_input.call_args.kwargs['deadline']
+            self.assertEqual(deadline,login_input.call_args.kwargs['deadline'])
+            self.assertEqual(deadline,build.call_args.kwargs['operation_deadline'])
         self.assertNotIn(source,stream.getvalue())
         return rc,json.loads(stream.getvalue()),provider
+
+    def test_source_credential_requires_explicit_tty_input_and_never_calls_cli_token(self):
+        source='SYNTHETIC_SOURCE_TOKEN_0123456789'
+        with patch.object(active.sys,'stdin',SimpleNamespace(isatty=lambda:True)), \
+             patch.object(active.getpass,'getpass',return_value=source) as prompt, \
+             patch.object(active,'_github') as gh:
+            got=active.read_source_token(deadline=100,monotonic=Mock(side_effect=[1,2]))
+        self.assertEqual(source,got);prompt.assert_called_once();gh.assert_not_called()
+
+    def test_source_input_rejects_nontty_expiry_and_backwards_clock_before_login(self):
+        for tty,deadline,clocks in ((False,100,[1]),(True,1,[1]),
+                                    (True,float('nan'),[1]),(True,10,[1,10]),(True,10,[2,1])):
+            with self.subTest(tty=tty,deadline=deadline,clocks=clocks), \
+                 patch.object(active.sys,'stdin',SimpleNamespace(isatty=lambda:tty)), \
+                 patch.object(active.getpass,'getpass',return_value='SYNTHETIC_SOURCE_TOKEN_0123456789'), \
+                 self.assertRaises(active.ActiveRunError):
+                active.read_source_token(deadline=deadline,monotonic=Mock(side_effect=clocks))
+
+    def test_source_echo_fallback_invalid_input_and_exception_text_are_not_exposed(self):
+        def echo(prompt):
+            warnings.warn('SYNTHETIC_SECRET',active.getpass.GetPassWarning)
+            return 'SYNTHETIC_SOURCE_TOKEN_0123456789'
+        for effect in (echo,RuntimeError('SYNTHETIC_SECRET'),lambda p:''):
+            with patch.object(active.sys,'stdin',SimpleNamespace(isatty=lambda:True)), \
+                 patch.object(active.getpass,'getpass',side_effect=effect), \
+                 self.assertRaises(active.ActiveRunError) as caught:
+                active.read_source_token(deadline=10,monotonic=lambda:1)
+            self.assertEqual('FDS_SOURCE_TERMINAL_INPUT_FAILED',str(caught.exception))
+
+    def test_source_input_cancel_is_preserved_without_cli_fallback(self):
+        with patch.object(active.sys,'stdin',SimpleNamespace(isatty=lambda:True)), \
+             patch.object(active.getpass,'getpass',side_effect=KeyboardInterrupt()), \
+             self.assertRaises(KeyboardInterrupt):
+            active.read_source_token(deadline=10,monotonic=lambda:1)
+
+    def test_cli_auth_token_command_is_refused_before_subprocess(self):
+        with self.assertRaises(active.ActiveRunError):
+            active._github(['auth','token','--hostname','github.com'])
+        self.blockers[3].assert_not_called()
+
+    def test_local_cli_metadata_uses_get_and_does_not_prompt_or_print(self):
+        with patch.object(active.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=b'GWONUK')) as run:
+            self.assertEqual(b'GWONUK',active._github(['api','--hostname','github.com','user']))
+        args,kw=run.call_args
+        self.assertEqual(['/usr/bin/gh','api','--method','GET','--hostname','github.com','user'],args[0])
+        self.assertEqual(active.subprocess.DEVNULL,kw['stdin'])
+        self.assertEqual(active.subprocess.PIPE,kw['stdout'])
+        self.assertEqual(active.subprocess.DEVNULL,kw['stderr'])
+
+    def test_issuer_host_uid_account_and_metadata_user_rejected_before_secret_input(self):
+        changes=(('delivery_fds_run_20261025.socket.gethostname',{'return_value':'other'}),
+                 ('delivery_fds_run_20261025.os.geteuid',{'return_value':0}),
+                 ('pwd.getpwuid',{'return_value':SimpleNamespace(pw_name='other')}),
+                 ('delivery_fds_run_20261025._github',{'return_value':b'other\n'}))
+        for target,kw in changes:
+            with self.subTest(target=target):
+                rc,body,_=self.run_issuer(Mock(),overrides=((target,kw),),expect_source=False)
+            self.assertEqual(2,rc);self.assertEqual('STOPPED',body['status'])
+            self.issue.assert_not_called()
+
+    def test_native_creation_age_and_authority_expiry_are_not_extended(self):
+        for when in (active.STARTS_AT+7200,active.EXPIRES_AT):
+            with patch.object(active,'_github',return_value=json.dumps(self.native_run()).encode()), \
+                 patch.object(active.time,'time',return_value=when), \
+                 self.assertRaises(active.ActiveRunError):
+                active._actual_context(CONTEXT.run_id,CONTEXT.workflow_sha)
+
+    def test_ca_change_and_insufficient_grant_time_reject_before_io(self):
+        with patch.object(active,'GITHUB_CA_SHA256','0'*64),self.assertRaises(active.ActiveRunError):
+            self.inputs()
+        with patch.object(active,'EXPIRES_AT',active.STARTS_AT+1000),self.assertRaises(active.ActiveRunError):
+            self.inputs()
 
     def test_issuer_forward_is_not_job_acceptance_and_borrowed_provider_transfers_once(self):
         supplier=Mock()
