@@ -13,6 +13,7 @@ import delivery_fds_observed_connection as connection
 import delivery_fds_operating_policy as policy
 import delivery_job as job
 import delivery_job_sources as sources
+import threading
 from dataclasses import replace
 from delivery_finish_observation import FOLLOWUPS
 
@@ -280,6 +281,75 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
         finish_scope=finish_scope, wall=wall, deadline=deadline, monotonic=monotonic,
         ready_context=context, materialize_plan=materialize,
         producer_repository=producer_repository, producer_pins=producer_pins)
+
+
+def declare_observed_native_job(*, select_inputs):
+    """Inert JobSite whose existing assembly receives the ACTUAL native context.
+
+    select_inputs(context, command) is explicitly reviewed Python site code. It
+    supplies the existing assemble_observed_native_job keyword inputs except
+    context; no JSON/env/file/grant loader or default operational values exist.
+    The selector must be inert and own any partial resources before returning.
+    Native RUN/attempt are supplied by the existing driver only when building,
+    never invented before dispatch. Gate/status invoke neither selector nor
+    assembler. A declaration is routing, not authorization or host readiness.
+    The existing assembly/parent retains policy, context, channel and cleanup
+    checks. No global SITE assignment, network, login, issuance or path creation.
+    """
+    policy.need(callable(select_inputs))
+    lock = threading.Lock()
+    selected = select_inputs
+
+    def build(context, command):
+        nonlocal selected
+        with lock:
+            policy.need(selected is not None)
+            select, selected = selected, None  # Consume even rejected attempts.
+        error, interrupted, result, cleanup_failed = False, None, None, False
+        inputs = inner = None
+        try:
+            policy.need(type(context) is job.JobContext)
+            context.check()
+            policy.need(type(command) is str and command in ('preflight', 'deploy'))
+            inputs = select(context, command)
+            policy.need(type(inputs) is dict)
+            # Explicit context cannot be replaced by selector kwargs. Unknown
+            # inputs, missing actual grants and all existing policy failures stop.
+            inner = assemble_observed_native_job(context=context, **inputs)
+            result = inner.build(context, command)
+        except BaseException as exc:
+            interrupted = (KeyboardInterrupt if isinstance(exc, KeyboardInterrupt)
+                           else SystemExit if isinstance(exc, SystemExit) else None)
+            error = True
+        finally:
+            if error and inner is not None:
+                # Also covers interruption between assembly and parent entry.
+                # These exact internal objects are owned by this assembly;
+                # borrowed selector inputs/source/credential are not closed.
+                closes = (inner.build._parent._plan.close, inner.build._owner.close)
+                if type(result) is job.RuntimeInvocation:
+                    closes = (result.close,) + closes
+                for close in closes:
+                    try:
+                        cleanup_failed = close() is not True or cleanup_failed
+                    except BaseException as exc:
+                        cleanup_failed = True
+                        if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            interrupted = KeyboardInterrupt if isinstance(exc, KeyboardInterrupt) else SystemExit
+            select = inputs = inner = close = closes = None
+            if error:
+                result = None
+        # Outside except: never retain callback exceptions or source/secret text.
+        if interrupted is KeyboardInterrupt:
+            raise KeyboardInterrupt() from None
+        if interrupted is SystemExit:
+            raise SystemExit(130) from None
+        if error:
+            raise policy.OperatingPolicyError('FDS_OPERATING_SELECTION_CLEANUP_FAILED'
+                if cleanup_failed else 'FDS_OPERATING_SELECTION_INVALID') from None
+        return result  # Existing parent has transferred the owned invocation.
+
+    return job.JobSite(EXPECTED_RUNNER, build)
 
 
 def reported_actor_grant_status():
