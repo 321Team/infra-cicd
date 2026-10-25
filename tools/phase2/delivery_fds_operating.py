@@ -57,11 +57,22 @@ def build_observed_login_supplier(config, *, login_provider, repositories,
     The dated endpoint/SSH selection must be rechecked when the environment
     changes; construction does not discover, log in, connect or configure SITE.
     """
-    return build_login_supplier(config, login_provider=login_provider,
-        repositories=repositories, source_tokens=source_tokens, context=context,
-        workspace=workspace, remote_timeout_seconds=remote_timeout_seconds,
-        operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
-        monotonic=monotonic, wall=wall, **connection.supplier_inputs())
+    from delivery_actor_channel import public_error
+    result = error = None
+    try:
+        result = build_login_supplier(config, login_provider=login_provider,
+            repositories=repositories, source_tokens=source_tokens, context=context,
+            workspace=workspace, remote_timeout_seconds=remote_timeout_seconds,
+            operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
+            monotonic=monotonic, wall=wall, require_original=True,
+            **connection.supplier_inputs())
+    except BaseException as exc:
+        error = public_error(exc, 'P2_FDS_LOGIN_SUPPLIER_INVALID')
+    # Match the existing constructor ownership: caller keeps provider on failure.
+    if error is not None:
+        result = None
+        raise error from None
+    return result
 
 
 def build_actor_channel(config, *, actor, endpoint_ip, operation_deadline,
@@ -134,7 +145,8 @@ def build_ready_pull_configuration(**inputs):
 
 def build_login_supplier(config, *, login_provider, endpoint_ip, repositories,
         source_tokens, context, workspace, port, host_key_alias, remote_python,
-        remote_timeout_seconds, operation_deadline, cleanup_deadline, monotonic, wall):
+        remote_timeout_seconds, operation_deadline, cleanup_deadline, monotonic, wall,
+        require_original=False):
     """Assemble the selected issuer side without starting it or configuring SITE.
 
     Use the SAME explicit native context, Binding and ordered RepositoryPins as
@@ -174,7 +186,8 @@ def build_login_supplier(config, *, login_provider, endpoint_ip, repositories,
             endpoint_ip=endpoint_ip, operation_deadline=operation_deadline,
             cleanup_deadline=cleanup_deadline, monotonic=monotonic, wall=wall)
         return MemoryOperatingSupplier(ready_pull=pull, bridge=bridge,
-            actor_channel=channel, source_tokens=source_tokens)
+            actor_channel=channel, source_tokens=source_tokens,
+            require_original=require_original)
     except BaseException as exc:
         error = public_error(exc, 'P2_FDS_LOGIN_SUPPLIER_INVALID')
     # No close: all constructors are inert and provider is still caller-owned.
@@ -291,6 +304,76 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
         finish_scope=finish_scope, wall=wall, deadline=deadline, monotonic=monotonic,
         ready_context=context, materialize_plan=materialize,
         producer_repository=producer_repository, producer_pins=producer_pins)
+
+
+def build_observed_run_inputs(context, command, *, selection, finish_scope,
+        baseline_grant, baseline_root, input_files, expected_peer, routes,
+        budget_seconds, finalize, deadline, monotonic, wall):
+    """Join explicit actual grants to prepared paths and existing native wiring.
+
+    This inert CODE helper returns existing assembly kwargs, never a new policy,
+    grant or executable SITE. Logical Binding.run_id remains the explicit grant's
+    value; only the input path uses the actual native context's run/attempt.
+    The same returned config/context can feed the existing issuer-side supplier.
+    Actual scope meanings/periods, baseline metadata/file, source channels and
+    authenticated personal login remain caller-owned; nothing is discovered.
+    """
+    from delivery_adopted_authority import AdoptedGrant
+    from delivery_fds_prepared_environment import configuration_paths
+    from delivery_fds_private_baseline import private_metadata_checked
+    from delivery_fds_producer_inputs import PRODUCER_REPOSITORY
+    from delivery_fds_run_inputs import files_checked, run_input_root
+    from delivery_runtime_site import EvidenceAdoption, FinishAdoptionSlot
+    from delivery_token_materializer import NativePlanSelection
+    result = error = None
+    try:
+        policy.need(type(context) is job.JobContext)
+        context.check()
+        policy.need(type(command) is str and command in ('preflight', 'deploy')
+            and type(selection) is NativePlanSelection
+            and type(selection.approval) is AdoptedGrant
+            and type(selection.producer) is EvidenceAdoption)
+        files_checked(input_files)
+        b = selection.approval.binding
+        config = build_configuration(run_id=b.run_id,
+            platform_receipt_sha256=b.platform_receipt_sha256,
+            supply_receipt_sha256=b.supply_receipt_sha256,
+            input_root=run_input_root(context), budget_seconds=budget_seconds,
+            finalize=finalize, **configuration_paths())
+        # Reuse the already adopted supply/native pins; never infer previous
+        # from desired images or replace mismatching caller facts silently.
+        producer, pins = connect_reviewed_producer(config,
+            grant=selection.producer.grant,
+            previous_images=selection.producer.facts.previous_images)
+        policy.need(selection.producer == producer and selection.baseline is None)
+        private_metadata_checked(config.binding, baseline_grant, baseline_root,
+                                 input_files.baseline_file)
+        policy.selection_checked(config, context, selection, finish_scope,
+            PRODUCER_REPOSITORY, pins, baseline_grant=baseline_grant)
+        # Grant objects are explicit trusted CODE selections, not source bodies.
+        # SourceRoleWiring still checks these roles against actual channels and
+        # authenticates original/control later; deriving a route is not adoption.
+        grants = (selection.approval, selection.issuer_grant, selection.producer.grant,
+                  finish_scope, baseline_grant)
+        role_routes = tuple(sources.RoleRoute(role, grant.original_pin.repository,
+            grant.control_pin.repository) for role, grant in zip(
+                sources.ROLES + ('baseline',), grants, strict=True))
+        result = dict(config=config, selection=selection,
+            finish_slot=FinishAdoptionSlot(config.binding), expected_peer=expected_peer,
+            routes=routes, role_routes=role_routes, finish_scope=finish_scope,
+            wall=wall, deadline=deadline, monotonic=monotonic,
+            producer_repository=PRODUCER_REPOSITORY, producer_pins=pins,
+            baseline_grant=baseline_grant, baseline_root=baseline_root,
+            baseline_file=input_files.baseline_file)
+    except BaseException as exc:
+        if isinstance(exc, KeyboardInterrupt): error = KeyboardInterrupt()
+        elif isinstance(exc, SystemExit): error = SystemExit(130)
+        else: error = policy.OperatingPolicyError('FDS_RUN_INPUT_SELECTION_INVALID')
+    if error is not None:
+        result = selection = finish_scope = baseline_grant = input_files = None
+        b = config = producer = pins = grants = role_routes = routes = expected_peer = None
+        raise error from None
+    return result
 
 
 def declare_observed_native_job(*, select_inputs, input_files=None):

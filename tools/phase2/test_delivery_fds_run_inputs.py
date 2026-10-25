@@ -200,6 +200,14 @@ class PosixRunInputTests(unittest.TestCase):
                 self.prepare(config=config,files=files)
             opened.assert_not_called()
 
+    def test_baseline_source_equal_to_or_below_target_fails_before_source_io(self):
+        for source in (self.output, self.output/'staging'):
+            with self.subTest(source=source), \
+                 patch.object(placement.store,'root_open') as opened, \
+                 self.assertRaises(placement.RunInputError):
+                self.prepare(files=replace(self.files,baseline_source_root=str(source)))
+            opened.assert_not_called()
+
     def test_partial_write_failure_preserves_partial_files_but_closes_descriptors(self):
         real=placement.store.create_file;opened=[];root_open=placement.store.root_open;n=0
         def observe(*args):
