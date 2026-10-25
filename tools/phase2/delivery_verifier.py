@@ -14,6 +14,35 @@ from delivery_authorization import VerifiedInputs
 from producer_bridge import CHECKER_SHA256
 
 
+# Fixed public diagnostics only. Never stringify an exception or emit a body.
+SAFE_PROVIDER_DIAGNOSTICS = frozenset("""
+SOURCE_READ_FAILED SOURCE_BLOB_UNVERIFIED SOURCE_COMMENT_UNVERIFIED
+SOURCE_PRIVATE_READ_FAILED PRIVATE_GITHUB_READ_FAILED
+ADOPTED_AUTHORITY_UNAVAILABLE ADOPTED_ORIGINAL_MISMATCH
+SEMANTIC_AUTHORITY_UNAVAILABLE SEMANTIC_ISSUER_LIFETIME_INVALID
+PLATFORM_READBACK_SUBJECT_INVALID PLATFORM_READBACK_SUBJECT_MISMATCH
+PLATFORM_READBACK_ACCESS_INVALID PLATFORM_READBACK_ACCESS_DENIED
+PLATFORM_READBACK_CLUSTER_MISMATCH PLATFORM_READBACK_NAMESPACE_MISMATCH
+PLATFORM_READBACK_UNAVAILABLE PLATFORM_READBACK_DEADLINE_EXCEEDED
+PLATFORM_ISSUER_UNVERIFIED PLATFORM_ISSUER_CHANGED PLATFORM_ISSUER_LIFETIME_INVALID
+ACTIONS_RUN_NOT_SUCCESSFUL ACTIONS_RUN_PIN_MISMATCH ACTIONS_SOURCE_UNAVAILABLE
+OBJECT_DRIFT OBJECT_UID_REPLACED OBJECT_OWNERSHIP_INVALID
+OBJECT_PROVIDER_FAILED OBJECT_READ_FAILED HTTP_UNAUTHORIZED HTTP_FORBIDDEN
+CONNECT_FAILED IO_TIMEOUT TLS_CERTIFICATE_FAILED
+""".split())
+
+
+def public_provider_diagnostic(error):
+    # Providers can put secrets or hostile objects in args. Only these literals
+    # are ever returned, independent of the exception's name or __str__.
+    try:
+        args=error.args
+        value=args[0] if type(args) is tuple and len(args)==1 else None
+        return value if type(value) is str and value in SAFE_PROVIDER_DIAGNOSTICS else 'PROVIDER_UNAVAILABLE'
+    except BaseException:
+        return 'PROVIDER_UNAVAILABLE'
+
+
 class VerificationError(RuntimeError):
     """Public errors contain fixed codes only."""
 
@@ -166,6 +195,8 @@ class Verifier:
         self.providers, self.credential, self.progress = providers, credential, progress
         self.budget, self.wall, self.monotonic = budget_seconds, wall, monotonic
         self.initial = self.platform = None
+        self.diagnostic_role = None
+        self.diagnostic_code = None
         self.last_wall = self.last_mono = None
         self.anchor_wall = self.anchor_mono = None
 
@@ -198,7 +229,8 @@ class Verifier:
         require(now < request.deadline, 'PROVIDER_DEADLINE_EXCEEDED')
         try:
             result = method(request)
-        except Exception:
+        except Exception as error:
+            self.diagnostic_code = public_provider_diagnostic(error)
             raise VerificationError('PROVIDER_UNAVAILABLE') from None
         _, now = self.clock()
         require(now < request.deadline, 'PROVIDER_DEADLINE_EXCEEDED')
@@ -208,6 +240,8 @@ class Verifier:
     def __call__(self, binding):
         try:
             request = self.request(binding)
+            self.diagnostic_role = 'approval'
+            self.diagnostic_code = None
             a = self.read(self.providers.approval, ApprovalEvidence, request)
             provenance_checked(a.provenance)
             require(a.binding == binding and a.state == 'ACTIVE', 'APPROVAL_DENIED')
@@ -218,6 +252,8 @@ class Verifier:
             # Preserve progress and narrow the immutable challenge before reads.
             request = ReadRequest(binding, self.credential, request.progress,
                                   min(request.deadline, self.last_mono + a.expires_at - now))
+            self.diagnostic_role = 'platform'
+            self.diagnostic_code = None
             p = self.read(self.providers.platform, PlatformEvidence, request)
             provenance_checked(p.provenance)
             require(p.binding == binding and p.credential is self.credential,
@@ -243,6 +279,8 @@ class Verifier:
                     'CREDENTIAL_LIFETIME_INVALID')
             request = ReadRequest(binding, self.credential, request.progress,
                                   min(request.deadline, m + p.expires_at - now))
+            self.diagnostic_role = 'producer'
+            self.diagnostic_code = None
             s = self.read(self.providers.producer, ProducerEvidence, request)
             provenance_checked(s.provenance)
             require(s.binding == binding and s.source_commit == binding.source_commit
@@ -250,6 +288,8 @@ class Verifier:
                     and s.rendered_sha256 == binding.rendered_sha256
                     and s.checker_sha256 == CHECKER_SHA256, 'PRODUCER_BINDING_MISMATCH')
             self.receipt(s.raw_receipt, binding.supply_receipt_sha256)
+            self.diagnostic_role = 'objects'
+            self.diagnostic_code = None
             o = self.read(self.providers.objects, ObjectEvidence, request)
             require(o.progress_key == request.progress.key, 'OBJECT_PROGRESS_MISMATCH')
             require(self.progress() == request.progress, 'PROGRESS_CHANGED')

@@ -9,7 +9,7 @@ import time
 import delivery_adapter as core
 from delivery_authorization import BoundAuthorizer
 import delivery_store as store
-from delivery_verifier import Progress, Verifier
+from delivery_verifier import Progress, Verifier, SAFE_PROVIDER_DIAGNOSTICS
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
               'error_code': None, 'receipt': None, 'completion': 'NOT_ATTEMPTED',
               'cleanup_errors': [], 'fence': 'NOT_ACQUIRED',
               'runtime': 'NOT_VERIFIED', 'delivery_gate': 'NOT_VERIFIED'}
-    claim = journal = sender = None
+    claim = journal = sender = verifier = None
     sender_close_attempted = False
     responses = []
 
@@ -136,6 +136,13 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
     except Exception:
         # Never include provider exception text, objects, raw receipts or locals.
         result.update(status='STOPPED', error_code=stage)
+        if stage == 'PREFLIGHT_DENIED' and verifier is not None:
+            role = verifier.diagnostic_role
+            code = verifier.diagnostic_code
+            if role in ('approval', 'platform', 'producer', 'objects'):
+                result['verification_detail'] = {
+                    'role': role,
+                    'code': code if code in SAFE_PROVIDER_DIAGNOSTICS else 'VERIFICATION_DENIED'}
     finally:
         if sender is not None and not sender_close_attempted:
             try:

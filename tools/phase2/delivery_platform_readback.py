@@ -226,8 +226,10 @@ class PlatformObservationReader(wire.Sender):
                                     self._ip, self.capabilities, tuple(raws))
         except PlatformReadbackError:
             raise
-        except Exception:
-            raise PlatformReadbackError('PLATFORM_READBACK_UNAVAILABLE') from None
+        except Exception as error:
+            # Preserve only transport-owned fixed public codes, never a body,
+            # token, TLS exception text or arbitrary provider message.
+            raise PlatformReadbackError(safe_code(error, 'PLATFORM_READBACK_UNAVAILABLE')) from None
 
 
 class ReadbackCheckedPlatformAdapter:
