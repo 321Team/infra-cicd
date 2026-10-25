@@ -204,6 +204,7 @@ class RunInputs:
     store_root: object = field(repr=False)
     budget_seconds: float
     finalize: bool = False  # request only; fresh finish evidence remains mandatory
+    local_time_checks: bool = False
 
 
 class OperationalApplication:
@@ -283,7 +284,7 @@ class OperationalApplication:
                     providers=None, credential=self._credential, provider_factory=self.factory,
                     sender_factory=bind_tls_sender, budget_seconds=self.inputs.budget_seconds,
                     wall=self.wall, monotonic=self.monotonic, sleep=self.sleep,
-                    finalize=self.inputs.finalize))
+                    finalize=self.inputs.finalize, local_time_checks=self.inputs.local_time_checks))
         except Exception as error:
             # Exact reviewed codes only; never stringify provider exceptions.
             fallback = result['error_code']

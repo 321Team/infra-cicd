@@ -42,6 +42,7 @@ class SiteConfiguration:
     store_root: object = field(repr=False)
     budget_seconds: float = field(repr=False)
     finalize: bool = field(default=False, repr=False)
+    local_time_checks: bool = field(default=False, repr=False)
 
 
 def configuration_checked(config):
@@ -51,7 +52,7 @@ def configuration_checked(config):
     except Exception:
         raise SiteError('SITE_CONFIGURATION_INVALID') from None
     need(core.finite(config.budget_seconds) and config.budget_seconds > 0
-         and type(config.finalize) is bool, 'SITE_CONFIGURATION_INVALID')
+         and type(config.finalize) is bool and type(config.local_time_checks) is bool, 'SITE_CONFIGURATION_INVALID')
     for value in (config.input_root, config.source_root, config.store_root):
         need(isinstance(value, (str, Path)) and bool(str(value))
              and Path(value).is_absolute() and '..' not in Path(value).parts,
@@ -157,7 +158,7 @@ def build_application(config, *, credential, adapters=None, authority_factory=No
         finally:
             os.close(fd)
         inputs = RunInputs(config.binding, rendered, contract, config.source_root,
-                           config.store_root, config.budget_seconds, config.finalize)
+                           config.store_root, config.budget_seconds, config.finalize, config.local_time_checks)
         return OperationalApplication(inputs, credential, adapters, authority_factory=authority_factory)
     except SiteError:
         raise
