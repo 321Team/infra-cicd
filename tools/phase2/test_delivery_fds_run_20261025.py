@@ -98,9 +98,22 @@ class ActiveRunTests(unittest.TestCase):
             with self.subTest(command=command),self.assertRaises((active.ActiveRunError,job.JobError)):
                 self.inputs(context,command)
         for when in (active.STARTS_AT-1,policy.CONSUMPTION_END,float('nan'),True,
-                     active.datetime.fromisoformat('2026-10-26T00:00:00+09:00').timestamp()):
+                     active.datetime.fromisoformat('2026-10-27T00:00:00+09:00').timestamp()):
             with self.subTest(when=when),self.assertRaises(active.ActiveRunError):
                 self.inputs(wall=lambda:when)
+        self.issue.assert_not_called()
+
+    def test_current_manual_restart_is_finite_and_keeps_original_control_and_baseline(self):
+        self.assertEqual('FDS-P2-DELIVERY-20261026-A1', active.RUN_ID)
+        self.assertEqual(6399779574, active.APPROVAL_PIN.comment_id)
+        self.assertEqual('2026-10-26', active.datetime.fromtimestamp(active.STARTS_AT,active.KST).date().isoformat())
+        self.assertEqual(policy.CONSUMPTION_END,active.EXPIRES_AT)
+        self.assertEqual('6531ba8e301858c0e180c377d06908f895158a70',policy.CONTROL_PIN.commit)
+        self.assertEqual(6395884121,baseline.METADATA_PIN.comment_id)
+        # Boundary includes room for READY, token cap and cleanup; no late start.
+        with self.assertRaises(active.ActiveRunError):
+            self.inputs(wall=lambda:active.EXPIRES_AT-active.HANDOFF_SECONDS-900-active.CLEANUP_SECONDS)
+        for block in self.blockers:block.assert_not_called()
         self.issue.assert_not_called()
 
     def test_private_supplier_uses_same_binding_context_originals_and_known_helper_route(self):
