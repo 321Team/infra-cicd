@@ -15,6 +15,7 @@ import delivery_fds_baseline_archive as archive
 import delivery_fds_operating as operating
 import delivery_fds_operating_policy as policy
 import delivery_fds_private_baseline as private
+import delivery_fds_observed_baseline as observed
 import delivery_runtime_site as runtime
 from delivery_adopted_authority import CodeAdoptedGrantResolver, pin_identity
 from delivery_github_source import CommentPin, SourceOriginal
@@ -33,6 +34,12 @@ class PrivateFixture:
             self.d.grant.original_pin.repository, 9, 123, 456,
             '2026-01-01T00:00:00Z', core.digest(self.metadata)))
         self.file = private.PrivateBaselineFile('synthetic-fresh.tgz', core.digest(self.d.raw))
+        # Substitute only the trusted CODE selection with SYNTHETIC evidence.
+        # Keep the real metadata association check in assembly/materialization.
+        for name, value in (('METADATA_PIN', self.grant.original_pin),
+                            ('SNAPSHOT_ROOT', archive_fixture.ROOT),
+                            ('SNAPSHOT_FILE', self.file)):
+            p = patch.object(observed, name, value); p.start(); self.addCleanup(p.stop)
         self.events = []
         self.hook = lambda original: original
         def comment(request, pin):
@@ -263,8 +270,11 @@ class PosixPrivateBaselineTests(PrivateFixture, unittest.TestCase):
         self.root.chmod(0o755)
         with self.assertRaises(runtime.RuntimeSiteError): self.materialize(config=self.config)
         self.root.chmod(0o700)
+        # Keep the trusted CODE selection intact and corrupt actual private
+        # bytes; a changed metadata digest now rejects earlier in assembly.
+        self.path.write_bytes(self.d.raw+b'SYNTHETIC_CORRUPTION')
         with self.assertRaises(runtime.RuntimeSiteError):
-            self.materialize(config=self.config, baseline_file=replace(self.file, sha256='f'*64))
+            self.materialize(config=self.config)
 
     def test_root_descriptor_closed_even_when_file_reader_fails(self):
         real_open = private.store.root_open

@@ -25,6 +25,7 @@ import delivery_runtime_site as runtime
 from delivery_finish_observation import FOLLOWUPS
 from test_delivery_job import CONTEXT
 import test_delivery_fds_private_baseline as fixture
+import test_delivery_fds_baseline_archive as archives
 
 
 class RunSelectionTests(unittest.TestCase):
@@ -51,7 +52,7 @@ class RunSelectionTests(unittest.TestCase):
                         producer.PRODUCER_REPOSITORY)
         self.routes = tuple(replace(a['routes'][0], repository=r) for r in repositories)
         self.options = dict(selection=self.selected, finish_scope=self.finish,
-            baseline_grant=self.baseline_grant, baseline_root='SYNTHETIC_BASELINE',
+            baseline_grant=self.baseline_grant, baseline_root=archives.ROOT,
             input_files=self.files, expected_peer=a['expected_peer'], routes=self.routes,
             budget_seconds=30, finalize=False, deadline=a['deadline'],
             monotonic=self.f.d.f.mono, wall=self.f.d.f.wall)
@@ -117,6 +118,46 @@ class RunSelectionTests(unittest.TestCase):
                 self.select(**change)
             self.assertIsNone(caught.exception.__context__)
         self.f.d.f.mono.assert_not_called();self.f.d.f.wall.assert_not_called()
+
+    def test_non_reference_producer_fact_changes_cannot_be_silently_reconnected(self):
+        facts = self.selected.producer.facts
+        for field in ('source_commit', 'rendered_sha256', 'checker_sha256',
+                      'clean_render_reference', 'adoption_reference'):
+            with self.subTest(field=field), self.assertRaises(policy.OperatingPolicyError):
+                self.select(selection=replace(self.selected, producer=replace(
+                    self.selected.producer, facts=replace(facts, **{field: 'SYNTHETIC_CHANGED'}))))
+        self.f.d.f.mono.assert_not_called(); self.f.d.f.wall.assert_not_called()
+
+    def test_actual_selected_private_association_rejects_foreign_pin_root_file_or_binding(self):
+        from delivery_fds_private_baseline import PrivateBaselineFile
+        changes = [dict(baseline_root='SYNTHETIC_OTHER_ROOT'),
+            dict(baseline_grant=replace(self.baseline_grant, original_pin=replace(
+                self.baseline_grant.original_pin, body_sha256='9'*64))),
+            dict(baseline_grant=replace(self.baseline_grant, original_pin=replace(
+                self.baseline_grant.original_pin, comment_id=999))),
+            dict(baseline_grant=replace(self.baseline_grant, original_pin=replace(
+                self.baseline_grant.original_pin, updated_at='2026-01-02T00:00:00Z'))),
+            dict(baseline_grant=replace(self.baseline_grant,
+                binding=replace(self.baseline_grant.binding, run_id='OTHER')))]
+        for file in (PrivateBaselineFile('other.tgz', self.f.file.sha256),
+                     replace(self.f.file, sha256='9'*64)):
+            changes.append(dict(input_files=replace(self.files, baseline_file=file)))
+        for change in changes:
+            with self.subTest(change=tuple(change)), self.assertRaises(policy.OperatingPolicyError):
+                self.select(**change)
+        self.f.d.f.mono.assert_not_called(); self.f.d.f.wall.assert_not_called()
+
+    def test_direct_native_private_assembly_cannot_bypass_selected_association(self):
+        from delivery_fds_baseline_archive import BaselineArchiveError
+        value = self.select()
+        for change in (dict(baseline_root='SYNTHETIC_FOREIGN'),
+                       dict(baseline_file=replace(self.files.baseline_file, sha256='9'*64)),
+                       dict(baseline_grant=replace(self.baseline_grant, original_pin=replace(
+                           self.baseline_grant.original_pin, comment_id=999)))):
+            with self.subTest(change=tuple(change)), self.assertRaises(BaselineArchiveError) as caught:
+                operating.assemble_observed_native_job(context=CONTEXT, **(value | change))
+            self.assertIsNone(caught.exception.__context__)
+        self.f.d.f.mono.assert_not_called(); self.f.d.f.wall.assert_not_called()
 
     def test_native_context_and_command_are_not_inferred_from_grants_or_environment(self):
         for ctx,cmd in ((replace(CONTEXT,attempt=2),'deploy'),(CONTEXT,'restore'),

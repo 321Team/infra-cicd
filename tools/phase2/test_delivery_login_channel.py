@@ -95,6 +95,15 @@ class DeferredTests(unittest.TestCase):
             self.assertFalse(c.status()['local_references_released'])
             provider.close()  # Explicit failed-cleanup reference stays test-owned.
 
+    def test_provider_close_false_stays_failed_even_if_status_claims_local_release(self):
+        c=self.channel(); provider=c._provider
+        with patch.object(provider,'close',return_value=False), \
+             patch.object(provider,'status',return_value={'local_references_released':True}):
+            self.assertFalse(c.close())
+        self.assertIsNone(c._provider);self.assertIsNone(c._args)
+        self.assertFalse(c.close());self.assertFalse(c.status()['local_references_released'])
+        provider.close()  # Rejected provider cleanup remains explicitly test-owned.
+
     def test_oversized_original_selection_stops_before_login_identity_or_issuance(self):
         # PR140 nonblocking review: the later supplier guard is insufficient to
         # prove NO OAuth token was minted. Exercise the real pre-login budget.

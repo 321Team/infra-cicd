@@ -260,8 +260,7 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
     from delivery_source_session import native_original_reader
     from delivery_fds_baseline_archive import (baseline_metadata_checked,
                                                connect_authenticated_baseline)
-    from delivery_fds_private_baseline import (private_metadata_checked,
-                                               connect_authenticated_private_baseline)
+    from delivery_fds_private_baseline import connect_authenticated_private_baseline
     policy.need(type(selection) is NativePlanSelection)
     if baseline_grant is None:
         policy.need(baseline_root is None and baseline_file is None)
@@ -270,7 +269,7 @@ def assemble_observed_native_job(*, config, context, selection, finish_slot,
         if baseline_file is None:
             baseline_metadata_checked(config.binding, baseline_grant, baseline_root)
         else:
-            private_metadata_checked(config.binding, baseline_grant, baseline_root, baseline_file)
+            baseline.private_selection_checked(config, baseline_grant, baseline_root, baseline_file)
     policy.selection_checked(config, context, selection, finish_scope,
                              producer_repository, producer_pins, baseline_grant=baseline_grant)
 
@@ -320,7 +319,6 @@ def build_observed_run_inputs(context, command, *, selection, finish_scope,
     """
     from delivery_adopted_authority import AdoptedGrant
     from delivery_fds_prepared_environment import configuration_paths
-    from delivery_fds_private_baseline import private_metadata_checked
     from delivery_fds_producer_inputs import PRODUCER_REPOSITORY
     from delivery_fds_run_inputs import files_checked, run_input_root
     from delivery_runtime_site import EvidenceAdoption, FinishAdoptionSlot
@@ -346,8 +344,8 @@ def build_observed_run_inputs(context, command, *, selection, finish_scope,
             grant=selection.producer.grant,
             previous_images=selection.producer.facts.previous_images)
         policy.need(selection.producer == producer and selection.baseline is None)
-        private_metadata_checked(config.binding, baseline_grant, baseline_root,
-                                 input_files.baseline_file)
+        baseline.private_selection_checked(config, baseline_grant, baseline_root,
+                                           input_files.baseline_file)
         policy.selection_checked(config, context, selection, finish_scope,
             PRODUCER_REPOSITORY, pins, baseline_grant=baseline_grant)
         # Grant objects are explicit trusted CODE selections, not source bodies.
@@ -541,7 +539,7 @@ def configuration_status():
                        '상시 시간대/control 선택은 편입; 실제 RUN/action/Binding별 유한 grant·원본 의미 연결',
                        '사전 플랫폼 receipt와 사후 발급 receipt 구분',
                        '선택한 baseline의 실제 grant/control 및 fresh drift 검증',
-                       '채택한 replicas0/3 인계의 실제 완료와 새 full baseline',
+                       '새 full6 metadata/실물 선택은 편입; 실제 RUN별 grant·private staging·fresh drift 연결',
                        '선택한 post-close 관측 범위의 실제 scope/control 연결·별도 Runtime GO']},
         ],
         'produced_during_run': ['native job run/attempt', 'READY nonce',

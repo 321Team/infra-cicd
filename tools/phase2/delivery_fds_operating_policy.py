@@ -22,6 +22,11 @@ ADOPTION_REFERENCE = 'https://github.com/321Team/fds-project-baseline/issues/46#
 # A real preparation-only comment. Its identity is denied as execution approval
 # even if its update timestamp/body hash changes; other source pins stay explicit.
 PREPARATION_COMMENT = ('321Team', 'fds-project-baseline', 46, 6385867126)
+PREPARATION_COMMENTS = (PREPARATION_COMMENT,
+    ('321Team', 'fds-project-baseline', 46, 6394784788))
+# Real post-handoff custody/adoption metadata, explicitly NOT execution/finish
+# permission. Its source identity is usable only in the baseline role.
+BASELINE_ONLY_COMMENT = ('321Team', 'fds-project-baseline', 46, 6395884121)
 CONTROL_PIN = BlobPin(
     RepositoryPin('321Team', 'infra-cicd', 1362221024, 315682664),
     '6531ba8e301858c0e180c377d06908f895158a70',
@@ -87,7 +92,8 @@ def selection_checked(config, context, selection, finish_scope, producer_reposit
         need(selection.approval.principal == ACTOR)
         grants = (selection.approval, selection.issuer_grant,
                   selection.producer.grant, baseline_grant, finish_scope)
-        for grant in grants:
+        for role, grant in zip(('approval', 'platform', 'producer', 'baseline', 'finish'),
+                               grants, strict=True):
             need(type(grant) is AdoptedGrant and grant.binding == b
                  and grant.control_pin == CONTROL_PIN
                  and core.finite(grant.starts_at) and core.finite(grant.expires_at)
@@ -95,10 +101,14 @@ def selection_checked(config, context, selection, finish_scope, producer_reposit
             pin_identity(grant.original_pin)
             pin_identity(grant.control_pin)
             original = grant.original_pin
-            need(not (type(original) is CommentPin and
-                 (original.repository.owner.casefold(), original.repository.name.casefold(),
-                  original.issue_number, original.comment_id) ==
-                 (PREPARATION_COMMENT[0].casefold(), *PREPARATION_COMMENT[1:])))
+            if type(original) is CommentPin:
+                identity = (original.repository.owner.casefold(),
+                    original.repository.name.casefold(), original.issue_number, original.comment_id)
+                need(identity not in tuple((p[0].casefold(), p[1].casefold(), *p[2:])
+                     for p in PREPARATION_COMMENTS))
+                baseline_only = (BASELINE_ONLY_COMMENT[0].casefold(),
+                    BASELINE_ONLY_COMMENT[1].casefold(), *BASELINE_ONLY_COMMENT[2:])
+                need(identity != baseline_only or role == 'baseline')
         # Scheduling is always open; neither a made-up start nor 240-min cap.
         # Only execution/finish validity is bounded by actual final cleanup.
         need(selection.approval.expires_at <= CLEANUP_END
