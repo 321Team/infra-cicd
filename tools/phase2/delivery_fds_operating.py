@@ -383,6 +383,7 @@ def configuration_status():
     Pending groups are handoff information, not another runtime validator. No
     user file/environment/status flag can enable the native workflow gate.
     """
+    from delivery_fds_prepared_environment import selection_status as prepared_paths
     return {
         'schema': 'P2-FDS-operating-selection-1',
         'selection': 'PARTIAL', 'runtime_site': 'UNCONFIGURED',
@@ -422,12 +423,13 @@ def configuration_status():
             'baseline_expectation': baseline.selection_status(),
             'management_route_expectation': management.selection_status(),
             'observed_readonly_connection': connection.selection_status(),
+            'prepared_source_parser_paths': prepared_paths(),
         },
         'pending_before_run': [
             {'id': 'TRANSPORT_AND_LAYOUT', 'owner': '이권욱',
              'support': '기존 회신과 10/24 읽기 OAuth/TLS·관리SSH 원본 대조. 실제 로그인·job 배치는 별개',
              'items': ['중앙 연결: 확인한 OAuth 입력과 본인 메모리 password, repository 자격 연결',
-                       '중앙 연결: 입력·source/store 및 두 호스트 caller의 실제 배치',
+                       '중앙 연결: 준비된 source/store·입력 template를 실제 RUN과 두 호스트 caller에 연결',
                        '실행 준비: 실제 job의 exact checkout/helper·UID/netns와 확인 시점 이후 transport 변경 대조',
                        '실행 준비: 본인 actor 인증·API 도달·회수 adapter의 실응답 및 만료/수동 회수 인수']},
             {'id': 'ORIGINAL_CONTROL_AND_FINISH', 'owner': '이권욱',

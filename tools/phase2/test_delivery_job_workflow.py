@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 import yaml
+import delivery_fds_prepared_environment as prepared
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / '.github/workflows/p2-rosa-delivery.yml'
@@ -78,7 +79,8 @@ class JobWorkflowTests(unittest.TestCase):
         for name in ('clean', 'set-safe-directory', 'submodules', 'lfs'):
             self.assertEqual('false', checkout[name])
         self.assertNotIn('rm ', self.text)
-        self.assertIn('/usr/bin/python3 -I -B', delivery['steps'][2]['run'])
+        self.assertIn('"'+prepared.RUNTIME_PYTHON+'" -I -B', delivery['steps'][2]['run'])
+        self.assertNotIn('/usr/bin/python3 -I -B', delivery['steps'][2]['run'])
         self.assertIn('delivery_job.main', delivery['steps'][2]['run'])
 
     def test_p1_workflow_bytes_unchanged_and_hosted_ci_exact_stack_base(self):

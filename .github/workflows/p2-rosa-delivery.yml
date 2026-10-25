@@ -84,4 +84,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/python3 -I -B -c 'import os, sys; sys.path.insert(0, "tools/phase2"); import delivery_job; raise SystemExit(delivery_job.main([os.environ["P2_JOB_COMMAND"], "--execute"]))'
+          "/home/server01_cicd-runner/fds-p2-delivery/runtime-py312-yaml603/bin/python3" -I -B -c 'import os, sys; sys.path.insert(0, "tools/phase2"); import delivery_fds_prepared_environment as p2env; p2env.check_interpreter(); import delivery_job; raise SystemExit(delivery_job.main([os.environ["P2_JOB_COMMAND"], "--execute"]))'
