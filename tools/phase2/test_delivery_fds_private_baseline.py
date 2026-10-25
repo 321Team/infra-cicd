@@ -270,8 +270,11 @@ class PosixPrivateBaselineTests(PrivateFixture, unittest.TestCase):
         self.root.chmod(0o755)
         with self.assertRaises(runtime.RuntimeSiteError): self.materialize(config=self.config)
         self.root.chmod(0o700)
+        # Keep the trusted CODE selection intact and corrupt actual private
+        # bytes; a changed metadata digest now rejects earlier in assembly.
+        self.path.write_bytes(self.d.raw+b'SYNTHETIC_CORRUPTION')
         with self.assertRaises(runtime.RuntimeSiteError):
-            self.materialize(config=self.config, baseline_file=replace(self.file, sha256='f'*64))
+            self.materialize(config=self.config)
 
     def test_root_descriptor_closed_even_when_file_reader_fails(self):
         real_open = private.store.root_open
