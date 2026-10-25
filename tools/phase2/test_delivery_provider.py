@@ -134,6 +134,15 @@ class ProviderTests(unittest.TestCase):
         self.assertIsNone(app._credential)
         self.safe(out)
 
+    def test_explicit_local_time_mode_reaches_real_session_and_finishes(self):
+        app=self.app()
+        app.inputs=replace(app.inputs,local_time_checks=True)
+        out=app.run('deploy')
+        self.assertIs(p.run_session.call_args.kwargs['local_time_checks'],True)
+        self.assertEqual('SESSION_COMPLETED',out['status'],out)
+        self.assertEqual(['PATCH']*6+['GET']*2,[r.method for r in self.c.h.requests])
+        self.assertEqual(1,self.c.storage.complete_calls)
+
     def test_preflight_never_acquires_or_constructs_write_sender(self):
         out = self.app().run('preflight')
         self.assertEqual(out['status'], 'PREFLIGHT_OBSERVED', out)
