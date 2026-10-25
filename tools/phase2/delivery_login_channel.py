@@ -49,6 +49,7 @@ class LoginActorChannel(ingress._NoCopy):
             cleanup_deadline=cleanup_deadline, monotonic=monotonic, wall=wall)
         self._used, self._lock = False, threading.RLock()
         self._receipt = self._metadata = None
+        self._cleanup_ok = True
         self._status = {'actor_identity':'NOT_ATTEMPTED', 'issuance_attempted':False,
             'credential_forwarded':False, 'actor_server_revocation':'NOT_ATTEMPTED',
             'local_references_released':False, 'sa_token_revoked':False,
@@ -86,13 +87,30 @@ class LoginActorChannel(ingress._NoCopy):
             except BaseException as exc:
                 error = actor.public_error(exc, 'ACTOR_HANDOFF_FAILED')
             finally:
+                cleanup_error = None; closed = True
                 if channel is not None:
-                    self._status.update(channel.status())
-                    self._receipt = channel.take_receipt()
-                    channel.close()
-                self._status.update(self._provider.status())
-                self._metadata = self._provider.take_metadata()
-                self.close()
+                    for step in ('status', 'receipt', 'close'):
+                        try:
+                            if step == 'status': self._status.update(channel.status())
+                            elif step == 'receipt': self._receipt = channel.take_receipt()
+                            else:
+                                closed = False
+                                closed = channel.close() is True
+                                actor.need(closed)
+                        except BaseException as exc:
+                            self._cleanup_ok = False
+                            if not isinstance(cleanup_error, (KeyboardInterrupt, SystemExit)):
+                                cleanup_error = actor.public_error(exc, 'ACTOR_LOCAL_CLEANUP_FAILED')
+                try:
+                    provider_closed = self.close()
+                    actor.need(provider_closed)
+                except BaseException as exc:
+                    provider_closed = False
+                    if not isinstance(cleanup_error, (KeyboardInterrupt, SystemExit)):
+                        cleanup_error = actor.public_error(exc, 'ACTOR_LOCAL_CLEANUP_FAILED')
+                self._status['local_references_released'] = closed and provider_closed
+                if cleanup_error is not None and not isinstance(error, (KeyboardInterrupt, SystemExit)):
+                    error = cleanup_error
                 channel = credential = source_tokens = request = bridge = None
             if error is not None:
                 raise error from None
@@ -115,11 +133,23 @@ class LoginActorChannel(ingress._NoCopy):
     def close(self):
         with self._lock:
             self._used = True
-            if self._provider is not None:
-                self._provider.close()
-                self._status.update(self._provider.status())
-                if self._metadata is None:
-                    self._metadata = self._provider.take_metadata()
-            self._provider = self._args = None
-            self._status['local_references_released'] = True
-        return True
+            interrupted = None
+            closed = self._provider is None and self._status['local_references_released']
+            try:
+                if self._provider is not None:
+                    for step in ('close', 'status', 'metadata'):
+                        try:
+                            if step == 'close':
+                                closed = self._provider.close() is True
+                                actor.need(closed)
+                            elif step == 'status': self._status.update(self._provider.status())
+                            elif self._metadata is None: self._metadata = self._provider.take_metadata()
+                        except BaseException as exc:
+                            self._cleanup_ok = False
+                            if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                                interrupted = KeyboardInterrupt() if isinstance(exc, KeyboardInterrupt) else SystemExit(130)
+            finally:
+                self._provider = self._args = None
+                self._status['local_references_released'] = closed and self._cleanup_ok
+        if interrupted is not None: raise interrupted from None
+        return self._cleanup_ok

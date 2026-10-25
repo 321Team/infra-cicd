@@ -114,5 +114,50 @@ class MemorySupplyTests(unittest.TestCase):
             self.assertEqual('UNCONFIRMED',status['actor_server_revocation'])
             self.assertTrue(status['local_references_released'])
 
+    def test_required_original_mode_is_inert_and_cannot_be_accidentally_downgraded(self):
+        for option in (False,True):
+            self.actor=self.f.client();value=self.make(require_original=True)
+            with patch.object(self.pull,'pull',return_value=self.request), \
+                 patch.object(self.actor,'send_over_bridge') as send:
+                value.send(include_original=option)
+            self.assertIs(True,send.call_args.kwargs['include_original'])
+            self.assertTrue(value.status()['native_original_required'])
+        for invalid in (None,1,'true'):
+            with self.assertRaises(supply.SupplyError):self.make(require_original=invalid)
+
+    def test_diagnostic_or_receipt_failure_cannot_skip_owned_close(self):
+        for step in ('status','take_receipt'):
+            self.actor=self.f.client();value=self.make()
+            private_receipt=object();self.actor._receipt=private_receipt
+            with patch.object(self.pull,'pull',side_effect=ValueError('PRIVATE_READY')), \
+                 patch.object(self.actor,step,side_effect=ValueError(fixture.TOKEN)), \
+                 patch.object(self.actor,'close',wraps=self.actor.close) as close:
+                with self.assertRaises(supply.SupplyError) as caught:value.send()
+                close.assert_called_once()
+            self.assertTrue(self.actor._closed);self.assertIsNone(self.actor._token)
+            self.assertIsNone(value._actor);self.assertIsNone(value._sources)
+            self.assertIsNone(caught.exception.__context__)
+            self.assertNotIn(fixture.TOKEN,str(caught.exception))
+            if step=='status':self.assertIs(private_receipt,value.take_receipt())
+            self.assertFalse(value.close())  # Failed local handoff stays visible.
+
+    def test_close_failure_is_not_relabelled_as_released_by_later_status_or_close(self):
+        value=self.make()
+        with patch.object(self.pull,'pull',side_effect=ValueError('PRIVATE_READY')), \
+             patch.object(self.actor,'close',side_effect=ValueError(fixture.TOKEN)):
+            with self.assertRaises(supply.SupplyError):value.send()
+        self.assertFalse(value.status()['local_references_released'])
+        self.assertFalse(value.close());self.assertFalse(value.status()['local_references_released'])
+        self.actor.close()  # Test owns the failed-cleanup reference.
+
+    def test_explicit_close_clears_private_handoffs_even_when_diagnostics_raise(self):
+        value=self.make();value._receipt=object();value._login_metadata={'PRIVATE':'RECOVERY'}
+        with patch.object(self.actor,'status',side_effect=KeyboardInterrupt(fixture.TOKEN)), \
+             self.assertRaises(KeyboardInterrupt) as caught:value.close()
+        self.assertIsNone(caught.exception.__context__)
+        self.assertTrue(self.actor._closed);self.assertIsNone(value._sources)
+        self.assertIsNone(value.take_receipt());self.assertIsNone(value.take_login_metadata())
+        self.assertFalse(value.close())
+
 
 if __name__=='__main__':unittest.main()

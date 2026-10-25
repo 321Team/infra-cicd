@@ -49,6 +49,41 @@ class DeferredTests(unittest.TestCase):
         self.assertTrue(s.status()['password_reference_released'])
         self.assertIsNone(s.take_login_metadata());self.assertIsNone(s.take_receipt())
 
+    def test_supplier_diagnostic_failure_still_releases_owned_password(self):
+        c=self.channel();provider=c._provider;s=self.supplier(c)
+        with patch.object(self.f.pull,'pull',side_effect=ValueError('PRIVATE_READY')), \
+             patch.object(c,'status',side_effect=ValueError(oauth.PASSWORD)), \
+             patch.object(c,'close',wraps=c.close) as close:
+            with self.assertRaises(supply.SupplyError) as caught:s.send()
+            close.assert_called_once()
+        self.assertIsNone(provider._password);self.assertTrue(provider._used)
+        self.assertIsNone(c._provider);self.assertIsNone(s._sources)
+        self.assertIsNone(caught.exception.__context__)
+        self.assertNotIn(oauth.PASSWORD,str(caught.exception))
+
+    def test_provider_close_diagnostics_or_metadata_failure_release_references_and_stay_failed(self):
+        for step in ('status','take_metadata'):
+            c=self.channel();provider=c._provider
+            with patch.object(provider,step,side_effect=ValueError(oauth.PASSWORD)), \
+                 patch.object(provider,'close',wraps=provider.close) as close:
+                self.assertFalse(c.close());close.assert_called_once()
+            self.assertIsNone(provider._password);self.assertIsNone(c._provider)
+            self.assertIsNone(c._args);self.assertFalse(c.close())
+            self.assertFalse(c.status()['local_references_released'])
+
+    def test_provider_close_failure_or_interrupt_is_visible_without_retaining_password_owner(self):
+        for error in (ValueError(oauth.PASSWORD),KeyboardInterrupt(oauth.PASSWORD),SystemExit(7)):
+            c=self.channel();provider=c._provider
+            with patch.object(provider,'close',side_effect=error):
+                if isinstance(error,(KeyboardInterrupt,SystemExit)):
+                    with self.assertRaises(type(error)) as caught:c.close()
+                    self.assertIsNone(caught.exception.__context__)
+                    if isinstance(error,SystemExit):self.assertEqual(130,caught.exception.code)
+                else:self.assertFalse(c.close())
+            self.assertIsNone(c._provider);self.assertFalse(c.close())
+            self.assertFalse(c.status()['local_references_released'])
+            provider.close()  # Explicit failed-cleanup reference stays test-owned.
+
     def test_oversized_original_selection_stops_before_login_identity_or_issuance(self):
         # PR140 nonblocking review: the later supplier guard is insufficient to
         # prove NO OAuth token was minted. Exercise the real pre-login budget.

@@ -31,9 +31,10 @@ class MemoryOperatingSupplier(ingress._NoCopy):
     Public READY failure occurs before actor use/login. Direct actor server cleanup
     remains explicit; deferred login creates no token before READY.
     """
-    def __init__(self, *, ready_pull, bridge, actor_channel, source_tokens):
+    def __init__(self, *, ready_pull, bridge, actor_channel, source_tokens,
+                 require_original=False):
         try:
-            need(type(ready_pull) is ready.SshReadyPull
+            need(type(require_original) is bool and type(ready_pull) is ready.SshReadyPull
                  and type(bridge) is ssh.SshCredentialBridge
                  and type(actor_channel) in (actor.ActorCredentialChannel, login.LoginActorChannel))
             selected = ready_pull._selected
@@ -57,7 +58,9 @@ class MemoryOperatingSupplier(ingress._NoCopy):
             raise SupplyError('P2_MEMORY_SUPPLY_INVALID') from None
         self._ready, self._bridge, self._actor = ready_pull, bridge, actor_channel
         self._sources, self._receipt, self._login_metadata = sources, None, None
-        self._status = {'public_ready_received':False, **actor_channel.status()}
+        self._require_original, self._cleanup_ok = require_original, True
+        self._status = {'public_ready_received':False,
+            'native_original_required':require_original, **actor_channel.status()}
         self._used, self._lock = False, threading.RLock()
 
     def __repr__(self):
@@ -74,6 +77,9 @@ class MemoryOperatingSupplier(ingress._NoCopy):
                 request = self._ready.pull()
                 ready._matches(request, self._ready._selected)
                 self._status['public_ready_received'] = True
+                # Existing v1 callers keep their default. The concrete native
+                # SITE cannot accidentally downgrade its required v2 original.
+                include_original = include_original or self._require_original
                 if include_original:
                     ingress.native_frame_budget_checked(request, self._sources)
                 options = {'include_original': True} if include_original else {}
@@ -87,19 +93,25 @@ class MemoryOperatingSupplier(ingress._NoCopy):
                 else:
                     error = SupplyError('P2_MEMORY_SUPPLY_FAILED')
             finally:
-                try:
-                    self._status.update(self._actor.status())
-                    self._receipt = self._actor.take_receipt()
-                    if type(self._actor) is login.LoginActorChannel:
-                        self._login_metadata = self._actor.take_login_metadata()
-                    self._actor.close()
-                    self._status.update(self._actor.status())
-                    self._status['local_references_released'] = True
-                except BaseException as exc:
-                    if not isinstance(error, (KeyboardInterrupt, SystemExit)):
-                        error = (KeyboardInterrupt() if isinstance(exc, KeyboardInterrupt)
-                                 else SystemExit(130) if isinstance(exc, SystemExit)
-                                 else SupplyError('P2_MEMORY_SUPPLY_CLEANUP_FAILED'))
+                closed = False
+                # A failed diagnostic/receipt transfer must not skip the owned
+                # channel's close. Attempt each independent local step once.
+                for step in ('status', 'receipt', 'metadata', 'close', 'status'):
+                    try:
+                        if step == 'status': self._status.update(self._actor.status())
+                        elif step == 'receipt': self._receipt = self._actor.take_receipt()
+                        elif step == 'metadata' and type(self._actor) is login.LoginActorChannel:
+                            self._login_metadata = self._actor.take_login_metadata()
+                        elif step == 'close':
+                            closed = self._actor.close() is True
+                            need(closed)
+                    except BaseException as exc:
+                        self._cleanup_ok = False
+                        if not isinstance(error, (KeyboardInterrupt, SystemExit)):
+                            error = (KeyboardInterrupt() if isinstance(exc, KeyboardInterrupt)
+                                     else SystemExit(130) if isinstance(exc, SystemExit)
+                                     else SupplyError('P2_MEMORY_SUPPLY_CLEANUP_FAILED'))
+                self._status['local_references_released'] = closed
                 self._sources = self._actor = self._ready = self._bridge = request = None
             if error is not None:
                 raise error from None
@@ -122,9 +134,25 @@ class MemoryOperatingSupplier(ingress._NoCopy):
     def close(self):
         with self._lock:
             self._used = True
-            if self._actor is not None:
-                self._actor.close()
-                self._status.update(self._actor.status())
-            self._sources = self._actor = self._ready = self._bridge = self._receipt = None
-            self._status['local_references_released'] = True
-        return True  # Local refs only; not server revocation or resource cleanup.
+            interrupted = None
+            closed = self._actor is None and self._status['local_references_released']
+            try:
+                if self._actor is not None:
+                    try:
+                        closed = self._actor.close() is True
+                        self._cleanup_ok = closed and self._cleanup_ok
+                    except BaseException as exc:
+                        self._cleanup_ok = False
+                        if isinstance(exc, KeyboardInterrupt): interrupted = KeyboardInterrupt()
+                        elif isinstance(exc, SystemExit): interrupted = SystemExit(130)
+                    try: self._status.update(self._actor.status())
+                    except BaseException as exc:
+                        self._cleanup_ok = False
+                        if interrupted is None and isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            interrupted = KeyboardInterrupt() if isinstance(exc, KeyboardInterrupt) else SystemExit(130)
+            finally:
+                self._sources = self._actor = self._ready = self._bridge = self._receipt = None
+                self._login_metadata = None
+                self._status['local_references_released'] = closed
+        if interrupted is not None: raise interrupted from None
+        return self._cleanup_ok  # Local refs only; never server revocation proof.

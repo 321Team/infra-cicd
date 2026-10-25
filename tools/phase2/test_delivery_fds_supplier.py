@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import delivery_adapter as core
+from delivery_actor_channel import ActorChannelError
 import delivery_fds_operating as operating
 import delivery_job_site as declaration
 import delivery_login_channel as deferred
@@ -122,6 +123,28 @@ class SupplierAssemblyTests(unittest.TestCase):
         self.assertTrue(self.provider._used); self.assertIsNone(self.provider._password)
         self.assertIsNone(value.take_receipt()); self.assertIsNone(value.take_login_metadata())
         self.assertIsNone(declaration.SITE)
+
+    def test_observed_supplier_requires_native_original_without_changing_generic_default(self):
+        args={k:v for k,v in self.args.items() if k not in
+              ('endpoint_ip','port','host_key_alias','remote_python')}
+        observed={k:self.args[k] for k in ('endpoint_ip','port','host_key_alias','remote_python')}
+        with patch.object(operating.connection,'supplier_inputs',return_value=observed):
+            value=operating.build_observed_login_supplier(self.config,**args)
+        self.addCleanup(value.close)
+        self.assertTrue(value.status()['native_original_required'])
+        self.assertFalse(self.build().status()['native_original_required'])
+        self.assert_unconsumed()
+
+    def test_observed_selection_failure_is_redacted_and_borrowed_provider_stays_caller_owned(self):
+        args={k:v for k,v in self.args.items() if k not in
+              ('endpoint_ip','port','host_key_alias','remote_python')}
+        for exc in (ValueError(oauth.PASSWORD),KeyboardInterrupt(oauth.PASSWORD),SystemExit(7)):
+            with patch.object(operating.connection,'supplier_inputs',side_effect=exc), \
+                 self.assertRaises(type(exc) if isinstance(exc,(KeyboardInterrupt,SystemExit))
+                                   else ActorChannelError) as caught:
+                operating.build_observed_login_supplier(self.config,**args)
+            self.assertIsNone(caught.exception.__context__)
+            self.assertNotIn(oauth.PASSWORD,str(caught.exception));self.assert_unconsumed()
 
 
 if __name__ == '__main__': unittest.main()

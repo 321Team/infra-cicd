@@ -57,11 +57,22 @@ def build_observed_login_supplier(config, *, login_provider, repositories,
     The dated endpoint/SSH selection must be rechecked when the environment
     changes; construction does not discover, log in, connect or configure SITE.
     """
-    return build_login_supplier(config, login_provider=login_provider,
-        repositories=repositories, source_tokens=source_tokens, context=context,
-        workspace=workspace, remote_timeout_seconds=remote_timeout_seconds,
-        operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
-        monotonic=monotonic, wall=wall, **connection.supplier_inputs())
+    from delivery_actor_channel import public_error
+    result = error = None
+    try:
+        result = build_login_supplier(config, login_provider=login_provider,
+            repositories=repositories, source_tokens=source_tokens, context=context,
+            workspace=workspace, remote_timeout_seconds=remote_timeout_seconds,
+            operation_deadline=operation_deadline, cleanup_deadline=cleanup_deadline,
+            monotonic=monotonic, wall=wall, require_original=True,
+            **connection.supplier_inputs())
+    except BaseException as exc:
+        error = public_error(exc, 'P2_FDS_LOGIN_SUPPLIER_INVALID')
+    # Match the existing constructor ownership: caller keeps provider on failure.
+    if error is not None:
+        result = None
+        raise error from None
+    return result
 
 
 def build_actor_channel(config, *, actor, endpoint_ip, operation_deadline,
@@ -134,7 +145,8 @@ def build_ready_pull_configuration(**inputs):
 
 def build_login_supplier(config, *, login_provider, endpoint_ip, repositories,
         source_tokens, context, workspace, port, host_key_alias, remote_python,
-        remote_timeout_seconds, operation_deadline, cleanup_deadline, monotonic, wall):
+        remote_timeout_seconds, operation_deadline, cleanup_deadline, monotonic, wall,
+        require_original=False):
     """Assemble the selected issuer side without starting it or configuring SITE.
 
     Use the SAME explicit native context, Binding and ordered RepositoryPins as
@@ -174,7 +186,8 @@ def build_login_supplier(config, *, login_provider, endpoint_ip, repositories,
             endpoint_ip=endpoint_ip, operation_deadline=operation_deadline,
             cleanup_deadline=cleanup_deadline, monotonic=monotonic, wall=wall)
         return MemoryOperatingSupplier(ready_pull=pull, bridge=bridge,
-            actor_channel=channel, source_tokens=source_tokens)
+            actor_channel=channel, source_tokens=source_tokens,
+            require_original=require_original)
     except BaseException as exc:
         error = public_error(exc, 'P2_FDS_LOGIN_SUPPLIER_INVALID')
     # No close: all constructors are inert and provider is still caller-owned.

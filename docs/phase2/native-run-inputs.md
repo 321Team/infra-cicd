@@ -93,3 +93,58 @@ ROSA/RoleBinding 회수와 나중 Runner 등록 해제→VM 폐기는 별개다.
 상시 실행 시간대는 무기한 grant가 아니다. 실제 grant 기간·예산은 기존 policy/실행 경로가 검사하며
 wall-clock 만료를 monotonic deadline과 직접 비교하거나 240분을 새 기본 예산으로 넣지 않는다.
 이 연결의 오프라인 시험·코드 리뷰·병합을 실제 파일 배치·발급·배포 또는 Runtime 인수로 확대하지 않는다.
+
+## PR150 통합 구현과 한 번의 인수 검토
+
+후속 구현은 이 PR에 모았다. 새 선언 wrapper·grant 형식·설정 loader·승인 절차는 추가하지 않았다.
+
+- `build_observed_login_supplier`는 native SITE가 요구하는 TokenRequest 원본 전달을 필수로 선택한다.
+  이 공급부의 `send()`는 기존 v2 메모리 프레임을 사용하며 `include_original=False`로 빠뜨릴 수 없다.
+  일반 `build_login_supplier`·`MemoryOperatingSupplier`의 기존 v1 기본값은 유지한다.
+  v2 프레임 예산은 로그인 전에 확인하고 실제 원본 parser/동일 context·Binding 검사를 유지한다.
+- 구성 생성 실패는 고정 오류/취소로 정제한다. **성공한 반환 전까지 login provider는 caller 소유**이므로
+  빌더가 실패한 provider를 임의로 닫지 않는다. caller는 자기 `finally`에서 이를 닫아야 한다.
+- 성공한 공급부가 소유한 actor/provider는 상태·receipt·metadata 수집 중 일부가 실패해도 각 독립 수집과
+  로컬 close를 시도한다. close 실패·취소를 성공으로 바꾸지 않으며 이후 close 호출도 실패 상태를 보존한다.
+  실제 OAuth 회수 응답과 로컬 참조 해제는 계속 구분한다. UNKNOWN을 ACK로 만들지 않는다.
+- 공급 실패 후에도 실제 발급 receipt와 로그인 복구 metadata가 수신됐다면 각각 단회 `take_*`로 인수할 수 있다.
+  **소유 공급부를 명시적으로 close하기 전에** 두 private handoff를 가져와 비공개 복구 담당에게 넘긴다.
+  명시 close는 남은 private handoff 참조를 버린다. 원문·토큰·비밀번호는 공개 상태·argv·환경·로그에 넣지 않는다.
+- `credential_forwarded`는 전달 단계이고 `job_accepted`, SA 회수, 자원 정리, Runtime 인수를 뜻하지 않는다.
+  예를 들어 전송 뒤 OAuth 회수가 불명확해도 job은 이미 프레임을 받았을 수 있다. 재전송하지 말고 job 결과,
+  private receipt·OAuth object/lifetime metadata와 fence 상태를 각각 인수한다.
+
+### 통합시험의 끝단과 한계
+
+`test_delivery_fds_vertical`는 실제 `build_observed_run_inputs` → 선언 → 새 RUN 파일 배치 →
+인증된 local READY/helper·UNIX/pipe → native 원본 reader/materializer → private baseline archive 해석 →
+5역할 원문/control 및 native4 검사 → 기존 provider/session → sender close 이후 finish를 연결한다.
+권위 사실을 발급 응답을 본 뒤 고치거나 materializer를 테스트용 성공 콜백으로 바꾸지 않는다.
+
+| 모의 시나리오 | 완료조건 |
+|---|---|
+| 정상 흐름 | 동일 Binding·논리/native RUN 분리, 파일3개, native 원본, 5역할, 관측6개·완료·fence 해제·프로세스/소켓 정리 |
+| baseline hash 변경 | source 배치·READY·로그인·claim 전에 거부. caller 소유 provider는 caller가 회수 |
+| READY helper 실패 | 로그인·발급·claim0, 공급부 소유 password 참조 정리 |
+| 원문/control 변경·필수 native step 실패 | claim/앱 쓰기0. 발급된 자격/회수 상태는 별도 인수 |
+| sender close 후 finish 보존 실패 | fence 유지·완료0. 같은 선언/attempt2/기존 deploy grant의 restore로 우회하지 않음 |
+| 전송 뒤 OAuth 회수 불명확 | 실제 job 결과와 UNCONFIRMED를 분리, private receipt/metadata 단회 인수·자동 재전송0 |
+| 상태·receipt/metadata 수집 또는 close 실패/취소 | 나머지 로컬 정리 시도, 비밀/외부 예외 비노출, 실패를 다음 close에서 성공으로 바꾸지 않음 |
+
+이 시험은 **합성 입력·외부 HTTP/SSH/API mock·메모리 claim store**를 사용한다. Linux의 파일·권한/FD,
+local helper subprocess·AF_UNIX·pipe는 실제 실행하지만 운영 호스트/원본/자격/배포 증거가 아니다.
+application file-loader와 source API는 fixture 경계이며 실제 byte loader·POSIX claim 내구성은 기존 별도 시험에 연결한다.
+Windows에서는 Linux 통합시험을 SKIP으로 남긴다. 기존 정상/실패/별도 restore Binding·fence 보존 시험도 함께 실행한다.
+
+### 운영값 미확정 목록 — 같은 요청으로 한 번에 인수
+
+| 담당 | 남은 실제 선택·원본 | 코드 완료와 구분할 완료조건 |
+|---|---|---|
+| 권욱 | RUN/action별 approval/platform/producer/baseline/finish grant의 원문 pin·의미·유한기간/control | 이미 받은 원본에서 실제 대상/행위를 채택. 구성 댓글·코드 승인·정리기한을 실행 GO로 대체하지 않음 |
+| 권욱(기존 하영·재환 인계 재사용) | replicas 인계 후 새 full baseline metadata pin·실물 SHA/root·명시 staging | 현재6객체 UID/spec/owner·previous를 동일 RUN에 결속. 과거 archive/UID projection 대체0 |
+| 권욱 | 실제 두 호스트의 동일 config/context·source repository 순서와 본인 메모리 자격 | 생성된 실제 native context와 같은 경로/교환. 자격은 환경/파일/argv로 공급하지 않음 |
+| 권욱 | 실제 로그인·실효 권한·인증된 READY, post-close finish와 종료/복구 인수 | 실행 승인 후 현장에서 검증. nonce·receipt·finish hash를 사전 제출시키지 않음 |
+
+확인한 SSH/OAuth·source/template/private interpreter·생산자/native4는 재사용한다.
+위 운영값이 미확정인 동안 `SITE=None`·dispatch 차단·Runtime NOT_RUN을 유지한다.
+새 실질 변경 없이 같은 사람 리뷰를 반복하거나, 이 표의 항목마다 새 기능 PR을 만들지 않는다.
