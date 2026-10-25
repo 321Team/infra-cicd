@@ -34,7 +34,7 @@ from delivery_terminal_login import read_login_provider
 from delivery_token_materializer import NativePlanSelection
 from delivery_token_request import TokenTarget
 
-RUN_ID = 'FDS-P2-DELIVERY-20261026-A2'
+RUN_ID = 'FDS-P2-DELIVERY-20261026-A3'
 OPERATION_SECONDS = 600
 HANDOFF_SECONDS = 600
 CLEANUP_SECONDS = 60
@@ -46,11 +46,11 @@ KST = timezone(timedelta(hours=9))
 
 # Actual owner-recorded scope, not a preparation/baseline comment.
 APPROVAL_PIN = CommentPin(
-    baseline.METADATA_PIN.repository, 46, 6400826004, 277643063,
-    '2026-10-25T17:29:04Z', '5bf12cc96087f0d5bd6e73b50d71fd5f8007fa095c8ec7b5a55f15f2b42fc32c')
-ADOPTION_REFERENCE = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6400826004'
-STARTS_AT = datetime.fromisoformat('2026-10-25T17:29:04Z'.replace('Z', '+00:00')).timestamp()
-EXPIRES_AT = policy.CONSUMPTION_END
+    baseline.METADATA_PIN.repository, 46, 6401264722, 277643063,
+    '2026-10-25T18:09:22Z', '73ec00dc2e94e12bc383a699755159286c64340eac35517f2dc984f4903e7132')
+ADOPTION_REFERENCE = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6401264722'
+STARTS_AT = datetime.fromisoformat('2026-10-26T03:20:00+09:00').timestamp()
+EXPIRES_AT = datetime.fromisoformat('2026-10-26T05:20:00+09:00').timestamp()
 PLATFORM_PIN = BlobPin(
     producer.SUPPLY_PIN.repository, 'ae4f3e3501330be9e7fc3949092b08c266db10ba', 'evidence/P2-ROSA-01/infra-rosa-5-bootstrap-20261019/rosa5-run4-7-20261019.tgz',
     'b7ed9d6b15c55001e06bfe217ee014100c7096eb6699cdbd2b11523373e6901e', 'heads/evidence/P2-ROSA-01-infra-rosa-5-bootstrap-20261019', 'ae4f3e3501330be9e7fc3949092b08c266db10ba')

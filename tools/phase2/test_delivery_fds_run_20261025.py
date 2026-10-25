@@ -78,7 +78,7 @@ class ActiveRunTests(unittest.TestCase):
         self.assertEqual(active.SOURCE_REPOSITORIES,tuple(r.repository for r in value['routes']))
         for g in (value['selection'].approval,value['selection'].issuer_grant,
                   value['selection'].producer.grant,value['baseline_grant'],value['finish_scope']):
-            self.assertEqual((b,policy.CONTROL_PIN,active.STARTS_AT,policy.CONSUMPTION_END),
+            self.assertEqual((b,policy.CONTROL_PIN,active.STARTS_AT,active.EXPIRES_AT),
                              (g.binding,g.control_pin,g.starts_at,g.expires_at))
         self.issue.assert_not_called()
 
@@ -120,10 +120,10 @@ class ActiveRunTests(unittest.TestCase):
         self.issue.assert_not_called()
 
     def test_current_manual_restart_is_finite_and_keeps_original_control_and_baseline(self):
-        self.assertEqual('FDS-P2-DELIVERY-20261026-A2', active.RUN_ID)
-        self.assertEqual(6400826004, active.APPROVAL_PIN.comment_id)
+        self.assertEqual('FDS-P2-DELIVERY-20261026-A3', active.RUN_ID)
+        self.assertEqual(6401264722, active.APPROVAL_PIN.comment_id)
         self.assertEqual('2026-10-26', active.datetime.fromtimestamp(active.STARTS_AT,active.KST).date().isoformat())
-        self.assertEqual(policy.CONSUMPTION_END,active.EXPIRES_AT)
+        self.assertLess(active.EXPIRES_AT,policy.CONSUMPTION_END)
         self.assertEqual('6531ba8e301858c0e180c377d06908f895158a70',policy.CONTROL_PIN.commit)
         self.assertEqual(6395884121,baseline.METADATA_PIN.comment_id)
         # Boundary includes room for READY, token cap and cleanup; no late start.
@@ -162,6 +162,32 @@ class ActiveRunTests(unittest.TestCase):
                     active.declare_site().build(CONTEXT,command)
         assemble.assert_not_called()
         self.issue.assert_not_called()
+
+    def test_native_job_assembly_preserves_final_config_through_real_parent(self):
+        import delivery_fds_run_inputs as run_inputs
+        import delivery_job_rendezvous as rendezvous
+        choose=active.selected_inputs
+        selected=[]
+        marker=object()
+        def select(context,command):
+            return choose(context,command,monotonic=self.mono,wall=self.wall)
+        def enter(builder,context,command):
+            selected.append(builder._parent._config)
+            self.assertEqual(CONTEXT,context)
+            self.assertEqual('deploy',command)
+            self.assertTrue(selected[-1].local_time_checks)
+            self.assertTrue(builder._parent._plan.close())
+            self.assertTrue(builder._owner.close())
+            return marker
+        with patch.object(active,'selected_inputs',side_effect=select), \
+             patch.object(run_inputs,'prepare_run_inputs') as prepare, \
+             patch.object(rendezvous.OwnedRendezvousBuilder,'__call__',new=enter):
+            result=active.declare_site().build(CONTEXT,'deploy')
+        self.assertIs(marker,result)
+        self.assertEqual(1,len(selected))
+        self.assertIs(selected[0],prepare.call_args.args[0])
+        self.issue.assert_not_called()
+        for block in self.blockers:block.assert_not_called()
 
     def native_run(self):
         return {'id':int(CONTEXT.run_id),'head_sha':CONTEXT.workflow_sha,'head_branch':'main',
