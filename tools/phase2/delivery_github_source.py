@@ -87,6 +87,18 @@ def repository_checked(pin):
          and positive(pin.repository_id) and positive(pin.owner_id), 'SOURCE_PIN_INVALID')
 
 
+def source_path_checked(path):
+    """GET routes used by original readers and native Actions metadata only."""
+    need(type(path) is str and re.fullmatch(
+        r'/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
+        r'(?:/issues/comments/[1-9][0-9]*|/git/(?:commits|trees|blobs)/[0-9a-f]{40}'
+        r'|/git/ref/heads/[A-Za-z0-9_.\-/]+'
+        r'|/compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}\?per_page=1'
+        r'|/actions/runs/[1-9][0-9]*(?:/attempts/[1-9][0-9]*(?:/jobs\?per_page=100&page=1)?)?)?', path),
+        'SOURCE_PATH_INVALID')
+    need(all(part not in ('.', '..') for part in path.split('/')), 'SOURCE_PATH_INVALID')
+
+
 class PublicGitHubTLS:
     """Anonymous GET only; a ROSA credential is NEVER sent to GitHub.
 
@@ -130,13 +142,7 @@ class PublicGitHubTLS:
         raw = tls = None
         try:
             # Only the exact public REST operations used by the adapter below.
-            need(type(path) is str and re.fullmatch(
-                r'/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
-                r'(?:/issues/comments/[1-9][0-9]*|/git/(?:commits|trees|blobs)/[0-9a-f]{40}'
-                r'|/git/ref/heads/[A-Za-z0-9_.\-/]+'
-                r'|/compare/[0-9a-f]{40}\.\.\.[0-9a-f]{40}\?per_page=1)?', path),
-                'SOURCE_PATH_INVALID')
-            need(all(part not in ('.', '..') for part in path.split('/')), 'SOURCE_PATH_INVALID')
+            source_path_checked(path)
             need(core.finite(deadline) and self.now() < deadline, 'SOURCE_DEADLINE_EXCEEDED')
             timer = wire.Deadline(min(10, deadline - self.now()), self.now)
             timer.end = min(timer.end, deadline)
