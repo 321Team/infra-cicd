@@ -197,6 +197,37 @@ class OperatingPolicyTests(unittest.TestCase):
                     with self.subTest(role=role, owner=owner), self.assertRaises(policy.OperatingPolicyError):
                         self.checked(**kw)
 
+    def test_handoff_preparation_is_not_authority_and_baseline_metadata_is_baseline_only(self):
+        for identity in (6394784788, 6395884121):
+            for updated, digest in (('2026-10-25T00:00:00Z', 'a'*64),
+                                    ('2026-10-25T01:00:00Z', 'b'*64)):
+                pin = CommentPin(RepositoryPin('321team', 'FDS-PROJECT-BASELINE', 1, 2),
+                                 46, identity, 277643063, updated, digest)
+                for role in ('approval', 'platform', 'producer', 'finish'):
+                    if role == 'approval':
+                        kw = {'selection': replace(self.selection,
+                            approval=replace(self.selection.approval, original_pin=pin))}
+                    elif role == 'platform':
+                        kw = {'selection': replace(self.selection,
+                            issuer_grant=replace(self.selection.issuer_grant, original_pin=pin))}
+                    elif role == 'producer':
+                        kw = {'selection': replace(self.selection, producer=replace(
+                            self.selection.producer,
+                            grant=replace(self.selection.producer.grant, original_pin=pin)))}
+                    else:
+                        kw = {'finish_scope': replace(self.finish, original_pin=pin)}
+                    with self.subTest(identity=identity, role=role), \
+                         self.assertRaises(policy.OperatingPolicyError):
+                        self.checked(**kw)
+                selected = replace(self.selection, baseline=replace(self.selection.baseline,
+                    grant=replace(self.selection.baseline.grant, original_pin=pin)))
+                if identity == 6394784788:
+                    with self.assertRaises(policy.OperatingPolicyError):
+                        self.checked(selection=selected)
+                else:
+                    self.assertIs(selected, self.checked(selection=selected))
+        self.mono.assert_not_called(); self.wall.assert_not_called(); self.issue.assert_not_called()
+
     def test_missing_baseline_wrong_profile_actor_target_and_producer_do_not_fallback(self):
         changes = [replace(self.selection, baseline=None),
             replace(self.selection, baseline=replace(self.selection.baseline, objects=(None,)*6)),

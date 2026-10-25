@@ -16,6 +16,8 @@ import delivery_fds_operating as operating
 import delivery_job as job
 import delivery_job_site as declaration
 from delivery_fds_baseline_archive import BaselineArchiveError
+from delivery_fds_private_baseline import PrivateBaselineFile
+from delivery_github_source import CommentPin
 import test_delivery_fds_baseline_archive as fixture
 
 
@@ -25,6 +27,16 @@ class ObservedBaselineSelectionTests(unittest.TestCase):
         # Profile literals are maintained separately from the previous choice.
         import delivery_fds_site_inputs as source
         self.assertEqual(source.IMAGES, policy.PREVIOUS_IMAGES)
+
+    def test_observed_private_staging_is_explicit_and_not_a_future_run_directory(self):
+        from delivery_fds_prepared_environment import ROOT
+        from delivery_fds_run_inputs import files_checked
+        files_checked(policy.INPUT_FILES)
+        self.assertEqual(ROOT + '/baseline-staging-20261025T091504',
+                         policy.INPUT_FILES.baseline_source_root)
+        self.assertEqual('baseline6-20261025T091504.tgz', policy.INPUT_FILES.baseline_file.name)
+        self.assertEqual('70d81d8f5e4798de8aa70bfe3ed3354c114904f5f7420ab5fb271c5bd6d99cbf',
+                         policy.INPUT_FILES.baseline_file.sha256)
 
     def setUp(self):
         self.f = fixture.BaselineArchiveTests('runTest'); self.f.setUp()
@@ -40,20 +52,26 @@ class ObservedBaselineSelectionTests(unittest.TestCase):
         self.objects = tuple(data[name] for name in fixture.reader.OBJECT_FILES)
         self.plan = replace(self.f.plan, producer=replace(self.f.plan.producer,
             facts=replace(self.f.plan.producer.facts, previous_images=None)))
+        old = self.f.f.baseline.grant
+        pin = CommentPin(old.original_pin.repository, 46, 101, 202,
+                         '2026-01-01T00:00:00Z', 'a'*64)
+        self.grant = replace(old, original_pin=pin)
         for name, value in (('SNAPSHOT_SHA256', core.digest(self.raw)),
-                            ('SNAPSHOT_ROOT', fixture.ROOT)):
+                            ('SNAPSHOT_ROOT', fixture.ROOT), ('METADATA_PIN', pin),
+                            ('SNAPSHOT_FILE', PrivateBaselineFile(
+                                fixture.ROOT+'.tgz', core.digest(self.raw)))):
             p = patch.object(policy, name, value); p.start(); self.addCleanup(p.stop)
 
     def connect(self, **kw):
         return policy.connect_selected_baseline(self.f.f.config, self.plan,
-            **(dict(received_archive=self.raw, grant=self.f.f.baseline.grant) | kw))
+            **(dict(received_archive=self.raw, grant=self.grant) | kw))
 
     def test_explicit_selection_preserves_raw_owner_spec_and_all_unrelated_facts(self):
         value = self.connect()
         self.assertIsNone(self.plan.baseline)
         self.assertIsNone(self.plan.producer.facts.previous_images)
         self.assertEqual(self.objects, value.baseline.objects)
-        self.assertIs(value.baseline.grant, self.f.f.baseline.grant)
+        self.assertIs(value.baseline.grant, self.grant)
         self.assertEqual(policy.PREVIOUS_IMAGES, value.producer.facts.previous_images)
         self.assertEqual(self.plan.producer.facts, replace(value.producer.facts, previous_images=None))
         for field in ('approval', 'issuer', 'subject'):
@@ -79,6 +97,11 @@ class ObservedBaselineSelectionTests(unittest.TestCase):
         with self.assertRaises(TypeError): self.connect(expected_sha256='0'*64)
         self.assertIsNone(self.plan.baseline)
 
+    def test_memory_archive_path_cannot_bypass_actual_metadata_selection(self):
+        for grant in (self.f.f.baseline.grant, replace(self.grant,
+                      original_pin=replace(self.grant.original_pin, comment_id=999))):
+            with self.assertRaises(BaselineArchiveError): self.connect(grant=grant)
+
     def test_foreign_profile_or_existing_baseline_remains_rejected(self):
         original = self.plan
         self.plan = replace(original, producer=replace(original.producer,
@@ -93,12 +116,26 @@ class ObservedBaselineSelectionTests(unittest.TestCase):
         self.assertFalse(status['rollback_verified'])
         self.assertFalse(status['execution_authorized'])
         self.assertFalse(status['force_authorized'])
-        self.assertEqual('SSA_REPLICAS_CONFLICT_PENDING', status['write_issue'])
+        self.assertIsNone(status['write_issue'])
+        self.assertTrue(status['replicas_handoff_observed'])
+        self.assertEqual(0, status['observed_replicas'])
+        self.assertEqual('fds-deployer/Apply/apps/v1/main', status['observed_replicas_owner'])
         status['previous_images'].clear()
         self.assertEqual(2, len(policy.selection_status()['previous_images']))
         self.assertIs(operating.connect_baseline, policy.connect_selected_baseline)
         with contextlib.redirect_stdout(io.StringIO()): self.assertEqual(2, job.main(['status']))
         self.assertIsNone(declaration.SITE)
+
+
+class ObservedConstantsTests(unittest.TestCase):
+    def test_selected_metadata_file_and_role_identity_are_consistent(self):
+        import delivery_fds_operating_policy as roles
+        pin = policy.METADATA_PIN
+        self.assertEqual((pin.repository.owner, pin.repository.name,
+                          pin.issue_number, pin.comment_id), roles.BASELINE_ONLY_COMMENT)
+        self.assertTrue(policy.SNAPSHOT_REFERENCE.endswith(str(pin.comment_id)))
+        self.assertEqual(PrivateBaselineFile(policy.SNAPSHOT_ROOT+'.tgz', policy.SNAPSHOT_SHA256),
+                         policy.INPUT_FILES.baseline_file)
 
 
 if __name__ == '__main__': unittest.main()

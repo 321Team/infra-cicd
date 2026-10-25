@@ -137,15 +137,50 @@ local helper subprocess·AF_UNIX·pipe는 실제 실행하지만 운영 호스�
 application file-loader와 source API는 fixture 경계이며 실제 byte loader·POSIX claim 내구성은 기존 별도 시험에 연결한다.
 Windows에서는 Linux 통합시험을 SKIP으로 남긴다. 기존 정상/실패/별도 restore Binding·fence 보존 시험도 함께 실행한다.
 
+### 인계 후 실제 full6 선택 — 2026-10-25
+
+`delivery_fds_observed_baseline`는 인계 후 exact GET6 원본의 metadata CommentPin·파일·root를
+CODE에서 함께 선택한다. 과거10/23 snapshot이나 인계 전 snapshot으로 fallback하지 않는다.
+
+| 선택 항목 | 실제 근거 |
+|---|---|
+| metadata | [#46 관측 원문6395884121](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6395884121), updated_at `2026-10-25T09:21:29Z` |
+| 원문 body SHA256 | `a1541e8bd6584745f5d5c8760237323b0871c5306601df2ef19bdabd8aebdcf1` |
+| 파일/root | `baseline6-20261025T091504.tgz` / `baseline6-20261025T091504` |
+| 파일 SHA256 | `70d81d8f5e4798de8aa70bfe3ed3354c114904f5f7420ab5fb271c5bd6d99cbf` |
+| 관측 | 10/25 18:15:04 KST, replicas0·fds-deployer Apply 소유, 실제 raw6 해석 및 replicas 사전검사2 PASS |
+
+`build_observed_run_inputs`와 native 조립 직접 호출 모두 `private_selection_checked`로
+정확한 metadata pin↔파일 hash/name↔root↔같은 Binding을 검사한다. 이 검사는 무통신이며,
+이후 기존 private connector의 원문/control 앞뒤 인증·실제 파일 해시·owner/spec·previous 검사를
+대체하지 않는다. 준비 댓글6385867126/6394784788은5역할 authority로 사용할 수 없고,
+새 관측 댓글6395884121은 **baseline 역할로만** 연결한다. approval/platform/producer/finish
+권위로 승격하지 않는다. 원문 수정은 repin 없이 다음 인증에서 중단한다.
+
+10/25 18:53 KST에 기존 Runner P2 root 아래
+`baseline-staging-20261025T091504/baseline6-20261025T091504.tgz`를 별도 배치·재조회했다.
+root·child0700, 파일0600·UID1000·nlink1·4519bytes·동일 SHA256을 확인했다. 이는 사전 보관
+영역이며 실제 native RUN 폴더가 아니다. RUN 생성 후 기존 `prepare_native_run_inputs`가
+그 회차 input_root로 읽어 검증·독점 배치한다. 원본은 공개 Git/artifact에 넣지 않는다.
+신뢰한 호출자는 `delivery_fds_observed_baseline.INPUT_FILES`를 기존 builder의
+`input_files` 인자로 명시 전달한다. 이 상수는 읽기/배치/권위 생성이나 전역 SITE 활성화를 하지 않는다.
+권욱이 #55 최종 회수 때 이 자기 P2 staging도 증적 보존 후 정리한다.
+
+producer 전체 facts가 기존 선택과 같아야 하며, 다른 source/render/checker/인계 reference를
+자동으로 고치지 않는다. READY는 실제 helper/context/peer/nonce 응답 뒤, 발급 원본은 실제
+TokenRequest 응답 뒤 같은 v2 메모리 채널로 전달한다. finish는 sender close 뒤 실제 관측·
+독점 접근 종료 원본으로만 만든다. baseline metadata·준비 성공을 이 데이터로 바꾸지 않는다.
+
 ### 운영값 미확정 목록 — 같은 요청으로 한 번에 인수
 
 | 담당 | 남은 실제 선택·원본 | 코드 완료와 구분할 완료조건 |
 |---|---|---|
 | 권욱 | RUN/action별 approval/platform/producer/baseline/finish grant의 원문 pin·의미·유한기간/control | 이미 받은 원본에서 실제 대상/행위를 채택. 구성 댓글·코드 승인·정리기한을 실행 GO로 대체하지 않음 |
-| 권욱(기존 하영·재환 인계 재사용) | replicas 인계 후 새 full baseline metadata pin·실물 SHA/root·명시 staging | 현재6객체 UID/spec/owner·previous를 동일 RUN에 결속. 과거 archive/UID projection 대체0 |
 | 권욱 | 실제 두 호스트의 동일 config/context·source repository 순서와 본인 메모리 자격 | 생성된 실제 native context와 같은 경로/교환. 자격은 환경/파일/argv로 공급하지 않음 |
 | 권욱 | 실제 로그인·실효 권한·인증된 READY, post-close finish와 종료/복구 인수 | 실행 승인 후 현장에서 검증. nonce·receipt·finish hash를 사전 제출시키지 않음 |
 
 확인한 SSH/OAuth·source/template/private interpreter·생산자/native4는 재사용한다.
+새 full6 metadata/실물/staging은 위 연결을 재사용하며 추가 제출을 요청하지 않는다.
+baseline grant는 표1행에서 일괄 인수하고, fresh drift는 실행 시점의 기존 자동 검사다.
 위 운영값이 미확정인 동안 `SITE=None`·dispatch 차단·Runtime NOT_RUN을 유지한다.
 새 실질 변경 없이 같은 사람 리뷰를 반복하거나, 이 표의 항목마다 새 기능 PR을 만들지 않는다.

@@ -26,6 +26,7 @@ import delivery_fds_operating as operating
 import delivery_fds_operating_policy as policy
 import delivery_fds_prepared_environment as prepared
 import delivery_fds_private_baseline as private
+import delivery_fds_observed_baseline as observed
 import delivery_fds_producer_inputs as producer
 import delivery_fds_run_inputs as placement
 import delivery_fds_site_inputs as profile
@@ -96,6 +97,9 @@ class VerticalOperatingTests(unittest.TestCase):
         metadata=b'SYNTHETIC_EXPLICIT_NEW_BASELINE_ASSOCIATION'
         baseline_grant=replace(f.plan.baseline.grant,original_pin=CommentPin(repo,46,1234,5678,
             '2026-01-01T00:00:00Z',core.digest(metadata)))
+        patched(observed,'METADATA_PIN',baseline_grant.original_pin)
+        patched(observed,'SNAPSHOT_ROOT',archives.ROOT)
+        patched(observed,'SNAPSHOT_FILE',baseline_file)
         config=replace(base.config(),input_root=placement.run_input_root(CONTEXT))
         adoption,pins=producer.connect_reviewed_producer(config,grant=f.plan.producer.grant,
             previous_images=f.plan.producer.facts.previous_images)

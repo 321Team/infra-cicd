@@ -26,10 +26,27 @@ Service 두 개만 먼저 바뀌는 상황도 방지한다. 새 승인 gate나 �
 dry-run, admission·권한·가용성 검증이 아니다. 통과해도 다른 필드의 충돌과 경합은 남으며
 기존 fresh drift·claim/fence·sender의 무강제 409 중단 처리를 유지한다.
 
-## 권장안: 0 유지 중 협조적 소유권 인계 후 새 baseline 채택
+## 2026-10-25 실제 인계 완료·새 baseline 채택
+
+아래 과거 임시 manager/force 제안은 실행 절차로 사용하지 않는다. 실제 준비에서 기존
+완전한 intent+replicas0의 무강제 공유를 확인하고, 사용자가 별도 승인한 좁은 정정안으로
+old `kubectl-patch/Update/apps/v1/main`의 **replicas만 소유한 항목1개/앱**을 정리했다.
+현재 UID·RV·generation·replicas0·전체 managedFields 배열 test를 건 JSONPatch만 사용했다.
+전체 managedFields 초기화·다른 소유 필드 삭제·force는 수행하지 않았다.
+
+서버 dry-run4·준비 쓰기4·단계별 readback을 마쳤다. 최종 replicas 소유자는 두 앱 모두
+`fds-deployer/Apply/apps/v1/main`, 값0이며 기존 UID·generation·전체 spec·이미지/template와
+Service2/Route2의 전체 객체·RV를 보존했다. exact GET6는 **18:15:03~18:15:04 KST**다.
+[실제 인계·metadata 원문](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6395884121)과
+[새 baseline 연결](native-run-inputs.md#인계-후-실제-full6-선택--2026-10-25)을 사용한다.
+원본6객체의 native 해석·기존 owned intent68/62노드·replicas 사전검사2건을 오프라인 대조했다.
+이는 그 시각의 준비 결과이며, 다음 job의 fresh drift·현재 권한·무강제 SSA 검사는 유지한다.
+실제 앱 기동·TokenRequest·배포·finish는 아직 수행하지 않았다.
+
+## 과거 제안 기록 — 실제 실행에는 위 정정 결과 적용
 
 자동 job의 0→3 변경을 검증하려면 먼저 **앱을 0으로 유지하면서** replicas 소유권만
-정리한다. 아래는 향후 단일 운영 작업창의 검토 순서다. 이번에는 실행하지 않았다.
+정리한다는 인계 전 과거 초안이었다. 아래 절차는 실제 운영에서 실행하지 않는다.
 
 | 순서·담당 | 필요한 조치와 확인 |
 |---|---|
