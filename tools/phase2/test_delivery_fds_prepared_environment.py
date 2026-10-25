@@ -77,9 +77,14 @@ class PreparedEnvironmentTests(unittest.TestCase):
 
     def test_real_workflow_snippet_preserves_explicit_request_after_environment_check(self):
         script=self.script();old=list(sys.path);order=[]
+        def invoke(args,*,declaration):
+            self.assertIs(type(declaration),job.JobSite)
+            self.assertEqual(('cicd-runner01','server01_cicd-runner',1000),
+                (declaration.runner.hostname,declaration.runner.account,declaration.runner.uid))
+            order.append(tuple(args));return 0
         try:
             with patch.object(prepared,'check_interpreter',side_effect=lambda:order.append('environment')), \
-                 patch.object(job,'main',side_effect=lambda args:order.append(tuple(args)) or 0), \
+                 patch.object(job,'main',side_effect=invoke), \
                  patch.dict(os.environ,{'P2_JOB_COMMAND':'deploy'}):
                 with self.assertRaises(SystemExit) as caught:exec(compile(script,'workflow','exec'),{})
             self.assertEqual(0,caught.exception.code)

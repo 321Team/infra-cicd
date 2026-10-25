@@ -44,7 +44,8 @@ jobs:
           import json, os, sys
           sys.path.insert(0, 'tools/phase2')
           from delivery_job import workflow_gate
-          result = workflow_gate()
+          from delivery_fds_run_20261025 import declare_site
+          result = workflow_gate(declaration=declare_site())
           print(json.dumps(result, sort_keys=True))
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
               stream.write('configured=' + ('true' if result['dispatch_configured'] else 'false') + '\n')
@@ -54,7 +55,7 @@ jobs:
   delivery:
     needs: prepare
     if: needs.prepare.outputs.configured == 'true' && inputs.execute && inputs.command != 'status' && github.repository == '321Team/infra-cicd' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.run_attempt == 1
-    # Existing registered Runner labels only. SITE=None currently blocks this job.
+    # Existing registered Runner labels. Explicit reviewed finite FDS declaration only.
     # Registration is not P2 readiness/authorization; driver checks adopted identity.
     runs-on: [self-hosted, Linux, X64, p1-cicd, onprem, podman]
     timeout-minutes: 30
@@ -84,4 +85,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "/home/server01_cicd-runner/fds-p2-delivery/runtime-py312-yaml603/bin/python3" -I -B -c 'import os, sys; sys.path.insert(0, "tools/phase2"); import delivery_fds_prepared_environment as p2env; p2env.check_interpreter(); import delivery_job; raise SystemExit(delivery_job.main([os.environ["P2_JOB_COMMAND"], "--execute"]))'
+          "/home/server01_cicd-runner/fds-p2-delivery/runtime-py312-yaml603/bin/python3" -I -B -c 'import os, sys; sys.path.insert(0, "tools/phase2"); import delivery_fds_prepared_environment as p2env; p2env.check_interpreter(); import delivery_job; from delivery_fds_run_20261025 import declare_site; raise SystemExit(delivery_job.main([os.environ["P2_JOB_COMMAND"], "--execute"], declaration=declare_site()))'

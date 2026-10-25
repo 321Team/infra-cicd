@@ -37,7 +37,8 @@ class JobWorkflowTests(unittest.TestCase):
                           "github.event_name == 'workflow_dispatch'", 'github.run_attempt == 1'):
                 self.assertIn(guard, stage['if'])
         gate = prepare['steps'][1]['run']
-        self.assertIn('workflow_gate()', gate)
+        self.assertIn('workflow_gate(declaration=declare_site())', gate)
+        self.assertIn('from delivery_fds_run_20261025 import declare_site', gate)
         self.assertIn("raise SystemExit(0 if result['dispatch_configured'] else 2)", gate)
         self.assertEqual('${{ steps.site.outputs.configured }}', prepare['outputs']['configured'])
 
