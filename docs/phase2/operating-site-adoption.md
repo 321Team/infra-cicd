@@ -246,6 +246,43 @@ PR132 병합본 `329fe5d8` 위에 `build_actor_channel`을 추가했다.
 현재 실제 자격·endpoint·SSH 배치·승인 원본이 공급된 전체 SITE는 아니며
 `SITE=None`·dispatch false·Runtime NOT_RUN을 유지한다.
 
+## 10/25 비공개 baseline 파일의 사후 원본 연결
+
+인계 후 새 baseline이 비공개 tgz 파일로 제공되는 경우를 기존 deferred materializer에
+연결했다. 기존 memory baseline과 인증된 BlobPin 경로는 그대로 사용한다.
+새 경로는 `assemble_observed_native_job(..., baseline_grant=...,
+baseline_root=..., baseline_file=PrivateBaselineFile(...))`로 **검토된 Python site 코드가
+명시적으로 선택할 때만** 동작한다. 원본·승인 loader나 실제 운영 선택값은 추가하지 않았다.
+
+| 경계 | 적용 계약 |
+|---|---|
+| 원본 의미 채택 | 권욱이 실제 수신·검토한 metadata 댓글과 archive digest/root·동일 RUN/action/Binding의 관계를 코드에서 채택. 파일 hash 일치와 댓글 작성자 인증만으로 이 관계나 Runtime GO를 생성하지 않음 |
+| metadata 인증 | 기존 CommentPin의 repository/댓글 ID/creator/update/body digest, 기존 grant 및 고정 control pin을 사용. 본문에서 hash·root·권한을 파싱하지 않음 |
+| 파일 위치 | 실제 RUN의 `config.input_root` 아래 단일 basename만 허용. 임의 절대경로·UNC·부모 탐색 없음. 비공개 raw를 GitHub blob이나 공개 댓글로 올릴 필요 없음 |
+| 읽기 | 원본 댓글·fresh control 인증 뒤 기존 POSIX root/dir-FD 읽기 재사용. 부모 안전·root0700·자기 UID, 파일0600·regular·nlink1·NOFOLLOW/NONBLOCK·1MiB 상한·전후 inode/metadata·정확 hash 검사. root 재개방 비교 후 FD 정리 |
+| 파싱과 재인증 | 기존 bounded gzip/tar·manifest·정확6객체/UID와 owner/spec/previous 검증 뒤 동일 댓글 pin·fresh control을 다시 조회. 같은 ReadRequest·메모리 credential·유한 grant/deadline 사용 |
+| 실패 | 파일 누락/변경·댓글 수정/철회·control 불일치·기한 초과 시 중단. 이전10/23 archive, GitHub blob, memory baseline으로 자동 대체하지 않음. 공개 오류에는 경로·원문을 남기지 않음 |
+
+선택 함수의 생성·status/gate에서는 파일·댓글·시계·자격을 읽지 않는다. 실제 파일 읽기와
+원본 검증은 기존 post-handoff preparation에서만 수행하며 claim 획득·발급·배포를 하지 않는다.
+파일과 metadata의 의미 결속을 채택하는 책임은 계속 중앙에 있다. 이 API가 생겼다고
+미수신 baseline, 실제 실행 grant, native producer 계보를 확보한 것으로 보지 않는다.
+기존 producer native 검증과 sender close 후 finish 관측 계약은 바뀌지 않는다.
+
+### 준비된 private 환경의 한계와 회수
+
+PR146의 `check_interpreter`는 실제 private Python3.12/PyYAML6.0.3의 버전·prefix·모듈 위치
+점검이다. **파일 무결성 검사나 같은 UID1000 프로세스의 변조 방지는 아니다.**
+동일 UID의 다른 job이 환경·source·inputs를 바꾸지 않는 기존 비중첩 조건을 유지한다.
+별도 sandbox나 새 패키지 무결성 승인을 구현했다고 표시하지 않는다.
+
+P2 전용 `/home/server01_cicd-runner/fds-p2-delivery` 영역의 회수는 권욱이 맡는다.
+마지막 소비·앱/claim/fence·메모리/프로세스 세션 상태 확인과 필요한 증적 보존/반출 뒤
+자기 P2 파일만 회수하고 부재 readback한다. 기존 Runner HOME/workspace/다른 job은 제외한다.
+하영의 ROSA/RoleBinding 회수와 이후 별도 GO의 Runner 등록 해제·VM 폐기는 별개다.
+실행 중 state나 해제되지 않은 fence, 보존 전 원본은 삭제하지 않는다.
+10/26 08:30 소비 종료 계획과 12:00 최종 정리 완료 기한은 유지한다.
+
 ### 별도 실행 승인이 있을 때의 호출 계약
 
 1. 발급 위치는 기존 결정인 ansible01/server01_ansible이다. 신뢰한 호출자가
