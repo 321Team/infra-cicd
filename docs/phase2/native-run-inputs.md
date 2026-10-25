@@ -124,8 +124,9 @@ wall-clock 만료를 monotonic deadline과 직접 비교하거나 240분을 새 
 | 모의 시나리오 | 완료조건 |
 |---|---|
 | 정상 흐름 | 동일 Binding·논리/native RUN 분리, 파일3개, native 원본, 5역할, 관측6개·완료·fence 해제·프로세스/소켓 정리 |
-| baseline hash 변경 | source 배치·READY·로그인·claim 전에 거부. caller 소유 provider는 caller가 회수 |
+| baseline hash 변경·파일 부분 생성 실패 | READY·로그인·claim 전에 거부. 부분 파일은 보존하고 발급측 소유자는 미소비 자격 입력을 명시적으로 회수 |
 | READY helper 실패 | 로그인·발급·claim0, 공급부 소유 password 참조 정리 |
+| 본인 로그인 거부 | TokenRequest·claim·앱 쓰기0, 원문/토큰 없는 오류와 로컬 참조 정리 |
 | 원문/control 변경·필수 native step 실패 | claim/앱 쓰기0. 발급된 자격/회수 상태는 별도 인수 |
 | sender close 후 finish 보존 실패 | fence 유지·완료0. 같은 선언/attempt2/기존 deploy grant의 restore로 우회하지 않음 |
 | 전송 뒤 OAuth 회수 불명확 | 실제 job 결과와 UNCONFIRMED를 분리, private receipt/metadata 단회 인수·자동 재전송0 |

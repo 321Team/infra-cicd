@@ -149,6 +149,12 @@ class VerticalOperatingTests(unittest.TestCase):
             original_copy(*args,**kwargs);stages.append('FILES_READY')
         output=Path(placement.run_input_root(CONTEXT))
         if mode=='bad_input':(staging/baseline_file.name).write_bytes(b'SYNTHETIC_CHANGED')
+        if mode=='partial_files':
+            write_file=placement.store.create_file
+            def fail_second_file(parent,name,raw):
+                if name=='contract.yaml':raise OSError('SYNTHETIC_PRIVATE_ENOSPC')
+                return write_file(parent,name,raw)
+            patched(placement.store,'create_file',fail_second_file)
         context=t.f.context;context.wrap_socket.side_effect=lambda raw,**kw:raw
         with patch.object(wire.ssl,'SSLContext',return_value=context):
             provider=login.BasicChallengeLogin(origin=oauth.ORIGIN,ca_pem=http.CA,
@@ -166,6 +172,7 @@ class VerticalOperatingTests(unittest.TestCase):
         replies=[oauth.challenge(),oauth.granted(),http.response(core.encoded(actors.ActorChannelTests.user(self))),
                  http.response(core.encoded(t.response()),201),http.response(core.encoded(actors.ActorChannelTests.revoked(self)))]
         if mode=='revoke_uncertain':replies[-1]=http.response(b'{}',500)
+        if mode=='login_failure':replies[1]=oauth.challenge()
         sockets=[http.FakeSocket(r) for r in replies];sent=[];processes=[];errors=[];captured=[]
         def socket_at_boundary(family=socket.AF_INET,kind=socket.SOCK_STREAM,proto=0,fileno=None):
             if family==socket.AF_UNIX:return REAL_SOCKET(family,kind,proto,fileno=fileno)
@@ -216,7 +223,7 @@ class VerticalOperatingTests(unittest.TestCase):
                  patch.object(placement,'prepare_run_inputs',side_effect=copy), \
                  contextlib.redirect_stdout(stdout):
                 declared=operating.declare_observed_native_job(select_inputs=select,input_files=files)
-                if mode!='bad_input':thread.start()
+                if mode not in ('bad_input','partial_files'):thread.start()
                 rc=job.main(['deploy','--execute'],declaration=declared,context=CONTEXT,
                     revision=lambda:CONTEXT.workflow_sha,identity=lambda:operating.EXPECTED_RUNNER)
                 if thread.ident is not None:thread.join(7)
@@ -231,8 +238,12 @@ class VerticalOperatingTests(unittest.TestCase):
         for secret in (oauth.PASSWORD,t.token(),'SYNTHETIC_PRIVATE_SOURCE_TOKEN_0123456789'):
             self.assertNotIn(secret,stdout.getvalue()+repr(supplier)+str(supplier.status()))
         self.assertTrue(all(i.build._owner._closed for i in inners))
-        if mode=='bad_input':
-            self.assertEqual(2,rc,result);self.assertFalse(output.exists())
+        if mode in ('bad_input','partial_files'):
+            self.assertEqual(2,rc,result)
+            if mode=='bad_input':self.assertFalse(output.exists())
+            else:
+                self.assertEqual({'rendered.yaml'},set(os.listdir(output)))
+                self.assertEqual(base.h.render,(output/'rendered.yaml').read_bytes())
             self.assertEqual([],sent);self.assertEqual([],processes);self.assertEqual([],base.p.c.storage.claims)
             self.assertTrue(inners[0].build._parent._plan._closed)
             self.assertFalse(provider._used);supplier.close();self.assertIsNone(provider._password)
@@ -244,6 +255,14 @@ class VerticalOperatingTests(unittest.TestCase):
             self.assertEqual(2,rc,result);self.assertEqual(['SupplyError'],errors)
             self.assertEqual([],sent);self.assertEqual([],captured);self.assertEqual([],native_reads)
             self.assertIsNone(provider._password);self.assertEqual([],base.p.c.storage.claims)
+            return
+        if mode=='login_failure':
+            self.assertEqual(2,rc,result);self.assertEqual(['SupplyError'],errors)
+            self.assertEqual(2,len(sent));self.assertTrue(all(s.closed for s in sent))
+            self.assertEqual([],captured);self.assertEqual([],native_reads)
+            self.assertEqual([],base.p.c.storage.claims);self.assertEqual([],base.h.requests)
+            self.assertIsNone(supplier.take_receipt());self.assertIsNone(supplier.take_login_metadata())
+            self.assertIsNone(provider._password);self.assertTrue(supplier.status()['local_references_released'])
             return
         self.assertEqual(5,len(sent));self.assertFalse(sockets)
         self.assertEqual([b'GET',b'GET',b'GET',b'POST',b'DELETE'],[bytes(s.sent).split(b' ',1)[0] for s in sent])
@@ -281,8 +300,10 @@ class VerticalOperatingTests(unittest.TestCase):
         self.assertTrue(all(tr._closed for tr in f.f.f.transports))
 
     def test_full_selector_file_native_original_to_finish(self):self.exercise()
-    def test_changed_baseline_stops_before_ready_and_preserves_borrowed_provider(self):self.exercise('bad_input')
+    def test_changed_baseline_stops_before_ready_and_preserves_issuer_input_until_close(self):self.exercise('bad_input')
+    def test_partial_input_failure_keeps_files_but_never_publishes_ready(self):self.exercise('partial_files')
     def test_bad_ready_helper_never_logs_in(self):self.exercise('bad_ready')
+    def test_login_failure_never_issues_or_claims(self):self.exercise('login_failure')
     def test_native_required_step_failure_denies_before_claim(self):self.exercise('native_failure')
     def test_changed_control_denies_before_claim(self):self.exercise('withdraw_control')
     def test_finish_failure_retains_fence_and_forbids_unapproved_restore(self):self.exercise('finish_failure')
