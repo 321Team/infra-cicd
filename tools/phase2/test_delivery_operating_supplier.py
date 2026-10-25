@@ -142,13 +142,26 @@ class MemorySupplyTests(unittest.TestCase):
             self.assertFalse(value.close())  # Failed local handoff stays visible.
 
     def test_close_failure_is_not_relabelled_as_released_by_later_status_or_close(self):
-        value=self.make()
-        with patch.object(self.pull,'pull',side_effect=ValueError('PRIVATE_READY')), \
-             patch.object(self.actor,'close',side_effect=ValueError(fixture.TOKEN)):
-            with self.assertRaises(supply.SupplyError):value.send()
-        self.assertFalse(value.status()['local_references_released'])
-        self.assertFalse(value.close());self.assertFalse(value.status()['local_references_released'])
-        self.actor.close()  # Test owns the failed-cleanup reference.
+        for close_result in (False,ValueError(fixture.TOKEN)):
+            self.actor=self.f.client();value=self.make()
+            options={'side_effect':close_result} if isinstance(close_result,Exception) else {'return_value':False}
+            with patch.object(self.pull,'pull',side_effect=ValueError('PRIVATE_READY')), \
+                 patch.object(self.actor,'close',**options):
+                with self.assertRaises(supply.SupplyError):value.send()
+            self.assertFalse(value.status()['local_references_released'])
+            self.assertFalse(value.close());self.assertFalse(value.status()['local_references_released'])
+            self.actor.close()  # Test owns the failed-cleanup reference.
+
+    def test_operation_or_cleanup_cancellation_keeps_interrupt_priority(self):
+        for operation,cleanup in ((ValueError('PRIVATE'),KeyboardInterrupt(fixture.TOKEN)),
+                                  (KeyboardInterrupt(fixture.TOKEN),ValueError('PRIVATE'))):
+            self.actor=self.f.client();value=self.make()
+            with patch.object(self.pull,'pull',side_effect=operation), \
+                 patch.object(self.actor,'close',side_effect=cleanup), \
+                 self.assertRaises(KeyboardInterrupt) as caught:value.send()
+            self.assertIsNone(caught.exception.__context__);self.assertNotIn(fixture.TOKEN,str(caught.exception))
+            self.assertFalse(value.close());self.assertIsNone(value._sources)
+            self.actor.close()
 
     def test_explicit_close_clears_private_handoffs_even_when_diagnostics_raise(self):
         value=self.make();value._receipt=object();value._login_metadata={'PRIVATE':'RECOVERY'}

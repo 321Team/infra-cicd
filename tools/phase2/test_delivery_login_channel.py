@@ -61,6 +61,17 @@ class DeferredTests(unittest.TestCase):
         self.assertIsNone(caught.exception.__context__)
         self.assertNotIn(oauth.PASSWORD,str(caught.exception))
 
+    def test_supplier_metadata_transfer_failure_cannot_skip_owned_provider_close(self):
+        c=self.channel();provider=c._provider;s=self.supplier(c)
+        with patch.object(self.f.pull,'pull',side_effect=ValueError('PRIVATE_READY')), \
+             patch.object(c,'take_login_metadata',side_effect=ValueError(oauth.PASSWORD)), \
+             patch.object(c,'close',wraps=c.close) as close:
+            with self.assertRaises(supply.SupplyError) as caught:s.send()
+            close.assert_called_once()
+        self.assertIsNone(provider._password);self.assertTrue(provider._used)
+        self.assertIsNone(c._provider);self.assertIsNone(s._actor)
+        self.assertFalse(s.close());self.assertIsNone(caught.exception.__context__)
+
     def test_provider_close_diagnostics_or_metadata_failure_release_references_and_stay_failed(self):
         for step in ('status','take_metadata'):
             c=self.channel();provider=c._provider

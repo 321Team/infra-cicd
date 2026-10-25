@@ -271,7 +271,8 @@ class VerticalOperatingTests(unittest.TestCase):
             self.assertEqual(0,base.p.c.storage.complete_calls);self.assertEqual([],f.saved)
             # Recovery boundary: no retry/attempt2/new RUN may clear this fence.
             count=len(base.h.requests);out=base.app().run('restore')
-            self.assertEqual('OPERATIONAL_ACTION_MISMATCH',out['error_code'])
+            self.assertEqual(('STOPPED','OPERATIONAL_PREPARATION_FAILED'),
+                             (out['status'],out['error_code']))
             self.assertEqual(count,len(base.h.requests));self.assertIsNotNone(base.p.c.storage.active)
             stage_count=len(stages)
             fresh=operating.declare_observed_native_job(select_inputs=select,input_files=files)

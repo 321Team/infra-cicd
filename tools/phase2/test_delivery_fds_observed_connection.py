@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import delivery_fds_observed_connection as observed
+from delivery_actor_channel import ActorChannelError
 import delivery_fds_operating as operating
 import delivery_fds_site_inputs as profile
 import delivery_job_site as declaration
@@ -102,7 +103,9 @@ class ObservedSupplierTests(unittest.TestCase):
                 self.build(workspace=workspace)
             self.f.assert_unconsumed()
         with patch.object(operating,'build_login_supplier',side_effect=ValueError('SYNTHETIC_FAILURE')):
-            with self.assertRaises(ValueError):self.build()
+            with self.assertRaises(ActorChannelError) as caught:self.build()
+            self.assertIsNone(caught.exception.__context__)
+            self.assertEqual('P2_FDS_LOGIN_SUPPLIER_INVALID',str(caught.exception))
         self.f.assert_unconsumed()
 
 
