@@ -11,6 +11,7 @@ import delivery_fds_observed_baseline as baseline
 import delivery_fds_management_route as management
 import delivery_fds_observed_connection as connection
 import delivery_fds_operating_policy as policy
+from delivery_fds_producer_inputs import connect_reviewed_producer
 import delivery_job as job
 import delivery_job_sources as sources
 import threading

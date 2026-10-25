@@ -107,6 +107,16 @@ class PrivateBaselineTests(PrivateFixture, unittest.TestCase):
         self.assertNotIn(self.file.name, repr(self.file))
         self.assertNotIn(self.file.sha256, repr(self.file))
 
+    def test_memory_baseline_cannot_silently_ignore_a_file_without_deferred_grant(self):
+        memory = replace(self.d.selected, baseline=replace(self.d.f.selection.baseline,
+            grant=replace(self.d.f.selection.baseline.grant, control_pin=self.d.control)))
+        self.d.build(selection=memory, baseline_grant=None, baseline_root=None)
+        with self.assertRaises(policy.OperatingPolicyError):
+            self.d.build(selection=memory, baseline_grant=None, baseline_root=None,
+                         baseline_file=self.file)
+        self.assertEqual([], self.events)
+        self.read_file_mock.assert_not_called()
+
     def test_invalid_input_store_overlap_prevents_source_or_file_access(self):
         # Exercise the new boundary directly; normal operating policy already
         # rejects the invalid configuration before prepared materialization.
