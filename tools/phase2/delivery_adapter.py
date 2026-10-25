@@ -281,9 +281,12 @@ class Adapter:
     constructing a new Adapter does NOT authorize replay of an interrupted run.
     """
     def __init__(self, *, authorize, send, checkpoint, wall=time.time,
-                 monotonic=time.monotonic, sleep=time.sleep):
+                 monotonic=time.monotonic, sleep=time.sleep,
+                 local_time_checks=False, initial_lease=None):
         self.authorize, self.send, self.checkpoint = authorize, send, checkpoint
         self.wall, self.monotonic, self.sleep = wall, monotonic, sleep
+        need(type(local_time_checks) is bool and (not local_time_checks or type(initial_lease) is Lease), 'AUTHORIZATION_DENIED')
+        self.local_time_checks, self.initial_lease = local_time_checks, initial_lease
         self.used = False
         self.active = False
         self.payloads = {}
@@ -309,10 +312,13 @@ class Adapter:
         need(finite(value), 'CLOCK_INVALID')
         return value
 
-    def window(self, b):
+    def window(self, b, *, refresh=True):
         try:
             try:
-                lease = self.authorize(b)
+                # Only local checkpoint/sleep checks may reuse the same live lease.
+                # request() always calls refresh=True before any network send.
+                lease = (self.authorize(b) if refresh or not self.local_time_checks
+                         else self.lease if self.lease is not None else self.initial_lease)
             except Exception:
                 raise Stop('AUTHORIZATION_DENIED') from None
             need(type(lease) is Lease and lease.binding_key == b.key, 'AUTHORIZATION_DENIED')
@@ -349,7 +355,7 @@ class Adapter:
         need((method == 'PATCH' and key in self.payloads and body == self.payloads[key])
              or (method == 'GET' and key in objects_for(b) and key[1] == 'Deployment' and body == b''),
              'REQUEST_SCOPE_INVALID')
-        left = self.window(b)
+        left = self.window(b)  # Fresh full authorization before EVERY GET/PATCH.
         if first:
             # Keep the legacy 6*10+600 budget. The explicit nine-object
             # profile needs 9*10+600; this never extends either expiry.
@@ -395,7 +401,7 @@ class Adapter:
             left = end - self.tick()
             need(finite(left) and left > 0, 'ROLLOUT_TIMEOUT')
             obj = self.request(b, key, 'GET', timeout=min(10, left))
-            self.window(b)
+            self.window(b, refresh=not self.local_time_checks)
             need(self.tick() < end, 'ROLLOUT_TIMEOUT')
             need(obj['metadata']['uid'] == applied['metadata']['uid']
                  and obj['metadata']['generation'] == generation
@@ -411,7 +417,7 @@ class Adapter:
                     and all(type(status.get(k, 0)) is int and status.get(k, 0) == 0 for k in
                             ('unavailableReplicas', 'terminatingReplicas'))):
                 return
-            delay = min(2, self.window(b), end - self.tick())
+            delay = min(2, self.window(b, refresh=not self.local_time_checks), end - self.tick())
             need(delay > 0, 'ROLLOUT_TIMEOUT')
             try:
                 self.sleep(delay)
@@ -427,19 +433,19 @@ class Adapter:
             self.payloads = dict(zip(objects, payloads))
             self.active = True
             self.receipt['binding_key'] = b.key
-            self.window(b)
+            self.window(b, refresh=not self.local_time_checks)
             self.receipt['status'] = 'PREPARED'
             self.save()
             deployments = []
             for index, (key, payload) in enumerate(zip(objects, payloads)):
-                self.window(b)
+                self.window(b, refresh=not self.local_time_checks)
                 self.receipt.update(status='WRITE_PENDING', pending='/'.join(key))
                 self.save()  # durable intent before any send, including the first
                 obj = self.request(b, key, 'PATCH', payload, first=(index == 0))
                 self.receipt['acknowledged'].append('/'.join(key))
                 self.receipt.update(status='WRITE_ACKNOWLEDGED', pending=None)
                 self.save()
-                self.window(b)
+                self.window(b, refresh=not self.local_time_checks)
                 if key[1] == 'Deployment':
                     deployments.append((key, obj))
             rollout_deadline = self.tick() + 600

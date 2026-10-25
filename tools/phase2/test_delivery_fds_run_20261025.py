@@ -104,8 +104,8 @@ class ActiveRunTests(unittest.TestCase):
         self.issue.assert_not_called()
 
     def test_current_manual_restart_is_finite_and_keeps_original_control_and_baseline(self):
-        self.assertEqual('FDS-P2-DELIVERY-20261026-A1', active.RUN_ID)
-        self.assertEqual(6399779574, active.APPROVAL_PIN.comment_id)
+        self.assertEqual('FDS-P2-DELIVERY-20261026-A2', active.RUN_ID)
+        self.assertEqual(6400826004, active.APPROVAL_PIN.comment_id)
         self.assertEqual('2026-10-26', active.datetime.fromtimestamp(active.STARTS_AT,active.KST).date().isoformat())
         self.assertEqual(policy.CONSUMPTION_END,active.EXPIRES_AT)
         self.assertEqual('6531ba8e301858c0e180c377d06908f895158a70',policy.CONTROL_PIN.commit)

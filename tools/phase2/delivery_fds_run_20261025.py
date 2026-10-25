@@ -4,6 +4,7 @@ Import is inert. Actual credentials/nonce/native run/TokenRequest/finish are not
 stored here. The ordinary default delivery_job_site.SITE stays unconfigured;
 the reviewed FDS workflow explicitly selects declare_site for this finite RUN.
 """
+from dataclasses import replace
 import argparse
 from datetime import datetime, timezone, timedelta
 import getpass
@@ -33,7 +34,7 @@ from delivery_terminal_login import read_login_provider
 from delivery_token_materializer import NativePlanSelection
 from delivery_token_request import TokenTarget
 
-RUN_ID = 'FDS-P2-DELIVERY-20261026-A1'
+RUN_ID = 'FDS-P2-DELIVERY-20261026-A2'
 OPERATION_SECONDS = 600
 HANDOFF_SECONDS = 600
 CLEANUP_SECONDS = 60
@@ -45,10 +46,10 @@ KST = timezone(timedelta(hours=9))
 
 # Actual owner-recorded scope, not a preparation/baseline comment.
 APPROVAL_PIN = CommentPin(
-    baseline.METADATA_PIN.repository, 46, 6399779574, 277643063,
-    '2026-10-25T15:52:21Z', '896aa58e107304dfc3c6fe842a838d63f578d1496b509de3abc62cdc77753434')
-ADOPTION_REFERENCE = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6399779574'
-STARTS_AT = datetime.fromisoformat('2026-10-25T15:52:21Z'.replace('Z', '+00:00')).timestamp()
+    baseline.METADATA_PIN.repository, 46, 6400826004, 277643063,
+    '2026-10-25T17:29:04Z', '5bf12cc96087f0d5bd6e73b50d71fd5f8007fa095c8ec7b5a55f15f2b42fc32c')
+ADOPTION_REFERENCE = 'https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6400826004'
+STARTS_AT = datetime.fromisoformat('2026-10-25T17:29:04Z'.replace('Z', '+00:00')).timestamp()
 EXPIRES_AT = policy.CONSUMPTION_END
 PLATFORM_PIN = BlobPin(
     producer.SUPPLY_PIN.repository, 'ae4f3e3501330be9e7fc3949092b08c266db10ba', 'evidence/P2-ROSA-01/infra-rosa-5-bootstrap-20261019/rosa5-run4-7-20261019.tgz',
@@ -82,6 +83,7 @@ def selected_inputs(context, command, *, monotonic=time.monotonic, wall=time.tim
         supply_receipt_sha256=producer.SUPPLY_SHA256,
         input_root=run_input_root(context),
         budget_seconds=OPERATION_SECONDS, finalize=True, **prepared.configuration_paths())
+    config = replace(config, local_time_checks=True)
     b=config.binding
     def grant(pin, principal):
         return AdoptedGrant(b, pin, policy.CONTROL_PIN, principal,

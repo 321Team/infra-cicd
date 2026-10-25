@@ -37,7 +37,7 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
                 sender_factory, budget_seconds, acquire=store.acquire,
                 journal_factory=store.Journal, wall=time.time,
                 monotonic=time.monotonic, sleep=time.sleep, finalize=False,
-                provider_factory=None):
+                provider_factory=None, local_time_checks=False):
     """Single invocation; never auto-complete from rollout alone.
 
     finalize=True additionally requires a fresh trusted CompletionEvidence after
@@ -59,6 +59,7 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
 
     stage = 'INPUT_PREPARATION_FAILED'
     try:
+        core.need(type(local_time_checks) is bool, 'AUTHORIZATION_DENIED')
         core.prepare(binding, rendered, contract, validator)
         if provider_factory is not None:
             stage = 'PROVIDER_INITIALIZATION_FAILED'
@@ -83,7 +84,7 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
         effective_wall = lambda: verifier.clock()[0]
         authorizer = BoundAuthorizer(verify=verifier, claim=claim, journal=journal, wall=effective_wall)
         stage = 'AUTHORIZATION_DENIED'
-        authorizer(binding)
+        initial_lease = authorizer(binding)
         stage = 'SENDER_INITIALIZATION_FAILED'
         sender = sender_factory(binding, credential, verifier.platform)
         core.need(type(sender) is BoundSender and sender.credential is credential
@@ -104,8 +105,10 @@ def run_session(binding, rendered, contract, validator, *, root, providers, cred
             return reply
 
         stage = 'ADAPTER_FAILED'
+        local_options = ({'local_time_checks': True, 'initial_lease': initial_lease}
+                         if local_time_checks else {})
         adapter = core.Adapter(authorize=authorizer, send=send, checkpoint=journal,
-                               wall=effective_wall, monotonic=monotonic, sleep=sleep)
+                               wall=effective_wall, monotonic=monotonic, sleep=sleep, **local_options)
         receipt = adapter.run(binding, rendered, contract, validator)
         result['receipt'] = receipt
         if receipt['status'] != 'ROLLOUT_OBSERVED':
