@@ -53,7 +53,7 @@ PUSH = actions.RunPin(PRODUCER_REPOSITORY, 38404449622, 1, 375319885,
 TBS_REFERENCE = 'https://github.com/321Team/infra-cicd/actions/runs/38395350748/job/115289040431'
 PUSH_REFERENCE = 'https://github.com/321Team/infra-cicd/actions/runs/38404449622/job/115320270242'
 RENDER_REFERENCE = 'https://github.com/321Team/fds-msa/pull/42#issuecomment-6337648856'
-ADOPTION_REFERENCE = ('https://github.com/321Team/fds-msa/blob/' + profile.SOURCE_COMMIT
+ADOPTION_REFERENCE = ('https://github.com/321Team/fds-msa/blob/' + RENDER_SOURCE_COMMIT
                       + '/deploy/DELIVERY-CONTRACT-rosa.md#9-앱별-currentprevious-채택-43-2026-10-15')
 
 
@@ -84,8 +84,8 @@ def connect_reviewed_producer(config, *, grant, previous_images):
         policy.need(tuple(x[0] for x in previous_images) == core.services_for(b))
         # The immutable receipt and adopted contract contain these two exact
         # pushed digests. No digest/contract/source override or latest selection.
-        facts = ProducerFacts(profile.IMAGES, previous_images, profile.SOURCE_COMMIT,
-            profile.CONTRACT_SHA256, profile.RENDERED_SHA256, CHECKER_SHA256,
+        facts = ProducerFacts(b.images, previous_images, b.source_commit,
+            b.contract_sha256, b.rendered_sha256, CHECKER_SHA256,
             TBS_REFERENCE, TBS_REFERENCE, TBS_REFERENCE, PUSH_REFERENCE,
             RENDER_REFERENCE, ADOPTION_REFERENCE)
         pins = tuple(actions.StagePin(stage, TBS_REFERENCE, TBS, 115289040431, 'app',

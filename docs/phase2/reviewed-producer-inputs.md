@@ -39,6 +39,8 @@ Test/Build/Scan/Push로 대체하지 않으며, 트리 일치를 전체 외부 �
    내부 세 단계 성공의 단독 증거가 아니며 검토된 공급 원문 의미와 함께 사용한다.
 5. previous는 필수 명시 입력이다. 과거 P1 관측값·현재 desired·지금 GET한 객체에서 자동 추론하지 않는다.
    인계 뒤 새 full baseline과 실제 owner/spec/previous를 기존 경로에서 대조한다.
+   기존 승인된 현재 profile을 명시 previous로 채택한 경우까지 일률 금지하지 않는다.
+   같은 digest 복원은 버전 전환 rollback 증거가 아니며 기존 소유권/기준선 검사를 생략하지 않는다.
 
 공급 원본 pin은 독립 편입된 PR218의 보존 branch
 `heads/evidence/p1-push-readiness-20261013-2150` / 실제 head
@@ -50,6 +52,9 @@ Test/Build/Scan/Push로 대체하지 않으며, 트리 일치를 전체 외부 �
 
 확인된 producer 값을 더 이상 일괄 미수신으로 두지 않는다. 실제 실행 grant·인계 후 baseline·
 본인 메모리 인증 공급·actual job/helper/READY·finish scope의 최종 연결은 아직 남는다.
+권욱은 실제 native RUN/attempt가 정해진 뒤 job의 `input_root`를 준비하고
+rendered/contract와 채택한 baseline을 0700/0600·UID1000 조건으로 놓는 배치 경로를 연결해야 한다.
+PR146의 `prepared-<source SHA>` template은 실제 RUN 입력이 아니다. PR147 리뷰의 이 비차단 인계를 재사용한다.
 finish 관측 원본·hash는 실제 sender close 뒤 생산되므로 미래 파일 제출 대상이 아니다.
 `SITE=None`·기본 dispatch 차단·Runtime NOT_RUN을 유지하며 자격 발급·앱 배포는 수행하지 않는다.
 상시 시간대, 10/26 08:30 소비 종료 계획과 12:00 최종 정리 완료 기준도 유지한다.

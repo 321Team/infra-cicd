@@ -112,6 +112,15 @@ class ReviewedProducerInputsTests(unittest.TestCase):
             b = replace(self.config.binding, **{field:value})
             with patch.object(profile, attr, value), self.assertRaises(selected.ProducerInputError):
                 self.build(config=replace(self.config, binding=b), grant=replace(self.grant, binding=b))
+            with patch.object(profile, attr, value), self.assertRaises(selected.ProducerInputError):
+                self.build()  # Unchanged Binding does not silently follow globals.
+
+    def test_explicit_same_digest_previous_is_not_inferred_or_a_version_rollback(self):
+        adoption, _ = self.build(previous_images=profile.IMAGES)
+        self.assertIs(profile.IMAGES, adoption.facts.previous_images)
+        # Existing-target baseline/owner checks must still establish that this
+        # is the actual adopted prior profile. Equality alone proves no rollback.
+        self.assertEqual(adoption.facts.images, adoption.facts.previous_images)
 
     def test_selected_native_pins_use_existing_gate_and_reject_a_failed_push_step(self):
         _, pins = self.build()
