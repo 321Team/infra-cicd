@@ -18,6 +18,7 @@ import delivery_fds_private_baseline as private
 import delivery_runtime_site as runtime
 from delivery_adopted_authority import CodeAdoptedGrantResolver, pin_identity
 from delivery_github_source import CommentPin, SourceOriginal
+from delivery_object_reader import BearerCredential
 import test_delivery_fds_deferred_baseline as fixture
 import test_delivery_fds_baseline_archive as archive_fixture
 from test_delivery_job import CONTEXT
@@ -107,8 +108,15 @@ class PrivateBaselineTests(PrivateFixture, unittest.TestCase):
         self.assertNotIn(self.file.sha256, repr(self.file))
 
     def test_invalid_input_store_overlap_prevents_source_or_file_access(self):
-        with self.assertRaises(runtime.RuntimeSiteError):
-            self.materialize(config=replace(self.d.f.config, input_root=self.d.f.config.store_root))
+        # Exercise the new boundary directly; normal operating policy already
+        # rejects the invalid configuration before prepared materialization.
+        with self.assertRaises(archive.BaselineArchiveError):
+            private.connect_authenticated_private_baseline(
+                replace(self.d.f.config, input_root=self.d.f.config.store_root),
+                replace(self.d.f.plan, baseline=None), grant=self.grant,
+                root_name=archive_fixture.ROOT, selected=self.file, readers=self.d.readers,
+                credential=BearerCredential('SYNTHETIC_NON_CREDENTIAL'), deadline=1005,
+                wall=self.d.f.wall, monotonic=self.d.f.mono)
         self.assertEqual([], self.events)
         self.read_file_mock.assert_not_called()
 
