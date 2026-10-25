@@ -90,3 +90,12 @@ SA 그룹3개는 Kubernetes ServiceAccount에 대한 **기대 설정**이다. �
 HTTP/SSH/API 응답과 clock은 SYNTHETIC이며 실제 Runtime 증거가 아니다.
 최종 Linux CI와 사람 독립 리뷰 후에만 Runtime을 요청한다.
 #46 전체 완료에는 정상/실패차단/복구·실제 종료 인수가 남으며 G4/G5/G6·최종 Close는 별도다.
+
+
+## 2026-10-26 수동 재착수 — 기존 회차와 구분
+
+사용자 “바로 착수해줘 담당자들 대기하는 중임” 지시에 따른 [정상 deploy 1회 범위](https://github.com/321Team/fds-project-baseline/issues/46#issuecomment-6399779574)를 명시 선택한다. 기존 10/25 세 RUN과 실패 원본은 보존한다. 모듈 파일명은 import 호환을 위해 유지하되 RUN_ID·approval 원문 pin·최초 착수일은 10/26 회차이며, 자동 날짜 확장/자동 retry는 없다.
+
+본인·배포 SA의 식별 get2 추가는 infra-rosa PR54에 별도로 기록한다. SA SAR16/16 허용·관리자 회수 뒤 본인 두 get 성공/wildcard no는 권한 조회 결과이며 전체 배포 PASS가 아니다. 이 코드 변경은 RBAC/권한/DB/네트워크 변경을 하지 않는다.
+
+기존 full6·control·producer·이미지·SSH/READY·단회 발급·600초 앱 작업·60초 정리를 유지한다. 실제 T0부터 복구 대기120분, 소비 종료10/26 08:30, 최종 회수12:00 중 빠른 상한을 지킨다. dispatch 전 정확한 HEAD 독립 사람 리뷰·필수CI·해당 회차 DB 복구 연결을 확인한다. 실제 RUN/attempt는 native 응답에서 취득하고 미래 값·receipt를 생성하지 않는다. 추가 실패 시 STOP하고 자동 재시작하지 않는다.
